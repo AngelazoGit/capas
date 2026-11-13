@@ -43,7 +43,11 @@ protegidos cuya contraseña estuviera entre las candidatas.
 ## Windows: `.exe` portable
 
 `capas.exe` (x64) es **portable**: un único archivo, sin instalación ni DLLs
-externas (solo usa las de Windows). Descárgalo y:
+externas (solo usa las de Windows).
+
+**Descarga directa:** [`dist/capas.exe`](https://github.com/AngelazoGit/capas/raw/main/dist/capas.exe)
+
+Descárgalo y:
 
 - **doble clic** → abre la interfaz gráfica;
 - desde `cmd`/PowerShell → `capas.exe archivo.zip` funciona en consola.
