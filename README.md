@@ -40,6 +40,17 @@ protegidos cuya contraseña estuviera entre las candidatas.
 
 ![interfaz con los módulos de claves y clasificación](docs/modulos.png)
 
+## Windows: `.exe` portable
+
+`capas.exe` (x64) es **portable**: un único archivo, sin instalación ni DLLs
+externas (solo usa las de Windows). Descárgalo y:
+
+- **doble clic** → abre la interfaz gráfica;
+- desde `cmd`/PowerShell → `capas.exe archivo.zip` funciona en consola.
+
+Al ejecutarlo, Windows SmartScreen puede avisar de que es de un autor desconocido
+(el ejecutable no está firmado con certificado): *Más información → Ejecutar de todas formas*.
+
 ## Compilar
 
 ```bash
@@ -51,6 +62,14 @@ programa: con interfaz gráfica y con modo consola.
 
 En Linux, la interfaz necesita las bibliotecas de escritorio habituales
 (`libxkbcommon-x11`, OpenGL); cualquier escritorio las trae.
+
+Para generar el `.exe` desde Linux (compilación cruzada, un solo archivo portable):
+
+```bash
+rustup target add x86_64-pc-windows-gnu
+sudo apt-get install -y gcc-mingw-w64-x86-64
+cargo build --release --target x86_64-pc-windows-gnu
+```
 
 ## Interfaz gráfica
 
