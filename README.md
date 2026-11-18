@@ -249,6 +249,27 @@ archivo cuando lo ves, pero te queda el aviso, la clasificación y una copia en
 `reports/` para decidir (desconectar, borrar, revisar en sandbox). No toca la red
 ni el cliente.
 
+### Localizar la caché de una aplicación
+
+¿No sabes dónde deja la caché una app? capas la busca por ti (solo mira el sistema
+de archivos; no engancha el proceso ni la red):
+
+```bash
+# por nombre, en las carpetas de caché estándar del sistema
+./target/release/capas --localizar-cache "MiJuego"
+
+# observando: arranca la app y mira qué carpeta escribe de verdad (lo más fiable)
+./target/release/capas --localizar-cache "MiJuego" --observar 15
+
+# además, pistas de ruta dentro del propio ejecutable
+./target/release/capas --localizar-cache "MiJuego" --exe "C:\\Juego\\juego.exe"
+```
+
+Busca en AppData/LocalLow/Temp (Windows), `~/.cache` · `~/.local/share` (Linux) o
+`~/Library/Caches` (macOS). Con `--observar N` arrancas la app y capas detecta qué
+carpeta recibe archivos nuevos en esos N segundos —esa es la caché, coincida o no
+el nombre— y te da directamente el comando para vigilarla con `--solo-informe`.
+
 ## Salida
 
 ```
