@@ -231,6 +231,24 @@ carpetas, se crean junto a `incoming/`.
 > Interceptar por red/TLS o falsificar la carga **no** es el enfoque: hazlo sobre
 > archivos que controlas, en la carpeta de la que el servidor lee, antes de activarlos.
 
+### Vigilancia de caché del cliente (solo informe)
+
+Si eres el **cliente** y un servidor te escribe archivos en tu **caché**, no puedes
+moverlos ni borrarlos (el juego los necesita) ni bloquearlos antes de que se
+carguen sin enganchar el cliente. Lo que sí puedes es **detectarlos**: capas vigila
+la carpeta de caché (recursivo), y de cada archivo nuevo **audita y clasifica una
+copia sin tocar el original**, avisándote del veredicto y de lo peligroso.
+
+```bash
+./target/release/capas --vigilar "/ruta/a/la/cache" --solo-informe
+```
+
+No mueve ni borra nada; los informes van a una carpeta `reports/` **fuera** de la
+caché. Es **detección, no bloqueo previo**: el cliente puede haber cargado ya el
+archivo cuando lo ves, pero te queda el aviso, la clasificación y una copia en
+`reports/` para decidir (desconectar, borrar, revisar en sandbox). No toca la red
+ni el cliente.
+
 ## Salida
 
 ```

@@ -102,6 +102,10 @@ struct Args {
     #[arg(long, value_name = "INCOMING")]
     vigilar: Option<PathBuf>,
 
+    /// Vigilancia de caché del cliente: audita/clasifica sin mover ni borrar nada
+    #[arg(long)]
+    solo_informe: bool,
+
     /// Carpeta de aprobados (la de Mods del servidor). Por defecto: ../approved
     #[arg(long, value_name = "DIR")]
     aprobados: Option<PathBuf>,
@@ -189,7 +193,7 @@ fn main() -> Result<()> {
         op.auditar = true;
         let c = vigilar::Carpetas::desde(incoming, a.aprobados.clone(), a.cuarentena.clone(), a.reportes.clone());
         eprintln!("capas v{VERSION} — por {AUTOR} · modo vigilancia\n");
-        return vigilar::vigilar(&c, &op, &herr, &sis, Duration::from_secs(a.intervalo.max(1)), Arc::new(AtomicBool::new(false)));
+        return vigilar::vigilar(&c, &op, &herr, &sis, Duration::from_secs(a.intervalo.max(1)), a.solo_informe, Arc::new(AtomicBool::new(false)));
     }
 
     if (a.archivos.is_empty() && !a.recursos) || a.gui {
