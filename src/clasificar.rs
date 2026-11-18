@@ -88,6 +88,9 @@ pub fn categoria(tipo: Tipo, nombre: &str) -> Categoria {
         Tipo::Elf | Tipo::Pe | Tipo::MachO | Tipo::MachOFat => return Categoria::Ejecutable,
         Tipo::ClaseJava | Tipo::Dex | Tipo::Pyc | Tipo::Wasm => return Categoria::Bytecode,
         Tipo::Imagen => return Categoria::Imagen,
+        Tipo::Audio => return Categoria::Audio,
+        Tipo::Video => return Categoria::Video,
+        Tipo::Fuente | Tipo::BaseDatos => return Categoria::Datos,
         Tipo::Pdf => return Categoria::Documento,
         Tipo::Zip | Tipo::Gzip | Tipo::Bzip2 | Tipo::Xz | Tipo::Lzma | Tipo::Zlib | Tipo::Tar
         | Tipo::SieteZ | Tipo::Rar | Tipo::Cab | Tipo::ArUnix => return Categoria::Comprimido,

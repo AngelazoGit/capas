@@ -94,6 +94,10 @@ fn codigo_tipo(t: Tipo) -> &'static str {
         Tipo::Wasm => "WASM",
         Tipo::Pdf => "PDF",
         Tipo::Imagen => "IMAGEN",
+        Tipo::Audio => "AUDIO",
+        Tipo::Video => "VÍDEO",
+        Tipo::Fuente => "FUENTE",
+        Tipo::BaseDatos => "BASE DATOS",
         Tipo::Texto => "TEXTO",
         Tipo::Desconocido => "DESCONOCIDO",
     }

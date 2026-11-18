@@ -149,6 +149,11 @@ pub fn ejecutar(
     let bloques = m.procesados.load(Ordering::Relaxed);
     fs::write(raiz.join("informe.json"), serde_json::to_string_pretty(&arbol)?)?;
     fs::write(raiz.join("informe.md"), informe_md(&arbol, sis, op.hilos, duracion, bloques, &m.herr))?;
+    if let Some(n) = diagnostico_desconocidos(&arbol, &raiz) {
+        if n > 0 {
+            m.emitir(Evento::Aviso(format!("{n} archivo(s) desconocidos → desconocidos.txt (mándamelo para añadir su detección)")));
+        }
+    }
 
     let clasificacion = if op.clasificar && !arbol.is_empty() {
         match crate::clasificar::clasificar(&arbol, &raiz, true) {
@@ -255,5 +260,74 @@ fn nodo_md(n: &Nodo, nivel: usize, s: &mut String) {
     }
     for h in &n.hijos {
         nodo_md(h, nivel + 1, s);
+    }
+}
+
+/// Vuelca los archivos detectados como "desconocidos" con sus bytes mágicos,
+/// agrupados por firma + extensión, para poder ampliar la detección.
+fn diagnostico_desconocidos(arbol: &[Nodo], raiz: &Path) -> Option<usize> {
+    use std::collections::BTreeMap;
+
+    let mut muestras: Vec<(String, String, u64, String)> = Vec::new(); // (nombre, ext, tam, hex16)
+    recoge_desconocidos(arbol, &mut muestras);
+    if muestras.is_empty() {
+        return Some(0);
+    }
+    // Agrupa por (primeros 8 bytes, extensión) para ver patrones.
+    let mut grupos: BTreeMap<(String, String), (usize, Vec<String>)> = BTreeMap::new();
+    for (nombre, ext, _tam, hex) in &muestras {
+        let firma = hex.split_whitespace().take(4).collect::<Vec<_>>().join(" ");
+        let e = grupos.entry((firma, ext.clone())).or_default();
+        e.0 += 1;
+        if e.1.len() < 3 {
+            e.1.push(nombre.clone());
+        }
+    }
+    let mut s = String::new();
+    let _ = writeln!(s, "# Archivos desconocidos — diagnóstico\n");
+    let _ = writeln!(s, "{} archivo(s) sin detección por contenido.\n", muestras.len());
+    let _ = writeln!(s, "## Agrupados por firma (primeros bytes) + extensión\n");
+    let _ = writeln!(s, "| nº | extensión | firma (hex) | ejemplos |");
+    let _ = writeln!(s, "|--:|---|---|---|");
+    let mut orden: Vec<_> = grupos.into_iter().collect();
+    orden.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
+    for ((firma, ext), (n, ejemplos)) in &orden {
+        let ext = if ext.is_empty() { "(sin)" } else { ext.as_str() };
+        let _ = writeln!(s, "| {n} | {ext} | `{firma}` | {} |", ejemplos.join(", "));
+    }
+    let _ = writeln!(s, "\n## Detalle (primeros 16 bytes)\n");
+    for (nombre, _ext, tam, hex) in muestras.iter().take(500) {
+        let ascii: String = hex
+            .split_whitespace()
+            .filter_map(|h| u8::from_str_radix(h, 16).ok())
+            .map(|b| if (0x20..0x7f).contains(&b) { b as char } else { '.' })
+            .collect();
+        let _ = writeln!(s, "- {nombre} ({}) `{hex}`  |{ascii}|", humano(*tam));
+    }
+    let _ = writeln!(s, "\n---\nMándame este archivo (o pega la tabla de arriba) y añado la detección de tus formatos.");
+    let _ = fs::write(raiz.join("desconocidos.txt"), s);
+    Some(muestras.len())
+}
+
+fn recoge_desconocidos(nodos: &[Nodo], out: &mut Vec<(String, String, u64, String)>) {
+    use crate::detectar::Tipo;
+    for n in nodos {
+        if n.tipo == Tipo::Desconocido {
+            let ext = n
+                .nombre
+                .rsplit('.')
+                .next()
+                .filter(|e| !e.is_empty() && e.len() <= 8 && *e != n.nombre)
+                .map(|e| e.to_lowercase())
+                .unwrap_or_default();
+            let mut buf = [0u8; 16];
+            let leidos = std::fs::File::open(&n.ruta_fisica)
+                .and_then(|mut f| std::io::Read::read(&mut f, &mut buf))
+                .unwrap_or(0);
+            let hex = buf[..leidos].iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ");
+            let base = n.nombre.rsplit(['/', '\\']).next().unwrap_or(&n.nombre).to_string();
+            out.push((base, ext, n.tamano, hex));
+        }
+        recoge_desconocidos(&n.hijos, out);
     }
 }
