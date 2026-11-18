@@ -202,6 +202,35 @@ paquetes en cuarentena con antivirus/sandbox y mantén el software actualizado.
 
 ![auditoría de paquetes](docs/auditoria.png)
 
+### Modo vigilancia (puerta antes de la carga del servidor)
+
+Para que **ningún pack llegue al servidor sin auditar**, capas puede vigilar una
+carpeta y encaminar solo cada pack que aparece. La interceptación se hace
+**controlando la carpeta de la que el servidor carga los mods**, no tocando la red
+ni el TLS:
+
+```
+fuente no confiable ─▶ incoming/ ─▶ [capas audita] ─▶ approved/ (= Mods del servidor)
+                                            └────────▶ quarantine/  (rechazados / a revisar)
+```
+
+```bash
+./target/release/capas --vigilar /ruta/incoming \
+    --aprobados /ruta/servidor/Mods \
+    --cuarentena /ruta/quarantine \
+    --reportes  /ruta/reports
+```
+
+Observa `incoming/`; cuando un pack termina de escribirse lo audita y lo mueve:
+**APROBADO → `approved/`** (la carpeta de Mods), **lo demás → `quarantine/`**, con
+el informe por pack en `reports/`. El servidor solo carga de `approved/` y el único
+que escribe ahí es capas, así que la auditoría es obligatoria por diseño. Corre en
+bucle (Ctrl-C para parar); `--intervalo` ajusta el sondeo. Si no indicas las
+carpetas, se crean junto a `incoming/`.
+
+> Interceptar por red/TLS o falsificar la carga **no** es el enfoque: hazlo sobre
+> archivos que controlas, en la carpeta de la que el servidor lee, antes de activarlos.
+
 ## Salida
 
 ```

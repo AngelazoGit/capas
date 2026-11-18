@@ -16,6 +16,7 @@ mod extraer;
 mod gui;
 mod motor;
 mod recursos;
+mod vigilar;
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -96,6 +97,27 @@ struct Args {
     #[arg(long)]
     auditar: bool,
 
+    // ── Modo vigilancia: puerta de auditoría antes de la carga del servidor ──
+    /// Vigilar esta carpeta: audita cada pack que llega y lo encamina solo
+    #[arg(long, value_name = "INCOMING")]
+    vigilar: Option<PathBuf>,
+
+    /// Carpeta de aprobados (la de Mods del servidor). Por defecto: ../approved
+    #[arg(long, value_name = "DIR")]
+    aprobados: Option<PathBuf>,
+
+    /// Carpeta de cuarentena. Por defecto: ../quarantine
+    #[arg(long, value_name = "DIR")]
+    cuarentena: Option<PathBuf>,
+
+    /// Carpeta de informes. Por defecto: ../reports
+    #[arg(long, value_name = "DIR")]
+    reportes: Option<PathBuf>,
+
+    /// Segundos entre sondeos de la carpeta vigilada
+    #[arg(long, default_value_t = 5)]
+    intervalo: u64,
+
     // ── Módulo de claves (abrir ZIP protegidos que tengas derecho a abrir) ──
     /// Contraseña a probar (se puede repetir: --clave a --clave b)
     #[arg(long = "clave", value_name = "CLAVE")]
@@ -130,23 +152,14 @@ struct Args {
     gui: bool,
 }
 
-fn main() -> Result<()> {
-    let a = Args::parse();
-    let sis = Sistema::detectar();
-
-    if (a.archivos.is_empty() && !a.recursos) || a.gui {
-        let auto = a.gui && !a.archivos.is_empty();
-        return gui::lanzar(sis, a.archivos, a.salida, auto);
-    }
-
-    let herr = Herramientas::detectar(a.sin_externas);
-    let mut op = analisis::Opciones::para(&sis);
+fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
+    let mut op = analisis::Opciones::para(sis);
     op.hilos = a.hilos.unwrap_or(sis.nucleos).max(1);
     op.profundidad = a.profundidad;
     op.max_archivo = a
         .max_archivo_mb
         .map(|m| m << 20)
-        .unwrap_or_else(|| analisis::limite_por_bloque(&sis, op.hilos));
+        .unwrap_or_else(|| analisis::limite_por_bloque(sis, op.hilos));
     op.max_total = a.max_total_mb << 20;
     op.timeout = Duration::from_secs(a.timeout);
     op.max_instrucciones = a.max_instrucciones;
@@ -162,6 +175,30 @@ fn main() -> Result<()> {
         }),
         max_intentos: a.max_intentos,
     };
+    op
+}
+
+fn main() -> Result<()> {
+    let a = Args::parse();
+    let sis = Sistema::detectar();
+
+    // Modo vigilancia: puerta de auditoría antes de la carga del servidor.
+    if let Some(incoming) = a.vigilar.clone() {
+        let herr = Herramientas::detectar(a.sin_externas);
+        let mut op = opciones(&a, &sis);
+        op.auditar = true;
+        let c = vigilar::Carpetas::desde(incoming, a.aprobados.clone(), a.cuarentena.clone(), a.reportes.clone());
+        eprintln!("capas v{VERSION} — por {AUTOR} · modo vigilancia\n");
+        return vigilar::vigilar(&c, &op, &herr, &sis, Duration::from_secs(a.intervalo.max(1)), Arc::new(AtomicBool::new(false)));
+    }
+
+    if (a.archivos.is_empty() && !a.recursos) || a.gui {
+        let auto = a.gui && !a.archivos.is_empty();
+        return gui::lanzar(sis, a.archivos, a.salida, auto);
+    }
+
+    let herr = Herramientas::detectar(a.sin_externas);
+    let op = opciones(&a, &sis);
 
     eprintln!("capas v{VERSION} — por {AUTOR}\n");
     eprintln!("== Recursos del ordenador ==");
