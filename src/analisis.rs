@@ -158,6 +158,11 @@ pub fn ejecutar(
             m.emitir(Evento::Aviso(format!("{n} archivo(s) desconocidos → desconocidos.txt (mándamelo para añadir su detección)")));
         }
     }
+    if let Some(n) = crate::plugins::analizar(&arbol, &raiz) {
+        if n > 0 {
+            m.emitir(Evento::Aviso(format!("{n} plugin(s)/código activo → plugins.md (funciones y APIs que importan)")));
+        }
+    }
 
     let clasificacion = if op.clasificar && !arbol.is_empty() {
         match crate::clasificar::clasificar(&arbol, &raiz, true) {

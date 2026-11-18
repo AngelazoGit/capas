@@ -137,6 +137,19 @@ Lo que no se reconoce por contenido se recoge en **`desconocidos.txt`**: agrupa 
 archivos por sus bytes mágicos y extensión, para poder ampliar la detección con los
 formatos propios que aparezcan.
 
+## Informe de plugins / código activo
+
+Siempre que aparece **código** (ELF/PE/Mach-O o bytecode Java/DEX/.pyc/WASM), capas
+escribe **`plugins.md`**: una lista consolidada de cada plugin/librería con sus
+**funciones** y las **APIs que importa**, resaltando las **capacidades sensibles**:
+red, ficheros, procesos, registro/persistencia y cripto. Así ves de un vistazo "qué
+hace y qué toca" cada plugin, sin abrir carpeta por carpeta.
+
+Combinado con la vigilancia de caché del cliente (`--solo-informe`), un plugin que un
+servidor deje en tu caché queda capturado, clasificado como ejecutable, marcado por la
+auditoría como código activo (→ cuarentena) y con sus funciones en `plugins.md`.
+**capas no ejecuta el código**: es detección y análisis, no bloqueo.
+
 ## Módulo de clasificación
 
 Al terminar, `capas` decide la **categoría** de cada archivo (por su contenido y su
@@ -311,6 +324,8 @@ salida/
   clasificacion.md   archivos agrupados por categoría
   clasificacion.json
   desconocidos.txt   magic + extensión de lo no reconocido (para ampliar la detección)
+  plugins.md         código activo con sus funciones y APIs (si hay ejecutables/bytecode)
+  plugins.json
   conjuntos.md       recursos agrupados por nombre base (con --agrupar)
   auditoria.md       veredicto por paquete (con --auditar)
   auditoria.json

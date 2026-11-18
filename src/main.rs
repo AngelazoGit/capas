@@ -16,6 +16,7 @@ mod extraer;
 mod gui;
 mod localizar;
 mod motor;
+mod plugins;
 mod recursos;
 mod vigilar;
 
