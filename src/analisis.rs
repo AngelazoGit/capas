@@ -26,6 +26,8 @@ pub struct Opciones {
     pub max_instrucciones: usize,
     pub tallar: bool,
     pub clasificar: bool,
+    pub agrupar: bool,
+    pub reconstruir: bool,
     pub auditar: bool,
     pub claves: crate::claves::Claves,
 }
@@ -43,6 +45,8 @@ impl Opciones {
             max_instrucciones: 500_000,
             tallar: true,
             clasificar: true,
+            agrupar: false,
+            reconstruir: false,
             auditar: false,
             claves: crate::claves::Claves::default(),
         }
@@ -173,6 +177,25 @@ pub fn ejecutar(
     } else {
         None
     };
+
+    if op.agrupar && !arbol.is_empty() {
+        match crate::clasificar::agrupar(&arbol, &raiz, true) {
+            Ok(c) => m.emitir(Evento::Aviso(format!(
+                "{} conjunto(s) de recursos agrupados ({} archivos) → extraidos/conjuntos/",
+                c.grupos, c.archivos
+            ))),
+            Err(e) => m.emitir(Evento::Aviso(format!("agrupación: {e}"))),
+        }
+    }
+
+    if op.reconstruir && !arbol.is_empty() {
+        match crate::clasificar::reconstruir(&arbol, &raiz, true) {
+            Ok((p, a)) => m.emitir(Evento::Aviso(format!(
+                "{p} paquete(s) reconstruidos ({a} archivos) → extraidos/reconstruido/"
+            ))),
+            Err(e) => m.emitir(Evento::Aviso(format!("reconstrucción: {e}"))),
+        }
+    }
 
     let auditoria = if op.auditar && !arbol.is_empty() {
         match crate::auditar::auditar(&arbol, &raiz) {

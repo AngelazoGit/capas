@@ -98,6 +98,14 @@ struct Args {
     #[arg(long)]
     auditar: bool,
 
+    /// Agrupar recursos con el mismo nombre base (mundo.blocky + mundo.png) en un .zip por conjunto
+    #[arg(long)]
+    agrupar: bool,
+
+    /// Reconstruir cada paquete con su estructura original (carpeta + .zip cargable)
+    #[arg(long)]
+    reconstruir: bool,
+
     // ── Modo vigilancia: puerta de auditoría antes de la carga del servidor ──
     /// Vigilar esta carpeta: audita cada pack que llega y lo encamina solo
     #[arg(long, value_name = "INCOMING")]
@@ -184,6 +192,8 @@ fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
     op.tallar = !a.sin_tallado;
     op.clasificar = !a.sin_clasificar;
     op.auditar = a.auditar;
+    op.agrupar = a.agrupar;
+    op.reconstruir = a.reconstruir;
     op.claves = claves::Claves {
         explicitas: a.claves.clone(),
         comunes: a.comunes,

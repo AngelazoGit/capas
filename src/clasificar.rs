@@ -316,3 +316,199 @@ fn informe(cl: &Clasificacion, copiado: bool) -> String {
     let _ = writeln!(s, "\n---\n*Clasificación generada por capas — módulo de clasificación de @angelazo*");
     s
 }
+
+// ── Agrupación de conjuntos de recursos ─────────────────────────────────
+// Junta los archivos que comparten nombre base en la misma carpeta de origen
+// (p. ej. mundo.blocky + mundo.png + mundo.json) para tratarlos como una unidad.
+
+pub struct Conjuntos {
+    pub grupos: usize,
+    pub archivos: usize,
+}
+
+struct Miembro {
+    base: String,
+    ruta: PathBuf,
+    tipo: Tipo,
+}
+
+/// Agrupa por (paquete raíz, carpeta de origen, nombre base). Escribe
+/// `conjuntos.md` y, si `empaquetar`, un `extraidos/conjuntos/<nombre>.zip` por
+/// conjunto con todos sus archivos juntos.
+pub fn agrupar(arbol: &[Nodo], raiz: &Path, empaquetar: bool) -> std::io::Result<Conjuntos> {
+    // clave: (índice de raíz, carpeta, nombre base en minúsculas)
+    let mut mapa: BTreeMap<(usize, String, String), Vec<Miembro>> = BTreeMap::new();
+    for (i, n) in arbol.iter().enumerate() {
+        recoge_miembros(n, i, &mut mapa);
+    }
+    // Un conjunto: ≥2 archivos distintos con el mismo nombre base.
+    let grupos: Vec<((usize, String, String), Vec<Miembro>)> = mapa
+        .into_iter()
+        .filter(|(_, m)| {
+            let mut bases: Vec<&str> = m.iter().map(|x| x.base.as_str()).collect();
+            bases.sort_unstable();
+            bases.dedup();
+            bases.len() >= 2
+        })
+        .collect();
+
+    let dir_zip = raiz.join("extraidos").join("conjuntos");
+    if empaquetar && !grupos.is_empty() {
+        fs::create_dir_all(&dir_zip)?;
+    }
+    let mut s = String::new();
+    let _ = writeln!(s, "# Conjuntos de recursos\n");
+    let _ = writeln!(s, "{} conjunto(s): archivos que comparten nombre base en la misma carpeta.\n", grupos.len());
+
+    let mut total_archivos = 0usize;
+    let mut usados: BTreeMap<String, usize> = BTreeMap::new();
+    for ((_, carpeta, _), miembros) in &grupos {
+        // Miembros únicos por nombre, orden estable.
+        let mut vistos = std::collections::HashSet::new();
+        let unicos: Vec<&Miembro> = miembros.iter().filter(|m| vistos.insert(m.base.clone())).collect();
+        total_archivos += unicos.len();
+        let stem = unicos[0].base.rsplit_once('.').map(|(a, _)| a).unwrap_or(&unicos[0].base);
+        let ubic = if carpeta.is_empty() { String::new() } else { format!(" (en `{carpeta}`)") };
+        let _ = writeln!(s, "## {stem}{ubic}\n");
+        for m in &unicos {
+            let _ = writeln!(s, "- {} — {}", m.base, categoria(m.tipo, &m.base).etiqueta());
+        }
+
+        if empaquetar {
+            let nombre_zip = nombre_zip_unico(&dir_zip, stem, &mut usados);
+            match empaquetar_conjunto(&dir_zip.join(&nombre_zip), &unicos) {
+                Ok(_) => {
+                    let _ = writeln!(s, "\n→ `extraidos/conjuntos/{nombre_zip}`");
+                }
+                Err(e) => {
+                    let _ = writeln!(s, "\n(no se pudo empaquetar: {e})");
+                }
+            }
+        }
+        let _ = writeln!(s);
+    }
+    let _ = writeln!(s, "---\n*Agrupación de conjuntos — capas, de @angelazo*");
+    fs::write(raiz.join("conjuntos.md"), s)?;
+    Ok(Conjuntos { grupos: grupos.len(), archivos: total_archivos })
+}
+
+fn recoge_miembros(n: &Nodo, raiz_idx: usize, mapa: &mut BTreeMap<(usize, String, String), Vec<Miembro>>) {
+    if n.hijos.is_empty() && n.ruta_fisica.is_file() {
+        let base = n.nombre.rsplit(['/', '\\']).next().unwrap_or(&n.nombre).to_string();
+        let carpeta = n.nombre[..n.nombre.len() - base.len()].trim_end_matches(['/', '\\']).to_string();
+        let stem = base.rsplit_once('.').map(|(a, _)| a).unwrap_or(&base).to_lowercase();
+        if !stem.is_empty() {
+            mapa.entry((raiz_idx, carpeta, stem)).or_default().push(Miembro {
+                base,
+                ruta: n.ruta_fisica.clone(),
+                tipo: n.tipo,
+            });
+        }
+    }
+    for h in &n.hijos {
+        recoge_miembros(h, raiz_idx, mapa);
+    }
+}
+
+fn empaquetar_conjunto(destino: &Path, miembros: &[&Miembro]) -> std::io::Result<()> {
+    use std::io::Write;
+    let f = fs::File::create(destino)?;
+    let mut zw = zip::ZipWriter::new(f);
+    let op = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for m in miembros {
+        let Ok(datos) = fs::read(&m.ruta) else { continue };
+        zw.start_file(m.base.clone(), op).map_err(std::io::Error::other)?;
+        zw.write_all(&datos)?;
+    }
+    zw.finish().map_err(std::io::Error::other)?;
+    Ok(())
+}
+
+fn nombre_zip_unico(dir: &Path, stem: &str, usados: &mut BTreeMap<String, usize>) -> String {
+    let limpio: String = stem.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' }).collect();
+    let limpio = if limpio.is_empty() { "conjunto".into() } else { limpio };
+    let n = usados.entry(limpio.clone()).or_insert(0);
+    *n += 1;
+    if *n == 1 && !dir.join(format!("{limpio}.zip")).exists() {
+        format!("{limpio}.zip")
+    } else {
+        format!("{limpio}~{n}.zip")
+    }
+}
+
+// ── Reconstrucción de paquetes ──────────────────────────────────────────
+// Rearma cada paquete con su estructura de carpetas original (desde el árbol
+// extraído) para que los archivos vuelvan a encontrar sus dependencias por su
+// ruta. Usa los bytes ya extraídos (descifrados si venían con contraseña).
+
+/// Reconstruye cada paquete raíz en `extraidos/reconstruido/<pack>/` y, si
+/// `empaquetar`, también en un `.zip` cargable. Devuelve (paquetes, archivos).
+pub fn reconstruir(arbol: &[Nodo], raiz: &Path, empaquetar: bool) -> std::io::Result<(usize, usize)> {
+    let base = raiz.join("extraidos").join("reconstruido");
+    let mut packs = 0;
+    let mut archivos = 0;
+    let mut usados: BTreeMap<String, usize> = BTreeMap::new();
+    for root in arbol {
+        if root.hijos.is_empty() {
+            continue; // no es un contenedor: nada que rearmar
+        }
+        let mut hojas: Vec<(PathBuf, PathBuf)> = Vec::new(); // (ruta relativa segura, origen)
+        for h in &root.hijos {
+            recoge_hojas(h, Path::new(""), &mut hojas);
+        }
+        if hojas.is_empty() {
+            continue;
+        }
+        let nombre = nombre_dir_unico(root.nombre.rsplit(['/', '\\']).next().unwrap_or(&root.nombre), &mut usados);
+        let dir = base.join(&nombre);
+        for (rel, origen) in &hojas {
+            let destino = dir.join(rel);
+            if let Some(p) = destino.parent() {
+                let _ = fs::create_dir_all(p);
+            }
+            let _ = fs::hard_link(origen, &destino).or_else(|_| fs::copy(origen, &destino).map(|_| ()));
+        }
+        archivos += hojas.len();
+        if empaquetar {
+            let _ = empaquetar_arbol(&base.join(format!("{nombre}.zip")), &hojas);
+        }
+        packs += 1;
+    }
+    Ok((packs, archivos))
+}
+
+fn recoge_hojas(n: &Nodo, prefijo: &Path, hojas: &mut Vec<(PathBuf, PathBuf)>) {
+    let rel = prefijo.join(crate::motor::ruta_segura(&n.nombre));
+    if n.hijos.is_empty() {
+        if n.ruta_fisica.is_file() {
+            hojas.push((rel, n.ruta_fisica.clone()));
+        }
+    } else {
+        for h in &n.hijos {
+            recoge_hojas(h, &rel, hojas);
+        }
+    }
+}
+
+fn empaquetar_arbol(destino: &Path, hojas: &[(PathBuf, PathBuf)]) -> std::io::Result<()> {
+    use std::io::Write;
+    let f = fs::File::create(destino)?;
+    let mut zw = zip::ZipWriter::new(f);
+    let op = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
+    for (rel, origen) in hojas {
+        let Ok(datos) = fs::read(origen) else { continue };
+        let nombre = rel.to_string_lossy().replace('\\', "/");
+        zw.start_file(nombre, op).map_err(std::io::Error::other)?;
+        zw.write_all(&datos)?;
+    }
+    zw.finish().map_err(std::io::Error::other)?;
+    Ok(())
+}
+
+fn nombre_dir_unico(nombre: &str, usados: &mut BTreeMap<String, usize>) -> String {
+    let limpio: String = nombre.chars().map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' }).collect();
+    let limpio = if limpio.is_empty() { "paquete".into() } else { limpio };
+    let n = usados.entry(limpio.clone()).or_insert(0);
+    *n += 1;
+    if *n == 1 { limpio } else { format!("{limpio}~{n}") }
+}
