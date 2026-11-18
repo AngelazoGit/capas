@@ -26,6 +26,7 @@ pub struct Opciones {
     pub max_instrucciones: usize,
     pub tallar: bool,
     pub clasificar: bool,
+    pub auditar: bool,
     pub claves: crate::claves::Claves,
 }
 
@@ -42,6 +43,7 @@ impl Opciones {
             max_instrucciones: 500_000,
             tallar: true,
             clasificar: true,
+            auditar: false,
             claves: crate::claves::Claves::default(),
         }
     }
@@ -60,6 +62,7 @@ pub struct Resumen {
     pub duracion: Duration,
     pub raiz: PathBuf,
     pub clasificacion: Option<crate::clasificar::Clasificacion>,
+    pub auditoria: Option<crate::auditar::Auditoria>,
 }
 
 pub fn ejecutar(
@@ -166,7 +169,24 @@ pub fn ejecutar(
         None
     };
 
-    Ok(Resumen { arbol, bloques, bytes: m.bytes_extraidos(), duracion, raiz, clasificacion })
+    let auditoria = if op.auditar && !arbol.is_empty() {
+        match crate::auditar::auditar(&arbol, &raiz) {
+            Ok(a) => {
+                for p in &a.paquetes {
+                    m.emitir(Evento::Aviso(format!("auditoría «{}»: {}", p.nombre, p.veredicto.etiqueta())));
+                }
+                Some(a)
+            }
+            Err(e) => {
+                m.emitir(Evento::Aviso(format!("auditoría: {e}")));
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    Ok(Resumen { arbol, bloques, bytes: m.bytes_extraidos(), duracion, raiz, clasificacion, auditoria })
 }
 
 pub fn recoger(rutas: &[PathBuf]) -> Result<Vec<PathBuf>> {

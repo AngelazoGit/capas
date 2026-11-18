@@ -7,6 +7,7 @@
 //! Sin argumentos abre la interfaz gráfica; con archivos funciona en consola.
 
 mod analisis;
+mod auditar;
 mod clasificar;
 mod claves;
 mod detectar;
@@ -41,7 +42,9 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
                   objdump, readelf, javap, jadx, CFR, pycdc, wabt, radare2, RetDec, Ghidra y 7z\n\
                   si están instalados.\n\n\
                   Clasifica los archivos finales por categoría en extraidos/ y puede abrir\n\
-                  ZIP protegidos con el módulo de claves (--clave, --comunes, --diccionario).\n\n\
+                  ZIP protegidos con el módulo de claves (--clave, --comunes, --diccionario).\n\
+                  Con --auditar revisa paquetes (asset packs/mods) y da un veredicto\n\
+                  APROBADO/CUARENTENA/RECHAZADO sin ejecutar nada.\n\n\
                   Sin argumentos abre la interfaz gráfica.\n\n\
                   Firmado por @angelazo."
 )]
@@ -88,6 +91,10 @@ struct Args {
     /// No clasificar ni reunir los archivos en extraidos/<categoria>/
     #[arg(long)]
     sin_clasificar: bool,
+
+    /// Auditar paquetes (asset packs/mods): veredicto APROBADO/CUARENTENA/RECHAZADO
+    #[arg(long)]
+    auditar: bool,
 
     // ── Módulo de claves (abrir ZIP protegidos que tengas derecho a abrir) ──
     /// Contraseña a probar (se puede repetir: --clave a --clave b)
@@ -145,6 +152,7 @@ fn main() -> Result<()> {
     op.max_instrucciones = a.max_instrucciones;
     op.tallar = !a.sin_tallado;
     op.clasificar = !a.sin_clasificar;
+    op.auditar = a.auditar;
     op.claves = claves::Claves {
         explicitas: a.claves.clone(),
         comunes: a.comunes,
@@ -186,6 +194,16 @@ fn main() -> Result<()> {
             }
         }
         eprintln!("  Archivos reunidos en: {}", r.raiz.join("extraidos").display());
+    }
+    if let Some(au) = &r.auditoria {
+        eprintln!("\n== Auditoría de paquetes ==");
+        for p in &au.paquetes {
+            eprintln!("  [{}] {}", p.veredicto.etiqueta(), p.nombre);
+            for h in p.hallazgos.iter().filter(|h| h.nivel != auditar::Nivel::Info) {
+                eprintln!("      - {}: {}", h.regla, h.detalle);
+            }
+        }
+        eprintln!("  Informe: {}", r.raiz.join("auditoria.md").display());
     }
     eprintln!("Informe: {}", r.raiz.join("informe.md").display());
     Ok(())

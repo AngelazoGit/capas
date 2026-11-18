@@ -17,6 +17,7 @@ use eframe::egui::{
 };
 
 use crate::analisis::{self, Opciones, Resumen};
+use crate::auditar::{Nivel, Veredicto};
 use crate::clasificar::Categoria;
 use crate::claves::{Claves, FuerzaBruta};
 use crate::detectar::Tipo;
@@ -51,6 +52,14 @@ fn color_tipo(t: Tipo) -> Color32 {
         Tipo::Texto | Tipo::Imagen => TEXTO,
         Tipo::Desconocido => ROJO,
         _ => VERDE,
+    }
+}
+
+fn color_veredicto(v: Veredicto) -> Color32 {
+    match v {
+        Veredicto::Aprobado => VERDE,
+        Veredicto::Cuarentena => NARANJA,
+        Veredicto::Rechazado => ROJO,
     }
 }
 
@@ -142,6 +151,8 @@ pub struct App {
     claves_halladas: Vec<(String, String)>, // (archivo, contraseña)
     // Resultado de la clasificación.
     clasif: Vec<(Categoria, usize)>,
+    // Resultado de la auditoría: (nombre, veredicto, hallazgos que no son info).
+    audit: Vec<(String, Veredicto, Vec<(Nivel, String)>)>,
 }
 
 const ALFABETOS: &[(&str, &str)] = &[
@@ -208,6 +219,7 @@ impl App {
             fuerza_long: 4,
             claves_halladas: Vec::new(),
             clasif: Vec::new(),
+            audit: Vec::new(),
             sis,
         };
         app.log(0.0, format!("CAPAS v{VERSION} INICIADO · OPERADOR {AUTOR}"), NARANJA);
@@ -288,6 +300,7 @@ impl App {
         self.visor = None;
         self.claves_halladas.clear();
         self.clasif.clear();
+        self.audit.clear();
         self.t_inicio = ahora;
         self.ult_muestra = (ahora, 0);
         self.log(ahora, format!("INICIO DE DESCOMPOSICIÓN · {} MUESTRA(S) · {} HILOS", self.archivos.len(), self.op.hilos), NARANJA);
@@ -369,6 +382,25 @@ impl App {
                                 })
                                 .collect();
                             self.log(ahora, format!("CLASIFICADOS {} ARCHIVO(S) → extraidos/", c.total), VERDE);
+                        }
+                        if let Some(au) = &r.auditoria {
+                            self.audit = au
+                                .paquetes
+                                .iter()
+                                .map(|p| {
+                                    let hs = p
+                                        .hallazgos
+                                        .iter()
+                                        .filter(|h| h.nivel != Nivel::Info)
+                                        .map(|h| (h.nivel, format!("{}: {}", h.regla, h.detalle)))
+                                        .collect();
+                                    (p.nombre.clone(), p.veredicto, hs)
+                                })
+                                .collect();
+                            for p in &au.paquetes {
+                                let col = color_veredicto(p.veredicto);
+                                self.log(ahora, format!("AUDITORÍA [{}] {}", p.veredicto.etiqueta(), p.nombre), col);
+                            }
                         }
                         self.arbol = r.arbol;
                         self.raiz = Some(r.raiz);
@@ -601,6 +633,7 @@ impl App {
                     ui.checkbox(&mut self.op.tallar, "BUSCAR ARCHIVOS INCRUSTADOS");
                     ui.checkbox(&mut self.externas, "USAR SUBSISTEMAS EXTERNOS");
                     ui.checkbox(&mut self.op.clasificar, "CLASIFICAR Y REUNIR ARCHIVOS");
+                    ui.checkbox(&mut self.op.auditar, "AUDITAR PAQUETES (ASSET PACKS/MODS)");
                 });
             });
 
@@ -901,6 +934,28 @@ impl App {
     }
 
     fn estratos_ui(&mut self, ui: &mut Ui) {
+        if !self.audit.is_empty() {
+            seccion(ui, "H", "AUDITORÍA DE PAQUETES", NARANJA, |ui| {
+                for (nombre, veredicto, hallazgos) in &self.audit {
+                    let c = color_veredicto(*veredicto);
+                    ui.horizontal(|ui| {
+                        let (r, p) = ui.allocate_painter(Vec2::new(96.0, 18.0), Sense::hover());
+                        let rr = r.rect;
+                        p.rect_filled(rr, 0.0, c.gamma_multiply(0.22));
+                        p.rect_stroke(rr, 0.0, Stroke::new(1.0, c), StrokeKind::Inside);
+                        p.text(rr.center(), Align2::CENTER_CENTER, veredicto.etiqueta(), titulo(12.0), c);
+                        ui.add(egui::Label::new(RichText::new(acortar(nombre, 28)).font(mono(12.0)).color(TEXTO)).truncate());
+                    });
+                    for (nivel, texto) in hallazgos {
+                        let marca = if *nivel == Nivel::Rechazo { "⛔" } else { "⚠" };
+                        ui.label(RichText::new(format!("   {marca} {texto}")).font(mono(10.0)).color(if *nivel == Nivel::Rechazo { ROJO } else { NARANJA }));
+                    }
+                }
+                if ui.add(boton("▸ ABRIR auditoria.md", VERDE)).clicked() {
+                    self.abrir_resultado("auditoria.md");
+                }
+            });
+        }
         if !self.clasif.is_empty() {
             seccion(ui, "G", "CLASIFICACIÓN", MORADO_CLARO, |ui| {
                 let total: usize = self.clasif.iter().map(|(_, n)| *n).sum();

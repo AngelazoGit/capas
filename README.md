@@ -175,6 +175,33 @@ la encuentra si está entre las que se prueban. En la interfaz está en el panel
 
 ![módulos de claves y clasificación](docs/claves.png)
 
+## Módulo de auditoría (asset packs / mods)
+
+Revisión **defensiva** de paquetes (asset packs, mods…) **antes de activarlos**:
+sobre el árbol ya extraído —sin ejecutar nada— aplica reglas y da un veredicto por
+paquete: **APROBADO**, **CUARENTENA** o **RECHAZADO**.
+
+```bash
+./target/release/capas pack1.zip pack2.zip --auditar -s revision
+```
+
+Reglas (alineadas con la guía de captura y auditoría de assets):
+
+- **Rutas de escape** (zip-slip): `../`, rutas absolutas o `C:\…` → RECHAZADO.
+- **Manifest** `manifest.json` ausente o no válido → RECHAZADO; si falta algún
+  campo recomendado (Group, Name, Version, Authors, Dependencies…) se avisa.
+- **Código activo / librerías nativas** (`.exe .dll .so .jar .class .bat .ps1`…) o
+  ejecutables detectados por contenido → CUARENTENA.
+- **Allowlist** de extensiones de recursos (`.json .png .ogg .model .animation`…);
+  lo que queda fuera → CUARENTENA (revisar).
+- Calcula SHA-256 (ya lo hacía) y escribe `auditoria.md` / `auditoria.json`.
+
+En la interfaz es el panel **H AUDITORÍA DE PAQUETES** y se activa con la casilla
+*AUDITAR PAQUETES*. Recuerda: un hash demuestra identidad, no inocencia; analiza los
+paquetes en cuarentena con antivirus/sandbox y mantén el software actualizado.
+
+![auditoría de paquetes](docs/auditoria.png)
+
 ## Salida
 
 ```
@@ -183,6 +210,8 @@ salida/
   informe.json       el mismo árbol, para procesar
   clasificacion.md   archivos agrupados por categoría
   clasificacion.json
+  auditoria.md       veredicto por paquete (con --auditar)
+  auditoria.json
   extraidos/<categoria>/   una copia de cada archivo final, por categoría
   <archivo>/
     analisis/     cabeceras.txt, desensamblado.asm, objdump.asm, javap.txt, cadenas.txt...
