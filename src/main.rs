@@ -14,6 +14,7 @@ mod detectar;
 mod ejecutables;
 mod extraer;
 mod gui;
+mod localizar;
 mod motor;
 mod recursos;
 mod vigilar;
@@ -106,6 +107,19 @@ struct Args {
     #[arg(long)]
     solo_informe: bool,
 
+    // ── Localizador: averiguar dónde guarda su caché una aplicación ──
+    /// Buscar la carpeta de caché de esta aplicación (por nombre)
+    #[arg(long, value_name = "APP")]
+    localizar_cache: Option<String>,
+
+    /// Ejecutable de la app, para buscar pistas de ruta en su binario
+    #[arg(long, value_name = "RUTA")]
+    exe: Option<PathBuf>,
+
+    /// Observar N segundos qué carpetas escribe la app mientras corre
+    #[arg(long, value_name = "SEGUNDOS")]
+    observar: Option<u64>,
+
     /// Carpeta de aprobados (la de Mods del servidor). Por defecto: ../approved
     #[arg(long, value_name = "DIR")]
     aprobados: Option<PathBuf>,
@@ -185,6 +199,17 @@ fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
 fn main() -> Result<()> {
     let a = Args::parse();
     let sis = Sistema::detectar();
+
+    // Localizador de caché: descubre dónde escribe una app y sugiere vigilarla.
+    if a.localizar_cache.is_some() || a.observar.is_some() {
+        eprintln!("capas v{VERSION} — por {AUTOR} · localizador de caché\n");
+        localizar::localizar(
+            a.localizar_cache.as_deref().unwrap_or(""),
+            a.exe.as_deref(),
+            a.observar.map(Duration::from_secs),
+        );
+        return Ok(());
+    }
 
     // Modo vigilancia: puerta de auditoría antes de la carga del servidor.
     if let Some(incoming) = a.vigilar.clone() {
