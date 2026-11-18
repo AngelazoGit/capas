@@ -637,6 +637,8 @@ impl App {
                     ui.checkbox(&mut self.op.tallar, "BUSCAR ARCHIVOS INCRUSTADOS");
                     ui.checkbox(&mut self.externas, "USAR SUBSISTEMAS EXTERNOS");
                     ui.checkbox(&mut self.op.clasificar, "CLASIFICAR Y REUNIR ARCHIVOS");
+                    ui.checkbox(&mut self.op.agrupar, "AGRUPAR RECURSOS (mismo nombre → .zip)");
+                    ui.checkbox(&mut self.op.reconstruir, "RECONSTRUIR PAQUETES (estructura + .zip)");
                     ui.checkbox(&mut self.op.auditar, "AUDITAR PAQUETES (ASSET PACKS/MODS)");
                 });
             });

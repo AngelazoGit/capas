@@ -149,6 +149,33 @@ documentos, comprimidos, recursos de juego / 3D, datos, texto y desconocidos.
 
 Se desactiva con `--sin-clasificar`.
 
+### Agrupar recursos relacionados
+
+Los archivos que comparten nombre base en la misma carpeta (un `mundo.blocky` y su
+`mundo.png`, su `mundo.json`…) son un mismo recurso repartido en varios archivos.
+Con `--agrupar`, capas los junta en **un `.zip` por conjunto** en
+`extraidos/conjuntos/<nombre>.zip`, y lista los conjuntos en `conjuntos.md`.
+
+```bash
+./target/release/capas pack.zip --agrupar -s salida
+```
+
+### Reconstruir paquetes (que vuelvan a funcionar)
+
+`--reconstruir` rearma cada paquete con su **estructura de carpetas original** en
+`extraidos/reconstruido/<paquete>/` y en un **`.zip` cargable**, usando los bytes ya
+extraídos. Así cada archivo vuelve a encontrar sus dependencias por su ruta; si el
+paquete venía **con contraseña**, el reconstruido sale ya descifrado y se abre sin
+clave.
+
+```bash
+./target/release/capas pack.zip --reconstruir -s salida
+```
+
+Nota honesta: esto restaura la **estructura** (co-locación y rutas), que es lo que
+hace que un pack cargue. No interpreta las referencias internas propias de cada
+formato (eso es específico de cada juego); para esos casos, dime el formato.
+
 ## Módulo de claves (ZIP protegidos)
 
 Para archivos **que tengas derecho a abrir** (tus propios ZIP con la contraseña
@@ -284,8 +311,11 @@ salida/
   clasificacion.md   archivos agrupados por categoría
   clasificacion.json
   desconocidos.txt   magic + extensión de lo no reconocido (para ampliar la detección)
+  conjuntos.md       recursos agrupados por nombre base (con --agrupar)
   auditoria.md       veredicto por paquete (con --auditar)
   auditoria.json
+  extraidos/conjuntos/<nombre>.zip     cada conjunto de recursos junto (con --agrupar)
+  extraidos/reconstruido/<pack>/ y .zip  paquete rearmado y cargable (con --reconstruir)
   extraidos/<categoria>/   una copia de cada archivo final, por categoría
   <archivo>/
     analisis/     cabeceras.txt, desensamblado.asm, objdump.asm, javap.txt, cadenas.txt...
