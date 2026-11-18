@@ -130,7 +130,12 @@ herramienta, `--max-archivo-mb`, `--max-total-mb`, `--sin-tallado`,
 | .pyc | — | `pycdc`, `decompyle3`, `uncompyle6` |
 | WebAssembly | — | `wasm2wat`, `wasm-decompile` |
 | Texto/scripts | detecta cargas base64 embebidas | — |
+| Audio/vídeo/fuentes/BD | OGG, WAV, MP3, FLAC, MP4, WebM, AVI, SQLite, TTF/OTF/WOFF… por contenido | — |
 | Cualquier binario | cadenas ASCII/UTF-16, entropía y búsqueda de archivos incrustados por firma | `file` |
+
+Lo que no se reconoce por contenido se recoge en **`desconocidos.txt`**: agrupa los
+archivos por sus bytes mágicos y extensión, para poder ampliar la detección con los
+formatos propios que aparezcan.
 
 ## Módulo de clasificación
 
@@ -278,6 +283,7 @@ salida/
   informe.json       el mismo árbol, para procesar
   clasificacion.md   archivos agrupados por categoría
   clasificacion.json
+  desconocidos.txt   magic + extensión de lo no reconocido (para ampliar la detección)
   auditoria.md       veredicto por paquete (con --auditar)
   auditoria.json
   extraidos/<categoria>/   una copia de cada archivo final, por categoría

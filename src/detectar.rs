@@ -25,6 +25,10 @@ pub enum Tipo {
     Wasm,
     Pdf,
     Imagen,
+    Audio,
+    Video,
+    Fuente,
+    BaseDatos,
     Texto,
     Desconocido,
 }
@@ -53,6 +57,10 @@ impl Tipo {
             Tipo::Wasm => "WebAssembly",
             Tipo::Pdf => "PDF",
             Tipo::Imagen => "Imagen",
+            Tipo::Audio => "Audio",
+            Tipo::Video => "Vídeo",
+            Tipo::Fuente => "Fuente tipográfica",
+            Tipo::BaseDatos => "Base de datos",
             Tipo::Texto => "Texto / script",
             Tipo::Desconocido => "Binario desconocido",
         }
@@ -80,6 +88,10 @@ impl Tipo {
             Tipo::Wasm => "wasm",
             Tipo::Pdf => "pdf",
             Tipo::Imagen => "img",
+            Tipo::Audio => "audio",
+            Tipo::Video => "video",
+            Tipo::Fuente => "font",
+            Tipo::BaseDatos => "db",
             Tipo::Texto => "txt",
             Tipo::Desconocido => "bin",
         }
@@ -184,9 +196,46 @@ pub fn detectar(d: &[u8]) -> Tipo {
             return Tipo::Pyc;
         }
     }
+    // Contenedor RIFF: el subtipo (bytes 8..12) decide la familia.
+    if d.len() >= 12 && &d[0..4] == b"RIFF" {
+        match &d[8..12] {
+            b"WAVE" => return Tipo::Audio,
+            b"AVI " => return Tipo::Video,
+            b"WEBP" => return Tipo::Imagen,
+            _ => {}
+        }
+    }
+    // Contenedor ISO-BMFF (mp4/mov/m4a/m4v): "ftyp" en el offset 4.
+    if d.len() >= 12 && &d[4..8] == b"ftyp" {
+        return if &d[8..11] == b"M4A" { Tipo::Audio } else { Tipo::Video };
+    }
+    // Audio sin contenedor.
+    if d.starts_with(b"OggS") || d.starts_with(b"fLaC") || d.starts_with(b"ID3")
+        || (d.len() > 2 && d[0] == 0xFF && matches!(d[1], 0xFB | 0xF3 | 0xF2))
+    {
+        return Tipo::Audio;
+    }
+    // Vídeo Matroska / WebM (EBML).
+    if d.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) {
+        return Tipo::Video;
+    }
+    // Bases de datos SQLite.
+    if d.starts_with(b"SQLite format 3\0") {
+        return Tipo::BaseDatos;
+    }
+    // Fuentes tipográficas.
+    if d.starts_with(b"OTTO") || d.starts_with(b"wOFF") || d.starts_with(b"wOF2")
+        || d.starts_with(b"ttcf") || d.starts_with(b"true") || d.starts_with(&[0x00, 0x01, 0x00, 0x00])
+    {
+        return Tipo::Fuente;
+    }
     if d.starts_with(b"\x89PNG")
         || d.starts_with(&[0xFF, 0xD8, 0xFF])
         || d.starts_with(b"GIF8")
+        || d.starts_with(b"DDS ")
+        || d.starts_with(&[0x00, 0x00, 0x01, 0x00]) // ICO
+        || d.starts_with(b"II*\x00") // TIFF LE
+        || d.starts_with(b"MM\x00*") // TIFF BE
         || d.starts_with(b"BM")
             && d.len() > 14
             && u32le(d, 2).map(|n| n as usize == d.len()).unwrap_or(false)

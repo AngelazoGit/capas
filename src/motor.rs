@@ -256,8 +256,12 @@ impl Motor {
                 Ok(Vec::new())
             }
             Tipo::Texto => Ok(extraer::base64_embebido(d)),
-            Tipo::Imagen => Ok(Vec::new()),
+            Tipo::Imagen | Tipo::Audio | Tipo::Video | Tipo::Fuente | Tipo::BaseDatos => Ok(Vec::new()),
             Tipo::Desconocido => {
+                // Pista por extensión: mejor que "Binario desconocido" a secas.
+                if let Some(ext) = nombre.rsplit('.').next().filter(|e| !e.is_empty() && e.len() <= 8 && *e != nombre) {
+                    nodo.descripcion = format!("Binario (.{})", ext.to_lowercase());
+                }
                 if let Some(f) = self.herr.get("file") {
                     if let Ok(s) = recursos::ejecutar(f, &[OsStr::new("-b"), r], self.cfg.timeout, 4096) {
                         let t = String::from_utf8_lossy(&s.stdout).trim().to_string();
