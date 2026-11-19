@@ -19,6 +19,7 @@ mod localizar;
 mod motor;
 mod plugins;
 mod recursos;
+mod relaciones;
 mod vigilar;
 
 use std::path::PathBuf;

@@ -99,6 +99,12 @@ by magic bytes + extension, so detection can be extended for custom formats.
   Probable = extension only or text heuristic; Unknown = no evidence. `Unknown` is not
   a failure — it is what keeps the report honest instead of falsely confident. Shown in
   the GUI (confidence panel + per-block badge) and in the reports.
+- **Family relations** — builds the relation graph inside a package generically (no
+  per-game branding): a text/manifest file that names another → *references*; files
+  sharing a base name in the same folder → *family*; same SHA-256 → *duplicate*. A file
+  **referenced by a manifest becomes Confirmed**; referenced by any other file becomes
+  **Compatible**. Written to `relaciones.md`/`.json`, and it raises the confidence of the
+  referenced files with the evidence (`referenced by …`).
 - **Classification** — sorts every final file into a category and gathers copies in
   `extraidos/<category>/` (hard links, no disk duplication).
 - **Password recovery** (`--clave`, `--comunes`, `--diccionario`, `--fuerza-bruta`) —

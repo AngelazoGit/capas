@@ -146,6 +146,19 @@ pub fn ejecutar(
     });
     arbol.sort_by(|a, b| a.nombre.cmp(&b.nombre));
 
+    // Relaciones de familia: ajusta la confianza (COMPATIBLE/CONFIRMADO) antes
+    // de escribir los informes, para que se propague a todo.
+    if !arbol.is_empty() {
+        match crate::relaciones::relacionar(&mut arbol, &raiz) {
+            Ok(n) if n > 0 => m.emitir(Evento::Aviso(tfmt(
+                tr("{} file relation(s) → relaciones.md", "{} relación(es) de archivos → relaciones.md"),
+                &[n.to_string()],
+            ))),
+            Ok(_) => {}
+            Err(e) => m.emitir(Evento::Aviso(tfmt(tr("relations: {}", "relaciones: {}"), &[e.to_string()]))),
+        }
+    }
+
     let duracion = t0.elapsed();
     let bloques = m.procesados.load(Ordering::Relaxed);
     fs::write(raiz.join("informe.json"), serde_json::to_string_pretty(&arbol)?)?;
