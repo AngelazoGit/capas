@@ -157,6 +157,29 @@ capas mod.zip --ci --edicion studio -s out         # exit code for pipelines
 capas --api 8080 --indice capas.db --edicion studio   # serve the index
 ```
 
+### Licensing (offline signed keys)
+
+`--edicion` is a manual override (handy for development). Real activation uses an
+**offline signed license** (Ed25519): the binary embeds only the **public** key and
+verifies the license's signature with no server. A license cannot be forged or
+edited without the vendor's **private** key, and the client just drops a `capas.lic`
+file next to the binary (or `--licencia file` / `CAPAS_LICENCIA`).
+
+Vendor setup (once): generate your key pair and paste the public key into
+`PUBLICA_HEX` in `src/licencia.rs`, then rebuild. **Keep the private key secret —
+never commit it.** The shipped build has a zero placeholder, so licensing is inert
+(everyone stays Core) until you set your key.
+
+```bash
+capas --generar-clave ./claves           # writes capas_private.key + the public key to embed
+capas --firmar-licencia --clave-privada ./claves/capas_private.key \
+      --edicion studio --titular "cliente@example.com" --dias 365 > capas.lic
+```
+
+Client: put `capas.lic` next to `capas.exe` (or pass `--licencia capas.lic`). A valid,
+unexpired signature activates Pro/Studio; a tampered or expired license is rejected
+and it stays Core.
+
 ## Output
 
 ```
