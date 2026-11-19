@@ -46,6 +46,8 @@ pub struct Nodo {
     pub sha256: String,
     pub entropia: f64,
     pub directorio: String,
+    pub confianza: crate::clasificar::Confianza,
+    pub evidencia: String,
     pub resultados: Vec<String>,
     pub notas: Vec<String>,
     pub hijos: Vec<Nodo>,
@@ -113,6 +115,7 @@ impl Motor {
         let tipo = detectar::detectar(&datos);
         let sha = hex(&Sha256::digest(&datos));
         let rel = dir.strip_prefix(&self.raiz).unwrap_or(&dir).display().to_string();
+        let (confianza, evidencia) = crate::clasificar::confianza(tipo, &nombre);
         self.emitir(Evento::Bloque { n, capa, tipo, tamano: datos.len() as u64, ruta: rel.clone() });
 
         let mut nodo = Nodo {
@@ -124,6 +127,8 @@ impl Motor {
             sha256: sha.clone(),
             entropia: (detectar::entropia(&datos) * 1000.0).round() / 1000.0,
             directorio: rel,
+            confianza,
+            evidencia,
             resultados: Vec::new(),
             notas: Vec::new(),
             hijos: Vec::new(),

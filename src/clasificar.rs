@@ -81,6 +81,57 @@ impl Categoria {
     ];
 }
 
+/// Nivel de confianza de una clasificación (de la guía de producto):
+/// Confirmado (una firma lo prueba), Compatible (encaja estructuralmente),
+/// Probable (heurística razonable), Desconocido (sin evidencia suficiente).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
+pub enum Confianza {
+    Confirmado,
+    Compatible,
+    Probable,
+    Desconocido,
+}
+
+impl Confianza {
+    pub fn etiqueta(self) -> &'static str {
+        match self {
+            Confianza::Confirmado => tr("CONFIRMED", "CONFIRMADO"),
+            Confianza::Compatible => tr("COMPATIBLE", "COMPATIBLE"),
+            Confianza::Probable => tr("PROBABLE", "PROBABLE"),
+            Confianza::Desconocido => tr("UNKNOWN", "DESCONOCIDO"),
+        }
+    }
+    pub fn clave(self) -> &'static str {
+        match self {
+            Confianza::Confirmado => "confirmado",
+            Confianza::Compatible => "compatible",
+            Confianza::Probable => "probable",
+            Confianza::Desconocido => "desconocido",
+        }
+    }
+    pub const TODAS: [Confianza; 4] =
+        [Confianza::Confirmado, Confianza::Compatible, Confianza::Probable, Confianza::Desconocido];
+}
+
+/// Decide el nivel de confianza de la identificación de un archivo y la
+/// evidencia que lo respalda. Confirmado = firma binaria; Probable = solo
+/// extensión o heurística de texto; Desconocido = sin evidencia. (Compatible
+/// lo asignan las reglas semánticas, aún no implementadas.)
+pub fn confianza(tipo: Tipo, nombre: &str) -> (Confianza, String) {
+    match tipo {
+        Tipo::Desconocido => {
+            let ext = extension(nombre);
+            if !ext.is_empty() && por_extension(&ext).is_some() {
+                (Confianza::Probable, tfmt(tr("extension only: .{}", "solo extensión: .{}"), &[ext]))
+            } else {
+                (Confianza::Desconocido, tr("no signature or known extension", "sin firma ni extensión conocida").to_string())
+            }
+        }
+        Tipo::Texto => (Confianza::Probable, tr("content looks like text", "el contenido parece texto").to_string()),
+        t => (Confianza::Confirmado, tfmt(tr("magic bytes: {}", "firma binaria: {}"), &[t.nombre().to_string()])),
+    }
+}
+
 /// Clasifica combinando lo que detectó el analizador con la extensión del
 /// nombre (que capta formatos que no tienen "número mágico" propio).
 pub fn categoria(tipo: Tipo, nombre: &str) -> Categoria {
