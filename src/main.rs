@@ -15,6 +15,7 @@ mod ejecutables;
 mod extraer;
 mod gui;
 mod idioma;
+mod indice;
 mod localizar;
 mod motor;
 mod plugins;
@@ -183,6 +184,14 @@ struct Args {
     /// Interface and message language: en | es (default: auto-detected)
     #[arg(long, value_name = "LANG")]
     idioma: Option<String>,
+
+    /// Base de datos SQLite del índice (por defecto: <salida>/capas.db). Persistente si apuntas a una fija.
+    #[arg(long, value_name = "RUTA")]
+    indice: Option<PathBuf>,
+
+    /// No escribir el índice SQLite
+    #[arg(long)]
+    sin_indice: bool,
 }
 
 fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
@@ -201,6 +210,8 @@ fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
     op.auditar = a.auditar;
     op.agrupar = a.agrupar;
     op.reconstruir = a.reconstruir;
+    op.indice = !a.sin_indice;
+    op.indice_db = a.indice.clone();
     op.claves = claves::Claves {
         explicitas: a.claves.clone(),
         comunes: a.comunes,

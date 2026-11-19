@@ -29,6 +29,8 @@ pub struct Opciones {
     pub clasificar: bool,
     pub agrupar: bool,
     pub reconstruir: bool,
+    pub indice: bool,
+    pub indice_db: Option<PathBuf>,
     pub auditar: bool,
     pub claves: crate::claves::Claves,
 }
@@ -48,6 +50,8 @@ impl Opciones {
             clasificar: true,
             agrupar: false,
             reconstruir: false,
+            indice: true,
+            indice_db: None,
             auditar: false,
             claves: crate::claves::Claves::default(),
         }
@@ -148,16 +152,25 @@ pub fn ejecutar(
 
     // Relaciones de familia: ajusta la confianza (COMPATIBLE/CONFIRMADO) antes
     // de escribir los informes, para que se propague a todo.
-    if !arbol.is_empty() {
+    let relaciones = if !arbol.is_empty() {
         match crate::relaciones::relacionar(&mut arbol, &raiz) {
-            Ok(n) if n > 0 => m.emitir(Evento::Aviso(tfmt(
-                tr("{} file relation(s) → relaciones.md", "{} relación(es) de archivos → relaciones.md"),
-                &[n.to_string()],
-            ))),
-            Ok(_) => {}
-            Err(e) => m.emitir(Evento::Aviso(tfmt(tr("relations: {}", "relaciones: {}"), &[e.to_string()]))),
+            Ok(v) => {
+                if !v.is_empty() {
+                    m.emitir(Evento::Aviso(tfmt(
+                        tr("{} file relation(s) → relaciones.md", "{} relación(es) de archivos → relaciones.md"),
+                        &[v.len().to_string()],
+                    )));
+                }
+                v
+            }
+            Err(e) => {
+                m.emitir(Evento::Aviso(tfmt(tr("relations: {}", "relaciones: {}"), &[e.to_string()])));
+                Vec::new()
+            }
         }
-    }
+    } else {
+        Vec::new()
+    };
 
     let duracion = t0.elapsed();
     let bloques = m.procesados.load(Ordering::Relaxed);
@@ -219,6 +232,17 @@ pub fn ejecutar(
     } else {
         None
     };
+
+    if op.indice && !arbol.is_empty() {
+        let db = op.indice_db.clone().unwrap_or_else(|| raiz.join("capas.db"));
+        match crate::indice::escribir(&db, &arbol, &relaciones, auditoria.as_ref()) {
+            Ok(r) => m.emitir(Evento::Aviso(tfmt(
+                tr("SQLite index: {} file(s) this run, {} unique total → {}", "índice SQLite: {} archivo(s) esta vez, {} únicos en total → {}"),
+                &[r.archivos.to_string(), r.total_db.to_string(), db.display().to_string()],
+            ))),
+            Err(e) => m.emitir(Evento::Aviso(tfmt(tr("SQLite index: {}", "índice SQLite: {}"), &[e.to_string()]))),
+        }
+    }
 
     Ok(Resumen { arbol, bloques, bytes: m.bytes_extraidos(), duracion, raiz, clasificacion, auditoria })
 }

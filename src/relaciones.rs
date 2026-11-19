@@ -63,8 +63,8 @@ fn es_manifest(base: &str) -> bool {
 }
 
 /// Construye las relaciones por paquete raíz, actualiza la confianza de los
-/// referenciados y escribe `relaciones.md` / `.json`. Devuelve cuántas relaciones.
-pub fn relacionar(arbol: &mut [Nodo], raiz: &Path) -> std::io::Result<usize> {
+/// referenciados y escribe `relaciones.md` / `.json`. Devuelve las relaciones.
+pub fn relacionar(arbol: &mut [Nodo], raiz: &Path) -> std::io::Result<Vec<Relacion>> {
     let mut rels: Vec<Relacion> = Vec::new();
     // Ajustes de confianza a aplicar: ruta_fisica -> (nueva, evidencia).
     let mut subir: HashMap<PathBuf, (Confianza, String)> = HashMap::new();
@@ -79,15 +79,14 @@ pub fn relacionar(arbol: &mut [Nodo], raiz: &Path) -> std::io::Result<usize> {
 
     aplicar(arbol, &subir, &notas);
 
-    if rels.is_empty() {
-        return Ok(0);
+    if !rels.is_empty() {
+        let r = Relaciones { relaciones: rels.clone() };
+        let _ = std::fs::write(raiz.join("relaciones.md"), informe(&r));
+        if let Ok(j) = serde_json::to_string_pretty(&r) {
+            let _ = std::fs::write(raiz.join("relaciones.json"), j);
+        }
     }
-    let r = Relaciones { relaciones: rels };
-    let _ = std::fs::write(raiz.join("relaciones.md"), informe(&r));
-    if let Ok(j) = serde_json::to_string_pretty(&r) {
-        let _ = std::fs::write(raiz.join("relaciones.json"), j);
-    }
-    Ok(r.relaciones.len())
+    Ok(rels)
 }
 
 fn recoge(n: &Nodo, out: &mut Vec<Hoja>) {
