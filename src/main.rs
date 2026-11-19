@@ -63,9 +63,9 @@ struct Args {
     /// Files or folders to analyze (with none, the GUI opens)
     archivos: Vec<PathBuf>,
 
-    /// Output folder
-    #[arg(short, long, default_value = "salida_capas")]
-    salida: PathBuf,
+    /// Output folder (default: output_capas in English, salida_capas in Spanish)
+    #[arg(short, long)]
+    salida: Option<PathBuf>,
 
     /// Worker threads (default: all cores)
     #[arg(short = 'j', long)]
@@ -280,6 +280,11 @@ fn main() -> Result<()> {
         Some(l) => idioma::set_es(l.eq_ignore_ascii_case("es")),
         None => idioma::autodetectar(),
     }
+    // El nombre por defecto de la carpeta de salida sigue el idioma activo.
+    let salida = a
+        .salida
+        .clone()
+        .unwrap_or_else(|| PathBuf::from(idioma::tr("output_capas", "salida_capas")));
     // [Vendedor] Generar par de claves.
     if let Some(dir) = &a.generar_clave {
         match licencia::generar_clave() {
@@ -323,7 +328,7 @@ fn main() -> Result<()> {
             eprintln!("{}", edicion::bloqueado("--api", edicion::API));
             std::process::exit(7);
         }
-        let db = a.indice.clone().unwrap_or_else(|| a.salida.join("capas.db"));
+        let db = a.indice.clone().unwrap_or_else(|| salida.join("capas.db"));
         return api::servir(db, puerto).map_err(Into::into);
     }
 
@@ -350,7 +355,7 @@ fn main() -> Result<()> {
 
     if (a.archivos.is_empty() && !a.recursos) || a.gui {
         let auto = a.gui && !a.archivos.is_empty();
-        return gui::lanzar(sis, a.archivos, a.salida, auto);
+        return gui::lanzar(sis, a.archivos, salida, auto);
     }
 
     let herr = Herramientas::detectar(a.sin_externas);
@@ -375,7 +380,7 @@ fn main() -> Result<()> {
     }
 
     eprintln!("\n== {} ==", idioma::tr("Analyzing","Analizando"));
-    let r = analisis::ejecutar(&a.archivos, &a.salida, &op, herr, &sis, None, Arc::new(AtomicBool::new(false)))?;
+    let r = analisis::ejecutar(&a.archivos, &salida, &op, herr, &sis, None, Arc::new(AtomicBool::new(false)))?;
     eprintln!(
         "\n== {} {:.1}s: {} {}, {} {} ==",
         idioma::tr("Done in","Terminado en"),

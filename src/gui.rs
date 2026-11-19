@@ -27,8 +27,8 @@ use crate::recursos::{humano, Herramientas, Sistema, HERRAMIENTAS_CONOCIDAS};
 use crate::{AUTOR, VERSION};
 
 // ── Temas (máscaras) ─────────────────────────────────────────────────────
-// Dos paletas con el mismo estilo (morado/verde/naranja): "Sereno" (limpio,
-// suave a la vista, por defecto) y "Mando" (intenso, el original).
+// Máscaras: "Limpio" (clara, business — por defecto), "Sereno" (oscuro suave),
+// "Neutro" (grises) y "Mando" (intenso, el original morado/verde/naranja).
 #[derive(Clone, Copy)]
 struct Paleta {
     fondo: Color32,
@@ -94,14 +94,33 @@ const NEUTRO: Paleta = Paleta {
     rejilla_bg: Color32::from_rgb(0x24, 0x24, 0x28),
 };
 
-// 0 = Sereno (por defecto), 1 = Mando, 2 = Neutro.
-static TEMA: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+// "Limpio" (Clean): máscara clara, estilo business — blancos y negros con
+// acentos sobrios, para quien se satura con las interfaces oscuras.
+const LIMPIO: Paleta = Paleta {
+    fondo: Color32::from_rgb(0xf5, 0xf5, 0xf7),
+    morado_oscuro: Color32::from_rgb(0xff, 0xff, 0xff),
+    morado: Color32::from_rgb(0xe7, 0xe7, 0xea),
+    morado_medio: Color32::from_rgb(0xbf, 0xbf, 0xc8),
+    morado_claro: Color32::from_rgb(0x44, 0x47, 0x4f),
+    verde: Color32::from_rgb(0x2f, 0x8f, 0x52),
+    verde_oscuro: Color32::from_rgb(0xd6, 0xea, 0xd9),
+    naranja: Color32::from_rgb(0xb0, 0x71, 0x16),
+    naranja_oscuro: Color32::from_rgb(0xf0, 0xe1, 0xc6),
+    rojo: Color32::from_rgb(0xc2, 0x3b, 0x2e),
+    texto: Color32::from_rgb(0x1a, 0x1b, 0x1f),
+    hondo: Color32::from_rgb(0xff, 0xff, 0xff),
+    rejilla_bg: Color32::from_rgb(0xee, 0xee, 0xf1),
+};
+
+// 0 = Sereno, 1 = Mando, 2 = Neutro, 3 = Limpio (por defecto).
+static TEMA: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(3);
 
 fn pal() -> Paleta {
     match TEMA.load(Ordering::Relaxed) {
+        0 => SERENO,
         1 => MANDO,
         2 => NEUTRO,
-        _ => SERENO,
+        _ => LIMPIO,
     }
 }
 fn fondo() -> Color32 { pal().fondo }
@@ -305,7 +324,7 @@ impl App {
             seleccion: None,
             visor: None,
             auto_iniciar: false,
-            tema: 0,
+            tema: 3,
             clave_entrada: String::new(),
             usar_comunes: false,
             diccionario: None,
@@ -735,9 +754,10 @@ impl App {
                     ui.separator();
                     let mut tema = self.tema;
                     egui::ComboBox::from_id_salt("tema")
-                        .selected_text(match tema { 1 => tr("THEME: COMMAND", "TEMA: MANDO"), 2 => tr("THEME: NEUTRAL", "TEMA: NEUTRO"), _ => tr("THEME: SERENE", "TEMA: SERENO") })
+                        .selected_text(match tema { 0 => tr("THEME: SERENE", "TEMA: SERENO"), 1 => tr("THEME: COMMAND", "TEMA: MANDO"), 2 => tr("THEME: NEUTRAL", "TEMA: NEUTRO"), _ => tr("THEME: CLEAN", "TEMA: LIMPIO") })
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut tema, 0u8, tr("SERENE (clean)", "SERENO (limpio)"));
+                            ui.selectable_value(&mut tema, 3u8, tr("CLEAN (light, business)", "LIMPIO (claro, business)"));
+                            ui.selectable_value(&mut tema, 0u8, tr("SERENE (soft dark)", "SERENO (oscuro suave)"));
                             ui.selectable_value(&mut tema, 2u8, tr("NEUTRAL (grayscale)", "NEUTRO (grises)"));
                             ui.selectable_value(&mut tema, 1u8, tr("COMMAND (intense)", "MANDO (intenso)"));
                         });
@@ -1471,7 +1491,8 @@ fn configurar_estilo(ctx: &egui::Context) {
 }
 
 fn aplicar_visuals(ctx: &egui::Context) {
-    let mut v = egui::Visuals::dark();
+    // Tema 3 (Limpio) es claro; el resto parten de la base oscura.
+    let mut v = if TEMA.load(Ordering::Relaxed) == 3 { egui::Visuals::light() } else { egui::Visuals::dark() };
     v.override_text_color = Some(texto());
     v.panel_fill = fondo();
     v.window_fill = morado_oscuro();
