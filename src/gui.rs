@@ -1,4 +1,4 @@
-//! Interfaz gráfica de capas — estética de "centro de mando" de anime de los 90:
+//! Interfaz gráfica de capas — estética de tr("command center", "centro de mando") de anime de los 90:
 //! morados profundos, verde neón y naranja de alerta. Diseño original de @angelazo.
 
 use std::collections::{HashMap, VecDeque};
@@ -19,24 +19,84 @@ use eframe::egui::{
 use crate::analisis::{self, Opciones, Resumen};
 use crate::auditar::{Nivel, Veredicto};
 use crate::clasificar::Categoria;
+use crate::idioma::tr;
 use crate::claves::{Claves, FuerzaBruta};
 use crate::detectar::Tipo;
 use crate::motor::{Evento, Nodo};
 use crate::recursos::{humano, Herramientas, Sistema, HERRAMIENTAS_CONOCIDAS};
 use crate::{AUTOR, VERSION};
 
-// ── Paleta ──────────────────────────────────────────────────────────────
-const FONDO: Color32 = Color32::from_rgb(0x0f, 0x07, 0x1c);
-const MORADO_OSCURO: Color32 = Color32::from_rgb(0x1a, 0x0b, 0x2e);
-const MORADO: Color32 = Color32::from_rgb(0x2e, 0x14, 0x52);
-const MORADO_MEDIO: Color32 = Color32::from_rgb(0x55, 0x2a, 0x93);
-const MORADO_CLARO: Color32 = Color32::from_rgb(0x9b, 0x6b, 0xe3);
-const VERDE: Color32 = Color32::from_rgb(0x8c, 0xff, 0x3c);
-const VERDE_OSCURO: Color32 = Color32::from_rgb(0x2b, 0x6e, 0x1e);
-const NARANJA: Color32 = Color32::from_rgb(0xff, 0x8a, 0x1c);
-const NARANJA_OSCURO: Color32 = Color32::from_rgb(0x8a, 0x3a, 0x05);
-const ROJO: Color32 = Color32::from_rgb(0xff, 0x2e, 0x4a);
-const TEXTO: Color32 = Color32::from_rgb(0xe9, 0xdd, 0xff);
+// ── Temas (máscaras) ─────────────────────────────────────────────────────
+// Dos paletas con el mismo estilo (morado/verde/naranja): "Sereno" (limpio,
+// suave a la vista, por defecto) y "Mando" (intenso, el original).
+#[derive(Clone, Copy)]
+struct Paleta {
+    fondo: Color32,
+    morado_oscuro: Color32,
+    morado: Color32,
+    morado_medio: Color32,
+    morado_claro: Color32,
+    verde: Color32,
+    verde_oscuro: Color32,
+    naranja: Color32,
+    naranja_oscuro: Color32,
+    rojo: Color32,
+    texto: Color32,
+    hondo: Color32,
+    rejilla_bg: Color32,
+}
+
+const SERENO: Paleta = Paleta {
+    fondo: Color32::from_rgb(0x19, 0x14, 0x29),
+    morado_oscuro: Color32::from_rgb(0x23, 0x1c, 0x3a),
+    morado: Color32::from_rgb(0x30, 0x26, 0x50),
+    morado_medio: Color32::from_rgb(0x5b, 0x4c, 0x85),
+    morado_claro: Color32::from_rgb(0xb6, 0xa4, 0xe2),
+    verde: Color32::from_rgb(0x86, 0xc9, 0x6e),
+    verde_oscuro: Color32::from_rgb(0x3c, 0x5b, 0x34),
+    naranja: Color32::from_rgb(0xe6, 0xa1, 0x5a),
+    naranja_oscuro: Color32::from_rgb(0x7e, 0x56, 0x2e),
+    rojo: Color32::from_rgb(0xdf, 0x6e, 0x7c),
+    texto: Color32::from_rgb(0xec, 0xe8, 0xf6),
+    hondo: Color32::from_rgb(0x13, 0x0f, 0x20),
+    rejilla_bg: Color32::from_rgb(0x1e, 0x18, 0x30),
+};
+
+const MANDO: Paleta = Paleta {
+    fondo: Color32::from_rgb(0x0f, 0x07, 0x1c),
+    morado_oscuro: Color32::from_rgb(0x1a, 0x0b, 0x2e),
+    morado: Color32::from_rgb(0x2e, 0x14, 0x52),
+    morado_medio: Color32::from_rgb(0x55, 0x2a, 0x93),
+    morado_claro: Color32::from_rgb(0x9b, 0x6b, 0xe3),
+    verde: Color32::from_rgb(0x8c, 0xff, 0x3c),
+    verde_oscuro: Color32::from_rgb(0x2b, 0x6e, 0x1e),
+    naranja: Color32::from_rgb(0xff, 0x8a, 0x1c),
+    naranja_oscuro: Color32::from_rgb(0x8a, 0x3a, 0x05),
+    rojo: Color32::from_rgb(0xff, 0x2e, 0x4a),
+    texto: Color32::from_rgb(0xe9, 0xdd, 0xff),
+    hondo: Color32::from_rgb(0x08, 0x04, 0x10),
+    rejilla_bg: Color32::from_rgb(0x12, 0x08, 0x22),
+};
+
+// 0 = Sereno (por defecto), 1 = Mando.
+static TEMA: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+fn pal() -> Paleta {
+    if TEMA.load(Ordering::Relaxed) == 1 { MANDO } else { SERENO }
+}
+fn fondo() -> Color32 { pal().fondo }
+fn morado_oscuro() -> Color32 { pal().morado_oscuro }
+fn morado() -> Color32 { pal().morado }
+fn morado_medio() -> Color32 { pal().morado_medio }
+fn morado_claro() -> Color32 { pal().morado_claro }
+fn verde() -> Color32 { pal().verde }
+fn verde_oscuro() -> Color32 { pal().verde_oscuro }
+fn naranja() -> Color32 { pal().naranja }
+fn naranja_oscuro() -> Color32 { pal().naranja_oscuro }
+fn rojo() -> Color32 { pal().rojo }
+fn texto() -> Color32 { pal().texto }
+fn hondo() -> Color32 { pal().hondo }
+fn rejilla_bg() -> Color32 { pal().rejilla_bg }
 
 fn titulo(t: f32) -> FontId {
     FontId::new(t, FontFamily::Name("titulo".into()))
@@ -47,33 +107,33 @@ fn mono(t: f32) -> FontId {
 
 fn color_tipo(t: Tipo) -> Color32 {
     match t {
-        Tipo::Elf | Tipo::Pe | Tipo::MachO => NARANJA,
-        Tipo::ClaseJava | Tipo::Dex | Tipo::Pyc | Tipo::Wasm => MORADO_CLARO,
-        Tipo::Texto | Tipo::Imagen => TEXTO,
-        Tipo::Desconocido => ROJO,
-        _ => VERDE,
+        Tipo::Elf | Tipo::Pe | Tipo::MachO => naranja(),
+        Tipo::ClaseJava | Tipo::Dex | Tipo::Pyc | Tipo::Wasm => morado_claro(),
+        Tipo::Texto | Tipo::Imagen => texto(),
+        Tipo::Desconocido => rojo(),
+        _ => verde(),
     }
 }
 
 fn color_veredicto(v: Veredicto) -> Color32 {
     match v {
-        Veredicto::Aprobado => VERDE,
-        Veredicto::Cuarentena => NARANJA,
-        Veredicto::Rechazado => ROJO,
+        Veredicto::Aprobado => verde(),
+        Veredicto::Cuarentena => naranja(),
+        Veredicto::Rechazado => rojo(),
     }
 }
 
 fn color_categoria(c: Categoria) -> Color32 {
     match c {
-        Categoria::Ejecutable | Categoria::Bytecode => NARANJA,
-        Categoria::Imagen | Categoria::Audio | Categoria::Video | Categoria::RecursoJuego => MORADO_CLARO,
-        Categoria::Desconocido => ROJO,
-        _ => VERDE,
+        Categoria::Ejecutable | Categoria::Bytecode => naranja(),
+        Categoria::Imagen | Categoria::Audio | Categoria::Video | Categoria::RecursoJuego => morado_claro(),
+        Categoria::Desconocido => rojo(),
+        _ => verde(),
     }
 }
 
-fn codigo_tipo(t: Tipo) -> &'static str {
-    match t {
+fn codigo_tipo(tp: Tipo) -> &'static str {
+    match tp {
         Tipo::Zip => "ZIP",
         Tipo::Gzip => "GZIP",
         Tipo::Bzip2 => "BZIP2",
@@ -93,13 +153,13 @@ fn codigo_tipo(t: Tipo) -> &'static str {
         Tipo::Pyc => "PYC",
         Tipo::Wasm => "WASM",
         Tipo::Pdf => "PDF",
-        Tipo::Imagen => "IMAGEN",
+        Tipo::Imagen => tr("IMAGE", "IMAGEN"),
         Tipo::Audio => "AUDIO",
-        Tipo::Video => "VÍDEO",
-        Tipo::Fuente => "FUENTE",
-        Tipo::BaseDatos => "BASE DATOS",
-        Tipo::Texto => "TEXTO",
-        Tipo::Desconocido => "DESCONOCIDO",
+        Tipo::Video => tr("VIDEO", "VÍDEO"),
+        Tipo::Fuente => tr("FONT", "FUENTE"),
+        Tipo::BaseDatos => tr("DATABASE", "BASE DATOS"),
+        Tipo::Texto => tr("TEXT", "TEXTO"),
+        Tipo::Desconocido => tr("UNKNOWN", "DESCONOCIDO"),
     }
 }
 
@@ -145,6 +205,7 @@ pub struct App {
     seleccion: Option<Vec<usize>>,
     visor: Option<Visor>,
     auto_iniciar: bool,
+    tema: u8,
     // Módulo de claves (interfaz).
     clave_entrada: String,
     usar_comunes: bool,
@@ -160,16 +221,16 @@ pub struct App {
 }
 
 const ALFABETOS: &[(&str, &str)] = &[
-    ("Dígitos 0-9", "d"),
-    ("Minúsculas a-z", "l"),
-    ("Alfanumérico", "a"),
-    ("Completo + May.", "A"),
+    ("Digits 0-9", "d"),
+    ("Lowercase a-z", "l"),
+    ("Alphanumeric", "a"),
+    ("Full + Upper", "A"),
 ];
 
 pub fn lanzar(sis: Sistema, archivos: Vec<PathBuf>, salida: PathBuf, auto_iniciar: bool) -> anyhow::Result<()> {
     let opciones = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title(format!("CAPAS · sistema de descomposición estratificada · {AUTOR}"))
+            .with_title(format!("CAPAS · layered decomposition system · {AUTOR}"))
             .with_inner_size([1440.0, 900.0])
             .with_min_inner_size([1100.0, 700.0])
             .with_icon(icono())
@@ -187,7 +248,7 @@ pub fn lanzar(sis: Sistema, archivos: Vec<PathBuf>, salida: PathBuf, auto_inicia
             Ok(Box::new(app))
         }),
     )
-    .map_err(|e| anyhow::anyhow!("no se pudo abrir la interfaz: {e}"))
+    .map_err(|e| anyhow::anyhow!("could not open the interface: {e}"))
 }
 
 impl App {
@@ -215,6 +276,7 @@ impl App {
             seleccion: None,
             visor: None,
             auto_iniciar: false,
+            tema: 0,
             clave_entrada: String::new(),
             usar_comunes: false,
             diccionario: None,
@@ -226,18 +288,18 @@ impl App {
             audit: Vec::new(),
             sis,
         };
-        app.log(0.0, format!("CAPAS v{VERSION} INICIADO · OPERADOR {AUTOR}"), NARANJA);
+        app.log(0.0, format!("CAPAS v{VERSION} STARTED · OPERATOR {AUTOR}"), naranja());
         app.log(
             0.0,
             format!(
-                "{} NÚCLEOS · {} LIBRES · {} SUBSISTEMAS EXTERNOS",
+                "{} CORES · {} FREE · {} EXTERNAL SUBSYSTEMS",
                 app.sis.nucleos,
                 humano(app.sis.memoria_libre),
                 app.herr.rutas.len()
             ),
-            VERDE,
+            verde(),
         );
-        app.log(0.0, "EN ESPERA DE MUESTRAS. ARRASTRA ARCHIVOS A LA VENTANA.".into(), MORADO_CLARO);
+        app.log(0.0, tr("WAITING FOR SAMPLES. DRAG FILES ONTO THE WINDOW.", "EN ESPERA DE MUESTRAS. ARRASTRA ARCHIVOS A LA VENTANA.").into(), morado_claro());
         app
     }
 
@@ -307,7 +369,7 @@ impl App {
         self.audit.clear();
         self.t_inicio = ahora;
         self.ult_muestra = (ahora, 0);
-        self.log(ahora, format!("INICIO DE DESCOMPOSICIÓN · {} MUESTRA(S) · {} HILOS", self.archivos.len(), self.op.hilos), NARANJA);
+        self.log(ahora, format!("DECOMPOSITION START · {} SAMPLE(S) · {} THREADS", self.archivos.len(), self.op.hilos), naranja());
         self.fase = Fase::Analizando { rx, hilo, cancelar };
     }
 
@@ -333,7 +395,7 @@ impl App {
                     self.ultimo = Some((tipo, ruta.clone(), ahora));
                     self.log(
                         ahora,
-                        format!("CAPA {capa:02} │ {:<11} │ {:>10} │ {ruta}", codigo_tipo(tipo), humano(tamano)),
+                        format!("LAYER {capa:02} │ {:<11} │ {:>10} │ {ruta}", codigo_tipo(tipo), humano(tamano)),
                         color_tipo(tipo),
                     );
                 }
@@ -342,12 +404,12 @@ impl App {
                     if let Some(resto) = a.strip_prefix("contraseña hallada para '") {
                         if let Some((arch, clave)) = resto.split_once("': ") {
                             self.claves_halladas.push((arch.to_string(), clave.to_string()));
-                            self.log(ahora, format!("🔓 CLAVE «{clave}» → {arch}"), VERDE);
+                            self.log(ahora, format!("🔓 KEY «{clave}» → {arch}"), verde());
                             continue;
                         }
                     }
-                    let col = if a.contains('✔') || a.contains("clasificados") { VERDE } else { NARANJA };
-                    self.log(ahora, format!("AVISO: {a}"), col);
+                    let col = if a.contains('✔') || a.contains("clasificados") { verde() } else { naranja() };
+                    self.log(ahora, format!("NOTICE: {a}"), col);
                 }
             }
         }
@@ -369,14 +431,14 @@ impl App {
                         self.log(
                             ahora,
                             format!(
-                                "DESCOMPOSICIÓN COMPLETADA · {} BLOQUES · {} EXTRAÍDOS · {:.2}s",
+                                "DECOMPOSITION COMPLETE · {} BLOCKS · {} EXTRACTED · {:.2}s",
                                 r.bloques,
                                 humano(r.bytes),
                                 r.duracion.as_secs_f64()
                             ),
-                            VERDE,
+                            verde(),
                         );
-                        self.log(ahora, format!("INFORME: {}", r.raiz.join("informe.md").display()), VERDE);
+                        self.log(ahora, format!("REPORT: {}", r.raiz.join("informe.md").display()), verde());
                         if let Some(c) = &r.clasificacion {
                             self.clasif = Categoria::TODAS
                                 .iter()
@@ -385,7 +447,7 @@ impl App {
                                     (n > 0).then_some((*cat, n))
                                 })
                                 .collect();
-                            self.log(ahora, format!("CLASIFICADOS {} ARCHIVO(S) → extraidos/", c.total), VERDE);
+                            self.log(ahora, format!("CLASSIFIED {} FILE(S) → extraidos/", c.total), verde());
                         }
                         if let Some(au) = &r.auditoria {
                             self.audit = au
@@ -403,7 +465,7 @@ impl App {
                                 .collect();
                             for p in &au.paquetes {
                                 let col = color_veredicto(p.veredicto);
-                                self.log(ahora, format!("AUDITORÍA [{}] {}", p.veredicto.etiqueta(), p.nombre), col);
+                                self.log(ahora, format!("AUDIT [{}] {}", p.veredicto.etiqueta(), p.nombre), col);
                             }
                         }
                         self.arbol = r.arbol;
@@ -412,8 +474,8 @@ impl App {
                             self.seleccion = Some(vec![0]);
                         }
                     }
-                    Ok(Err(e)) => self.log(ahora, format!("FALLO: {e:#}"), ROJO),
-                    Err(_) => self.log(ahora, "FALLO: el hilo de análisis se ha detenido".into(), ROJO),
+                    Ok(Err(e)) => self.log(ahora, format!("FAILURE: {e:#}"), rojo()),
+                    Err(_) => self.log(ahora, tr("FAILURE: the analysis thread stopped", "FALLO: el hilo de análisis se ha detenido").into(), rojo()),
                 }
             }
         }
@@ -439,7 +501,7 @@ impl App {
                 });
             }
             Err(e) => {
-                self.visor = Some(Visor { titulo: rel.into(), lineas: vec![format!("no se pudo leer: {e}")], truncado: false })
+                self.visor = Some(Visor { titulo: rel.into(), lineas: vec![format!("could not read: {e}")], truncado: false })
             }
         }
     }
@@ -447,7 +509,7 @@ impl App {
 
 impl eframe::App for App {
     fn clear_color(&self, _v: &egui::Visuals) -> [f32; 4] {
-        FONDO.to_normalized_gamma_f32()
+        fondo().to_normalized_gamma_f32()
     }
 
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
@@ -459,7 +521,7 @@ impl eframe::App for App {
         if !soltados.is_empty() && !self.analizando() {
             for p in soltados {
                 if !self.archivos.contains(&p) {
-                    self.log(ahora, format!("MUESTRA RECIBIDA: {}", p.display()), MORADO_CLARO);
+                    self.log(ahora, format!("SAMPLE RECEIVED: {}", p.display()), morado_claro());
                     self.archivos.push(p);
                 }
             }
@@ -472,7 +534,7 @@ impl eframe::App for App {
         // Animaciones continuas (suaves cuando está en espera).
         ctx.request_repaint_after(if self.analizando() { Duration::from_millis(16) } else { Duration::from_millis(50) });
 
-        let marco_panel = egui::Frame::new().fill(FONDO).inner_margin(Margin::same(10));
+        let marco_panel = egui::Frame::new().fill(fondo()).inner_margin(Margin::same(10));
 
         egui::Panel::top("cabecera").exact_size(104.0).frame(marco_panel).show(ui, |ui| self.cabecera(ui, ahora));
         egui::Panel::bottom("registro")
@@ -497,8 +559,8 @@ impl eframe::App for App {
             let r = ctx.content_rect();
             let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("soltar")));
             p.rect_filled(r, 0.0, Color32::from_black_alpha(170));
-            p.rect_stroke(r.shrink(12.0), 0.0, Stroke::new(4.0, VERDE), StrokeKind::Inside);
-            p.text(r.center(), Align2::CENTER_CENTER, "SUELTA LA MUESTRA", titulo(64.0), VERDE);
+            p.rect_stroke(r.shrink(12.0), 0.0, Stroke::new(4.0, verde()), StrokeKind::Inside);
+            p.text(r.center(), Align2::CENTER_CENTER, tr("DROP THE SAMPLE", "SUELTA LA MUESTRA"), titulo(64.0), verde());
         }
     }
 }
@@ -509,26 +571,26 @@ impl App {
         let r = ui.max_rect();
         let p = ui.painter().clone();
         // Título: se mide para colocar el subtítulo justo al lado.
-        let g = p.layout_no_wrap("CAPAS".into(), titulo(64.0), NARANJA);
+        let g = p.layout_no_wrap("CAPAS".into(), titulo(64.0), naranja());
         let ancho_titulo = g.size().x;
-        p.galley(r.left_top() + Vec2::new(0.0, -4.0), g, NARANJA);
+        p.galley(r.left_top() + Vec2::new(0.0, -4.0), g, naranja());
         let x = r.left() + ancho_titulo + 18.0;
-        p.line_segment([Pos2::new(x - 9.0, r.top() + 6.0), Pos2::new(x - 9.0, r.top() + 72.0)], Stroke::new(2.0, VERDE));
-        p.text(Pos2::new(x, r.top() + 4.0), Align2::LEFT_TOP, "SISTEMA DE DESCOMPOSICIÓN", titulo(20.0), TEXTO);
-        p.text(Pos2::new(x, r.top() + 27.0), Align2::LEFT_TOP, "ESTRATIFICADA DE ARCHIVOS", titulo(20.0), TEXTO);
+        p.line_segment([Pos2::new(x - 9.0, r.top() + 6.0), Pos2::new(x - 9.0, r.top() + 72.0)], Stroke::new(2.0, verde()));
+        p.text(Pos2::new(x, r.top() + 4.0), Align2::LEFT_TOP, tr("LAYERED DECOMPOSITION", "SISTEMA DE DESCOMPOSICIÓN"), titulo(20.0), texto());
+        p.text(Pos2::new(x, r.top() + 27.0), Align2::LEFT_TOP, tr("SYSTEM FOR FILES", "ESTRATIFICADA DE ARCHIVOS"), titulo(20.0), texto());
         p.text(
             Pos2::new(x, r.top() + 56.0),
             Align2::LEFT_TOP,
-            format!("v{VERSION}  ·  OPERADOR {AUTOR}"),
+            format!("v{VERSION}  ·  OPERATOR {AUTOR}"),
             mono(12.0),
-            VERDE,
+            verde(),
         );
 
         // Reloj T+ y estado.
         let (estado, color) = match self.fase {
-            Fase::Espera => ("EN ESPERA", MORADO_CLARO),
-            Fase::Analizando { .. } => ("DESCOMPONIENDO", NARANJA),
-            Fase::Terminado => ("COMPLETADO", VERDE),
+            Fase::Espera => (tr("IDLE", "EN ESPERA"), morado_claro()),
+            Fase::Analizando { .. } => (tr("DECOMPOSING", "DESCOMPONIENDO"), naranja()),
+            Fase::Terminado => (tr("COMPLETED", "COMPLETADO"), verde()),
         };
         let t = match self.fase {
             Fase::Espera => 0.0,
@@ -536,34 +598,34 @@ impl App {
             Fase::Terminado => self.t_fin - self.t_inicio,
         };
         let reloj = format!("T+{:02}:{:02}.{:02}", (t / 60.0) as u64, (t % 60.0) as u64, ((t * 100.0) % 100.0) as u64);
-        p.text(r.right_top() + Vec2::new(0.0, -2.0), Align2::RIGHT_TOP, reloj, mono(40.0), NARANJA);
+        p.text(r.right_top() + Vec2::new(0.0, -2.0), Align2::RIGHT_TOP, reloj, mono(40.0), naranja());
 
         let caja = Rect::from_min_size(Pos2::new(r.right() - 340.0, r.top() + 50.0), Vec2::new(180.0, 26.0));
         let parpadeo = self.analizando() && (ahora * 3.0).fract() < 0.5;
-        p.rect_filled(caja, 0.0, if parpadeo { color } else { MORADO_OSCURO });
+        p.rect_filled(caja, 0.0, if parpadeo { color } else { morado_oscuro() });
         p.rect_stroke(caja, 0.0, Stroke::new(2.0, color), StrokeKind::Inside);
-        p.text(caja.center(), Align2::CENTER_CENTER, estado, titulo(15.0), if parpadeo { FONDO } else { color });
+        p.text(caja.center(), Align2::CENTER_CENTER, estado, titulo(15.0), if parpadeo { fondo() } else { color });
         p.text(
             Pos2::new(r.right(), r.top() + 63.0),
             Align2::RIGHT_CENTER,
-            format!("{} BLOQUES", self.bloques),
+            format!("{} BLOCKS", self.bloques),
             mono(14.0),
-            VERDE,
+            verde(),
         );
 
         // Franja inferior: rayas de alerta animadas mientras trabaja.
         let franja = Rect::from_min_max(Pos2::new(r.left(), r.bottom() - 8.0), r.right_bottom());
         if self.analizando() {
-            rayas(&p, franja, NARANJA, FONDO, (ahora * 40.0) as f32);
+            rayas(&p, franja, naranja(), fondo(), (ahora * 40.0) as f32);
         } else {
-            p.rect_filled(franja, 0.0, MORADO);
-            p.line_segment([franja.left_top(), franja.right_top()], Stroke::new(1.0, MORADO_CLARO));
+            p.rect_filled(franja, 0.0, morado());
+            p.line_segment([franja.left_top(), franja.right_top()], Stroke::new(1.0, morado_claro()));
         }
     }
 
     fn recursos_ui(&mut self, ui: &mut Ui, ahora: f64) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            seccion(ui, "01", "NÚCLEOS DE PROCESO", VERDE, |ui| {
+            seccion(ui, "01", tr("PROCESSING CORES", "NÚCLEOS DE PROCESO"), verde(), |ui| {
                 let n = self.sis.nucleos.min(64);
                 let activos = if self.analizando() { self.op.hilos.min(n) } else { 0 };
                 let radio = 20.0;
@@ -578,50 +640,50 @@ impl App {
                     let centro = o + Vec2::new(c as f32 * paso_x, f as f32 * radio * 1.75 + if c % 2 == 1 { radio * 0.87 } else { 0.0 });
                     let fase = ((ahora * 4.0 + i as f64 * 0.7).sin() * 0.5 + 0.5) as f32;
                     let (relleno, borde) = if i < activos {
-                        (mezclar(VERDE_OSCURO, VERDE, fase * 0.7), VERDE)
+                        (mezclar(verde_oscuro(), verde(), fase * 0.7), verde())
                     } else {
-                        (MORADO_OSCURO, MORADO_MEDIO)
+                        (morado_oscuro(), morado_medio())
                     };
                     hexagono(&p, centro, radio, relleno, Stroke::new(1.5, borde));
-                    p.text(centro, Align2::CENTER_CENTER, format!("{:02}", i + 1), mono(10.0), if i < activos { FONDO } else { MORADO_CLARO });
+                    p.text(centro, Align2::CENTER_CENTER, format!("{:02}", i + 1), mono(10.0), if i < activos { fondo() } else { morado_claro() });
                 }
-                ui.label(RichText::new(format!("{} LÓGICOS · {} ASIGNADOS", self.sis.nucleos, self.op.hilos)).font(mono(11.0)).color(VERDE));
+                ui.label(RichText::new(format!("{} LOGICAL · {} ASSIGNED", self.sis.nucleos, self.op.hilos)).font(mono(11.0)).color(verde()));
             });
 
-            seccion(ui, "02", "MEMORIA", VERDE, |ui| {
+            seccion(ui, "02", tr("MEMORY", "MEMORIA"), verde(), |ui| {
                 let total = self.sis.memoria_total.max(1);
                 let usada = total.saturating_sub(self.sis.memoria_libre);
-                barra_segmentada(ui, usada as f32 / total as f32, MORADO_CLARO);
+                barra_segmentada(ui, usada as f32 / total as f32, morado_claro());
                 ui.label(
-                    RichText::new(format!("{} LIBRE / {}", humano(self.sis.memoria_libre), humano(self.sis.memoria_total)))
+                    RichText::new(format!("{} FREE / {}", humano(self.sis.memoria_libre), humano(self.sis.memoria_total)))
                         .font(mono(11.0))
-                        .color(TEXTO),
+                        .color(texto()),
                 );
-                ui.label(RichText::new(format!("LÍMITE POR BLOQUE: {}", humano(self.op.max_archivo))).font(mono(11.0)).color(NARANJA));
+                ui.label(RichText::new(format!("PER-BLOCK LIMIT: {}", humano(self.op.max_archivo))).font(mono(11.0)).color(naranja()));
             });
 
-            seccion(ui, "03", "SUBSISTEMAS EXTERNOS", NARANJA, |ui| {
+            seccion(ui, "03", tr("EXTERNAL SUBSYSTEMS", "SUBSISTEMAS EXTERNOS"), naranja(), |ui| {
                 for (n, desc) in HERRAMIENTAS_CONOCIDAS {
                     let ok = self.herr.get(n).is_some() && self.externas;
                     ui.horizontal(|ui| {
                         let (r, p) = ui.allocate_painter(Vec2::splat(12.0), Sense::hover());
                         let c = r.rect.center();
                         if ok {
-                            p.rect_filled(Rect::from_center_size(c, Vec2::splat(9.0)), 0.0, VERDE);
+                            p.rect_filled(Rect::from_center_size(c, Vec2::splat(9.0)), 0.0, verde());
                         } else {
-                            p.rect_stroke(Rect::from_center_size(c, Vec2::splat(9.0)), 0.0, Stroke::new(1.0, MORADO_MEDIO), StrokeKind::Inside);
+                            p.rect_stroke(Rect::from_center_size(c, Vec2::splat(9.0)), 0.0, Stroke::new(1.0, morado_medio()), StrokeKind::Inside);
                         }
-                        ui.label(RichText::new(*n).font(mono(12.0)).color(if ok { VERDE } else { MORADO_MEDIO }))
+                        ui.label(RichText::new(*n).font(mono(12.0)).color(if ok { verde() } else { morado_medio() }))
                             .on_hover_text(*desc);
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.label(RichText::new(if ok { "ACTIVO" } else { "AUSENTE" }).font(mono(10.0)).color(if ok { VERDE } else { MORADO_MEDIO }));
+                            ui.label(RichText::new(if ok { tr("ACTIVE","ACTIVO") } else { tr("ABSENT","AUSENTE") }).font(mono(10.0)).color(if ok { verde() } else { morado_medio() }));
                         });
                     });
                 }
             });
 
             let bloqueado = self.analizando();
-            seccion(ui, "04", "PARÁMETROS", MORADO_CLARO, |ui| {
+            seccion(ui, "04", tr("PARAMETERS", "PARÁMETROS"), morado_claro(), |ui| {
                 ui.add_enabled_ui(!bloqueado, |ui| {
                     let max_hilos = (self.sis.nucleos * 2).max(1);
                     let mut h = self.op.hilos;
@@ -629,45 +691,66 @@ impl App {
                         self.op.hilos = h;
                         self.op.max_archivo = analisis::limite_por_bloque(&self.sis, h);
                     }
-                    ui.add(egui::Slider::new(&mut self.op.profundidad, 1..=32).text("PROFUNDIDAD"));
+                    ui.add(egui::Slider::new(&mut self.op.profundidad, 1..=32).text(tr("DEPTH", "PROFUNDIDAD")));
                     let mut t = self.op.timeout.as_secs();
                     if ui.add(egui::Slider::new(&mut t, 5..=1800).text("TIMEOUT s")).changed() {
                         self.op.timeout = Duration::from_secs(t);
                     }
-                    ui.checkbox(&mut self.op.tallar, "BUSCAR ARCHIVOS INCRUSTADOS");
-                    ui.checkbox(&mut self.externas, "USAR SUBSISTEMAS EXTERNOS");
-                    ui.checkbox(&mut self.op.clasificar, "CLASIFICAR Y REUNIR ARCHIVOS");
-                    ui.checkbox(&mut self.op.agrupar, "AGRUPAR RECURSOS (mismo nombre → .zip)");
-                    ui.checkbox(&mut self.op.reconstruir, "RECONSTRUIR PAQUETES (estructura + .zip)");
-                    ui.checkbox(&mut self.op.auditar, "AUDITAR PAQUETES (ASSET PACKS/MODS)");
+                    ui.checkbox(&mut self.op.tallar, tr("FIND EMBEDDED FILES", "BUSCAR ARCHIVOS INCRUSTADOS"));
+                    ui.checkbox(&mut self.externas, tr("USE EXTERNAL SUBSYSTEMS", "USAR SUBSISTEMAS EXTERNOS"));
+                    ui.checkbox(&mut self.op.clasificar, tr("CLASSIFY AND GATHER FILES", "CLASIFICAR Y REUNIR ARCHIVOS"));
+                    ui.checkbox(&mut self.op.agrupar, tr("GROUP RESOURCES (same name → .zip)", "AGRUPAR RECURSOS (mismo nombre → .zip)"));
+                    ui.checkbox(&mut self.op.reconstruir, tr("REBUILD PACKAGES (structure + .zip)", "RECONSTRUIR PAQUETES (estructura + .zip)"));
+                    ui.checkbox(&mut self.op.auditar, tr("AUDIT PACKAGES (ASSET PACKS/MODS)", "AUDITAR PAQUETES (ASSET PACKS/MODS)"));
+                    ui.separator();
+                    let mut tema = self.tema;
+                    egui::ComboBox::from_id_salt("tema")
+                        .selected_text(if tema == 0 { tr("THEME: SERENE (clean)", "TEMA: SERENO (limpio)") } else { tr("THEME: COMMAND (intense)", "TEMA: MANDO (intenso)") })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut tema, 0u8, tr("SERENE (clean)", "SERENO (limpio)"));
+                            ui.selectable_value(&mut tema, 1u8, tr("COMMAND (intense)", "MANDO (intenso)"));
+                        });
+                    if tema != self.tema {
+                        self.tema = tema;
+                        TEMA.store(tema, Ordering::Relaxed);
+                        aplicar_visuals(&ui.ctx().clone());
+                    }
+                    let mut idi = if crate::idioma::es() { 1u8 } else { 0u8 };
+                    egui::ComboBox::from_id_salt("idioma")
+                        .selected_text(if idi == 0 { "LANGUAGE: ENGLISH" } else { "IDIOMA: ESPAÑOL" })
+                        .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut idi, 0u8, "English");
+                            ui.selectable_value(&mut idi, 1u8, "Español");
+                        });
+                    crate::idioma::set_es(idi == 1);
                 });
             });
 
-            seccion(ui, "05", "CLAVES (ZIP PROTEGIDO)", NARANJA, |ui| {
+            seccion(ui, "05", tr("KEYS (PROTECTED ZIP)", "CLAVES (ZIP PROTEGIDO)"), naranja(), |ui| {
                 ui.add_enabled_ui(!bloqueado, |ui| {
-                    ui.label(RichText::new("CONTRASEÑAS A PROBAR (una por línea):").font(mono(10.0)).color(MORADO_CLARO));
+                    ui.label(RichText::new(tr("PASSWORDS TO TRY (one per line):", "CONTRASEÑAS A PROBAR (una por línea):")).font(mono(10.0)).color(morado_claro()));
                     ui.add(
                         egui::TextEdit::multiline(&mut self.clave_entrada)
                             .font(mono(12.0))
                             .desired_rows(2)
                             .desired_width(f32::INFINITY)
-                            .hint_text("clave1\nclave2"),
+                            .hint_text(tr("key1\nkey2", "clave1\nclave2")),
                     );
-                    ui.checkbox(&mut self.usar_comunes, "LISTA DE CONTRASEÑAS HABITUALES");
+                    ui.checkbox(&mut self.usar_comunes, tr("COMMON PASSWORD LIST", "LISTA DE CONTRASEÑAS HABITUALES"));
                     ui.horizontal(|ui| {
-                        if ui.add(boton("DICCIONARIO…", MORADO_CLARO)).clicked() {
+                        if ui.add(boton(tr("DICTIONARY…", "DICCIONARIO…"), morado_claro())).clicked() {
                             if let Some(f) = rfd::FileDialog::new().pick_file() {
                                 self.diccionario = Some(f);
                             }
                         }
-                        if self.diccionario.is_some() && ui.add(boton("QUITAR", NARANJA)).clicked() {
+                        if self.diccionario.is_some() && ui.add(boton("QUITAR", naranja())).clicked() {
                             self.diccionario = None;
                         }
                     });
                     if let Some(d) = &self.diccionario {
-                        ui.label(RichText::new(acortar(&d.display().to_string(), 36)).font(mono(10.0)).color(VERDE));
+                        ui.label(RichText::new(acortar(&d.display().to_string(), 36)).font(mono(10.0)).color(verde()));
                     }
-                    ui.checkbox(&mut self.fuerza_bruta, "FUERZA BRUTA (acotada)");
+                    ui.checkbox(&mut self.fuerza_bruta, tr("BRUTE FORCE (bounded)", "FUERZA BRUTA (acotada)"));
                     if self.fuerza_bruta {
                         egui::ComboBox::from_id_salt("alf")
                             .selected_text(ALFABETOS[self.fuerza_alfabeto].0)
@@ -676,14 +759,14 @@ impl App {
                                     ui.selectable_value(&mut self.fuerza_alfabeto, i, *n);
                                 }
                             });
-                        ui.add(egui::Slider::new(&mut self.fuerza_long, 1..=8).text("LONG. MÁX"));
-                        ui.label(RichText::new("⚠ la fuerza bruta larga puede tardar mucho").font(mono(9.0)).color(NARANJA));
+                        ui.add(egui::Slider::new(&mut self.fuerza_long, 1..=8).text(tr("MAX LEN", "LONG. MÁX")));
+                        ui.label(RichText::new(tr("⚠ long brute force can take a while", "⚠ la fuerza bruta larga puede tardar mucho")).font(mono(9.0)).color(naranja()));
                     }
-                    let estado = if self.claves_activas() { ("MÓDULO ACTIVO", VERDE) } else { ("INACTIVO (ZIP cifrados se omiten)", MORADO_MEDIO) };
+                    let estado = if self.claves_activas() { (tr("MODULE ACTIVE", "MÓDULO ACTIVO"), verde()) } else { (tr("INACTIVE (encrypted ZIPs skipped)", "INACTIVO (ZIP cifrados se omiten)"), morado_medio()) };
                     ui.label(RichText::new(estado.0).font(mono(10.0)).color(estado.1));
                 });
                 for (arch, clave) in &self.claves_halladas {
-                    ui.label(RichText::new(format!("🔓 {} → «{}»", acortar(arch, 20), clave)).font(mono(10.0)).color(VERDE));
+                    ui.label(RichText::new(format!("🔓 {} → «{}»", acortar(arch, 20), clave)).font(mono(10.0)).color(verde()));
                 }
             });
         });
@@ -692,9 +775,9 @@ impl App {
     fn central_ui(&mut self, ui: &mut Ui, ctx: &egui::Context, ahora: f64) {
         // Fila de instrumentos.
         ui.columns(3, |c| {
-            seccion(&mut c[0], "A", "CLASIFICACIÓN", NARANJA, |ui| self.clasificacion(ui, ahora));
-            seccion(&mut c[1], "B", "PROFUNDIDAD", VERDE, |ui| self.profundidad(ui));
-            seccion(&mut c[2], "C", "RENDIMIENTO", VERDE, |ui| self.senal_ui(ui, ahora));
+            seccion(&mut c[0], "A", tr("CLASSIFICATION", "CLASIFICACIÓN"), naranja(), |ui| self.clasificacion(ui, ahora));
+            seccion(&mut c[1], "B", tr("DEPTH", "PROFUNDIDAD"), verde(), |ui| self.profundidad(ui));
+            seccion(&mut c[2], "C", tr("PERFORMANCE", "RENDIMIENTO"), verde(), |ui| self.senal_ui(ui, ahora));
         });
         ui.add_space(6.0);
 
@@ -716,13 +799,13 @@ impl App {
                 if destello > 0.0 {
                     p.rect_filled(r, 0.0, c.gamma_multiply(0.18 * destello));
                 }
-                p.text(r.center_top() + Vec2::new(0.0, 8.0), Align2::CENTER_TOP, "PATRÓN DETECTADO", mono(11.0), TEXTO);
+                p.text(r.center_top() + Vec2::new(0.0, 8.0), Align2::CENTER_TOP, tr("PATTERN DETECTED", "PATRÓN DETECTADO"), mono(11.0), texto());
                 texto_ajustado(&p, r.center() + Vec2::new(0.0, 4.0), codigo_tipo(*tipo), 46.0, r.width() - 20.0, c);
                 let corto = acortar(ruta, (r.width() / 6.2) as usize);
-                p.text(r.center_bottom() - Vec2::new(0.0, 6.0), Align2::CENTER_BOTTOM, corto, mono(10.0), MORADO_CLARO);
+                p.text(r.center_bottom() - Vec2::new(0.0, 6.0), Align2::CENTER_BOTTOM, corto, mono(10.0), morado_claro());
             }
             None => {
-                texto_ajustado(&p, r.center(), "SIN PATRÓN", 34.0, r.width() - 20.0, MORADO_MEDIO);
+                texto_ajustado(&p, r.center(), tr("NO PATTERN", "SIN PATRÓN"), 34.0, r.width() - 20.0, morado_medio());
             }
         }
         // Recuento por tipo.
@@ -747,17 +830,17 @@ impl App {
             let h = (v as f32 / max) * (r.height() - 36.0);
             let x0 = r.left() + i as f32 * ancho + 3.0;
             let b = Rect::from_min_max(Pos2::new(x0, r.bottom() - 16.0 - h), Pos2::new(x0 + ancho - 6.0, r.bottom() - 16.0));
-            let c = mezclar(VERDE, NARANJA, i as f32 / (n - 1).max(1) as f32);
+            let c = mezclar(verde(), naranja(), i as f32 / (n - 1).max(1) as f32);
             if v > 0 {
                 p.rect_filled(b, 0.0, c.gamma_multiply(0.85));
                 p.text(b.center_top() - Vec2::new(0.0, 2.0), Align2::CENTER_BOTTOM, v.to_string(), mono(10.0), c);
             }
-            p.text(Pos2::new(b.center().x, r.bottom() - 2.0), Align2::CENTER_BOTTOM, format!("{i}"), mono(10.0), MORADO_CLARO);
+            p.text(Pos2::new(b.center().x, r.bottom() - 2.0), Align2::CENTER_BOTTOM, format!("{i}"), mono(10.0), morado_claro());
         }
         ui.label(
-            RichText::new(format!("ESTRATOS: {} · VOLUMEN: {}", self.por_capa.len(), humano(self.bytes_vistos)))
+            RichText::new(format!("LAYERS: {} · VOLUME: {}", self.por_capa.len(), humano(self.bytes_vistos)))
                 .font(mono(10.0))
-                .color(VERDE),
+                .color(verde()),
         );
     }
 
@@ -777,7 +860,7 @@ impl App {
                 Pos2::new(r.left() + f * r.width(), y)
             })
             .collect();
-        p.add(Shape::line(onda, Stroke::new(1.0, NARANJA.gamma_multiply(0.6))));
+        p.add(Shape::line(onda, Stroke::new(1.0, naranja().gamma_multiply(0.6))));
         // Datos reales (verde).
         let pts: Vec<Pos2> = self
             .senal
@@ -785,26 +868,26 @@ impl App {
             .enumerate()
             .map(|(i, v)| Pos2::new(r.left() + i as f32 / (n - 1) as f32 * r.width(), r.bottom() - 4.0 - v / max * (r.height() - 12.0)))
             .collect();
-        p.add(Shape::line(pts, Stroke::new(2.0, VERDE)));
+        p.add(Shape::line(pts, Stroke::new(2.0, verde())));
         let actual = self.senal.back().copied().unwrap_or(0.0);
-        ui.label(RichText::new(format!("{actual:.0} BLOQUES/s · PICO {max:.0}")).font(mono(10.0)).color(VERDE));
+        ui.label(RichText::new(format!("{actual:.0} {} · {} {max:.0}", tr("BLOCKS/s","BLOQUES/s"), tr("PEAK","PICO"))).font(mono(10.0)).color(verde()));
     }
 
     fn cola_ui(&mut self, ui: &mut Ui, ctx: &egui::Context, ahora: f64) {
-        seccion(ui, "D", "MUESTRAS", MORADO_CLARO, |ui| {
+        seccion(ui, "D", tr("SAMPLES", "MUESTRAS"), morado_claro(), |ui| {
             let alto = (ui.available_height() - 110.0).max(160.0);
             let (resp, p) = ui.allocate_painter(Vec2::new(ui.available_width(), alto), Sense::click());
             let r = resp.rect;
             rejilla(&p, r, 28.0);
             if self.archivos.is_empty() {
-                // Hexágono pulsante de "zona de carga".
+                // Hexágono pulsante de tr("drop zone", "zona de carga").
                 let pulso = ((ahora * 2.0).sin() * 0.5 + 0.5) as f32;
                 let rad = (r.height() * 0.46).min(r.width() * 0.3).max(40.0);
-                hexagono(&p, r.center(), rad + 10.0 * pulso, Color32::TRANSPARENT, Stroke::new(1.0, MORADO_MEDIO));
-                hexagono(&p, r.center(), rad, MORADO_OSCURO, Stroke::new(3.0, mezclar(MORADO_CLARO, VERDE, pulso)));
-                p.text(r.center() - Vec2::new(0.0, 16.0), Align2::CENTER_CENTER, "ARRASTRA AQUÍ", titulo(24.0), VERDE);
-                p.text(r.center() + Vec2::new(0.0, 18.0), Align2::CENTER_CENTER, "ARCHIVOS O CARPETAS", titulo(15.0), TEXTO);
-                p.text(r.center() + Vec2::new(0.0, 42.0), Align2::CENTER_CENTER, "o haz clic para elegir", mono(11.0), MORADO_CLARO);
+                hexagono(&p, r.center(), rad + 10.0 * pulso, Color32::TRANSPARENT, Stroke::new(1.0, morado_medio()));
+                hexagono(&p, r.center(), rad, morado_oscuro(), Stroke::new(3.0, mezclar(morado_claro(), verde(), pulso)));
+                p.text(r.center() - Vec2::new(0.0, 16.0), Align2::CENTER_CENTER, tr("DROP HERE", "ARRASTRA AQUÍ"), titulo(24.0), verde());
+                p.text(r.center() + Vec2::new(0.0, 18.0), Align2::CENTER_CENTER, tr("FILES OR FOLDERS", "ARCHIVOS O CARPETAS"), titulo(15.0), texto());
+                p.text(r.center() + Vec2::new(0.0, 42.0), Align2::CENTER_CENTER, tr("or click to choose", "o haz clic para elegir"), mono(11.0), morado_claro());
                 if resp.clicked() {
                     self.elegir_archivos();
                 }
@@ -814,18 +897,18 @@ impl App {
                 egui::ScrollArea::vertical().id_salt("cola").show(&mut sub, |ui| {
                     for (i, a) in self.archivos.iter().enumerate() {
                         ui.horizontal(|ui| {
-                            ui.label(RichText::new(format!("{:02}", i + 1)).font(mono(13.0)).color(NARANJA));
+                            ui.label(RichText::new(format!("{:02}", i + 1)).font(mono(13.0)).color(naranja()));
                             let tam = fs::metadata(a).map(|m| if m.is_dir() { "CARPETA".into() } else { humano(m.len()) }).unwrap_or_default();
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                 if !self.analizando() && ui.small_button("×").clicked() {
                                     quitar = Some(i);
                                 }
-                                ui.label(RichText::new(tam).font(mono(11.0)).color(VERDE));
+                                ui.label(RichText::new(tam).font(mono(11.0)).color(verde()));
                                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                                     let nombre = a.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                                    ui.label(RichText::new(nombre).font(mono(13.0)).color(TEXTO));
+                                    ui.label(RichText::new(nombre).font(mono(13.0)).color(texto()));
                                     let dir = a.parent().map(|d| d.display().to_string()).unwrap_or_default();
-                                    ui.add(egui::Label::new(RichText::new(dir).font(mono(11.0)).color(MORADO_MEDIO)).truncate());
+                                    ui.add(egui::Label::new(RichText::new(dir).font(mono(11.0)).color(morado_medio())).truncate());
                                 });
                             });
                         });
@@ -839,20 +922,20 @@ impl App {
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 let libre = !self.analizando();
-                if ui.add_enabled(libre, boton("+ ARCHIVOS", MORADO_CLARO)).clicked() {
+                if ui.add_enabled(libre, boton(tr("+ FILES", "+ ARCHIVOS"), morado_claro())).clicked() {
                     self.elegir_archivos();
                 }
-                if ui.add_enabled(libre, boton("+ CARPETA", MORADO_CLARO)).clicked() {
+                if ui.add_enabled(libre, boton(tr("+ FOLDER", "+ CARPETA"), morado_claro())).clicked() {
                     if let Some(d) = rfd::FileDialog::new().pick_folder() {
                         self.archivos.push(d);
                     }
                 }
-                if ui.add_enabled(libre && !self.archivos.is_empty(), boton("VACIAR", MORADO_CLARO)).clicked() {
+                if ui.add_enabled(libre && !self.archivos.is_empty(), boton(tr("CLEAR", "VACIAR"), morado_claro())).clicked() {
                     self.archivos.clear();
                 }
                 if ui
-                    .add_enabled(libre, boton(&format!("SALIDA: {}", acortar(&self.salida.display().to_string(), 26)), VERDE))
-                    .on_hover_text(format!("Carpeta donde se guardan las capas extraídas:\n{}", self.salida.display()))
+                    .add_enabled(libre, boton(&format!("OUTPUT: {}", acortar(&self.salida.display().to_string(), 26)), verde()))
+                    .on_hover_text(format!("Folder where extracted layers are saved:\n{}", self.salida.display()))
                     .clicked()
                 {
                     if let Some(d) = rfd::FileDialog::new().pick_folder() {
@@ -864,20 +947,20 @@ impl App {
             ui.horizontal(|ui| {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| match &self.fase {
                     Fase::Analizando { cancelar, .. } => {
-                        if ui.add(boton("■ ABORTAR", ROJO).min_size(Vec2::new(170.0, 40.0))).clicked() {
+                        if ui.add(boton(tr("■ ABORT", "■ ABORTAR"), rojo()).min_size(Vec2::new(170.0, 40.0))).clicked() {
                             cancelar.store(true, Ordering::Relaxed);
                         }
                     }
                     _ => {
                         let listo = !self.archivos.is_empty();
                         if ui
-                            .add_enabled(listo, boton("▶ INICIAR DESCOMPOSICIÓN", NARANJA).min_size(Vec2::new(250.0, 40.0)))
+                            .add_enabled(listo, boton(tr("▶ START DECOMPOSITION", "▶ INICIAR DESCOMPOSICIÓN"), naranja()).min_size(Vec2::new(250.0, 40.0)))
                             .clicked()
                         {
                             self.iniciar(ctx, ahora);
                         }
                         if let Some(r) = &self.raiz {
-                            if ui.add(boton("ABRIR SALIDA", VERDE).min_size(Vec2::new(120.0, 40.0))).clicked() {
+                            if ui.add(boton(tr("OPEN OUTPUT", "ABRIR SALIDA"), verde()).min_size(Vec2::new(120.0, 40.0))).clicked() {
                                 abrir_en_sistema(r);
                             }
                         }
@@ -900,23 +983,23 @@ impl App {
     fn visor_ui(&mut self, ui: &mut Ui) {
         let mut cerrar = false;
         let Some(v) = &self.visor else { return };
-        seccion(ui, "V", "VISOR DE ANÁLISIS", NARANJA, |ui| {
+        seccion(ui, "V", tr("ANALYSIS VIEWER", "VISOR DE ANÁLISIS"), naranja(), |ui| {
             ui.horizontal(|ui| {
-                ui.label(RichText::new(acortar(&v.titulo, ((ui.available_width() - 260.0) / 7.3).max(10.0) as usize)).font(mono(12.0)).color(NARANJA))
+                ui.label(RichText::new(acortar(&v.titulo, ((ui.available_width() - 260.0) / 7.3).max(10.0) as usize)).font(mono(12.0)).color(naranja()))
                     .on_hover_text(&v.titulo);
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.add(boton("CERRAR", NARANJA)).clicked() {
+                    if ui.add(boton(tr("CLOSE", "CERRAR"), naranja())).clicked() {
                         cerrar = true;
                     }
                     ui.label(
-                        RichText::new(format!("{} LÍNEAS{}", v.lineas.len(), if v.truncado { " · TRUNCADO A 4 MiB" } else { "" }))
+                        RichText::new(format!("{} LINES{}", v.lineas.len(), if v.truncado { tr(" · TRUNCATED AT 4 MiB", " · TRUNCADO A 4 MiB") } else { "" }))
                             .font(mono(10.0))
-                            .color(MORADO_CLARO),
+                            .color(morado_claro()),
                     );
                 });
             });
             let alto_fila = 16.0;
-            egui::Frame::new().fill(Color32::from_rgb(0x08, 0x04, 0x10)).inner_margin(Margin::same(6)).show(ui, |ui| {
+            egui::Frame::new().fill(hondo()).inner_margin(Margin::same(6)).show(ui, |ui| {
                 egui::ScrollArea::both().id_salt("visor").auto_shrink([false, false]).show_rows(
                     ui,
                     alto_fila,
@@ -926,7 +1009,7 @@ impl App {
                         for i in rango {
                             let mut job = egui::text::LayoutJob::default();
                             let fmt = |c| egui::TextFormat { font_id: mono(12.0), color: c, ..Default::default() };
-                            job.append(&format!("{:>6}  ", i + 1), 0.0, fmt(MORADO_MEDIO));
+                            job.append(&format!("{:>6}  ", i + 1), 0.0, fmt(morado_medio()));
                             job.append(&v.lineas[i], 0.0, fmt(color_linea(&v.lineas[i])));
                             fila(ui, alto_fila, egui::Label::new(job).extend());
                         }
@@ -941,7 +1024,7 @@ impl App {
 
     fn estratos_ui(&mut self, ui: &mut Ui) {
         if !self.audit.is_empty() {
-            seccion(ui, "H", "AUDITORÍA DE PAQUETES", NARANJA, |ui| {
+            seccion(ui, "H", tr("PACKAGE AUDIT", "AUDITORÍA DE PAQUETES"), naranja(), |ui| {
                 for (nombre, veredicto, hallazgos) in &self.audit {
                     let c = color_veredicto(*veredicto);
                     ui.horizontal(|ui| {
@@ -950,20 +1033,20 @@ impl App {
                         p.rect_filled(rr, 0.0, c.gamma_multiply(0.22));
                         p.rect_stroke(rr, 0.0, Stroke::new(1.0, c), StrokeKind::Inside);
                         p.text(rr.center(), Align2::CENTER_CENTER, veredicto.etiqueta(), titulo(12.0), c);
-                        ui.add(egui::Label::new(RichText::new(acortar(nombre, 28)).font(mono(12.0)).color(TEXTO)).truncate());
+                        ui.add(egui::Label::new(RichText::new(acortar(nombre, 28)).font(mono(12.0)).color(texto())).truncate());
                     });
                     for (nivel, texto) in hallazgos {
                         let marca = if *nivel == Nivel::Rechazo { "⛔" } else { "⚠" };
-                        ui.label(RichText::new(format!("   {marca} {texto}")).font(mono(10.0)).color(if *nivel == Nivel::Rechazo { ROJO } else { NARANJA }));
+                        ui.label(RichText::new(format!("   {marca} {texto}")).font(mono(10.0)).color(if *nivel == Nivel::Rechazo { rojo() } else { naranja() }));
                     }
                 }
-                if ui.add(boton("▸ ABRIR auditoria.md", VERDE)).clicked() {
+                if ui.add(boton(tr("▸ OPEN auditoria.md", "▸ ABRIR auditoria.md"), verde())).clicked() {
                     self.abrir_resultado("auditoria.md");
                 }
             });
         }
         if !self.clasif.is_empty() {
-            seccion(ui, "G", "CLASIFICACIÓN", MORADO_CLARO, |ui| {
+            seccion(ui, "G", tr("CLASSIFICATION", "CLASIFICACIÓN"), morado_claro(), |ui| {
                 let total: usize = self.clasif.iter().map(|(_, n)| *n).sum();
                 let max = self.clasif.iter().map(|(_, n)| *n).max().unwrap_or(1).max(1) as f32;
                 for (cat, n) in &self.clasif {
@@ -974,11 +1057,11 @@ impl App {
                         let w = (*n as f32 / max) * (rr.width() * 0.45);
                         p.rect_filled(Rect::from_min_size(rr.left_top(), Vec2::new(w, rr.height())), 0.0, c.gamma_multiply(0.5));
                         p.text(rr.left_center() + Vec2::new(4.0, 0.0), Align2::LEFT_CENTER, cat.etiqueta(), mono(11.0), c);
-                        p.text(rr.right_center() - Vec2::new(4.0, 0.0), Align2::RIGHT_CENTER, n.to_string(), mono(11.0), TEXTO);
+                        p.text(rr.right_center() - Vec2::new(4.0, 0.0), Align2::RIGHT_CENTER, n.to_string(), mono(11.0), texto());
                     });
                 }
                 ui.add_space(2.0);
-                if ui.add(boton(&format!("▸ ABRIR extraidos/ ({total} archivos)"), VERDE)).clicked() {
+                if ui.add(boton(&format!("▸ OPEN extraidos/ ({total} files)"), verde())).clicked() {
                     if let Some(raiz) = &self.raiz {
                         abrir_en_sistema(&raiz.join("extraidos"));
                     }
@@ -986,14 +1069,14 @@ impl App {
             });
         }
         let alto_arbol = (ui.available_height() * 0.55).max(180.0);
-        seccion(ui, "E", "ÁRBOL DE ESTRATOS", VERDE, |ui| {
+        seccion(ui, "E", tr("LAYER TREE", "ÁRBOL DE ESTRATOS"), verde(), |ui| {
             if self.arbol.is_empty() {
                 ui.add_space(20.0);
                 ui.vertical_centered(|ui| {
                     ui.label(
-                        RichText::new(if self.analizando() { "DESCOMPONIENDO…" } else { "SIN DATOS" })
+                        RichText::new(if self.analizando() { tr("DECOMPOSING…", "DESCOMPONIENDO…") } else { tr("NO DATA", "SIN DATOS") })
                             .font(titulo(22.0))
-                            .color(MORADO_MEDIO),
+                            .color(morado_medio()),
                     );
                 });
                 ui.add_space(20.0);
@@ -1014,42 +1097,42 @@ impl App {
         let Some(n) = buscar_nodo(&self.arbol, &sel) else { return };
         let n = n.clone();
         let mut abrir = None;
-        seccion(ui, "F", "FICHA DEL BLOQUE", NARANJA, |ui| {
+        seccion(ui, "F", tr("BLOCK DETAILS", "FICHA DEL BLOQUE"), naranja(), |ui| {
             egui::ScrollArea::vertical().id_salt("ficha").show(ui, |ui| {
                 ui.label(RichText::new(&n.nombre).font(titulo(18.0)).color(color_tipo(n.tipo)));
                 egui::Grid::new("ficha_grid").num_columns(2).spacing([10.0, 2.0]).show(ui, |ui| {
                     for (k, v) in [
-                        ("CAPA", n.capa.to_string()),
-                        ("TIPO", n.descripcion.clone()),
-                        ("TAMAÑO", humano(n.tamano)),
-                        ("ENTROPÍA", format!("{:.3} bits/byte", n.entropia)),
+                        (tr("LAYER", "CAPA"), n.capa.to_string()),
+                        (tr("TYPE", "TIPO"), n.descripcion.clone()),
+                        (tr("SIZE", "TAMAÑO"), humano(n.tamano)),
+                        (tr("ENTROPY", "ENTROPÍA"), format!("{:.3} bits/byte", n.entropia)),
                         ("SHA-256", n.sha256[..32].to_string()),
                         ("", n.sha256[32..].to_string()),
                     ] {
-                        ui.label(RichText::new(k).font(mono(11.0)).color(MORADO_CLARO));
-                        ui.label(RichText::new(v).font(mono(11.0)).color(TEXTO));
+                        ui.label(RichText::new(k).font(mono(11.0)).color(morado_claro()));
+                        ui.label(RichText::new(v).font(mono(11.0)).color(texto()));
                         ui.end_row();
                     }
                 });
-                barra_segmentada(ui, (n.entropia / 8.0) as f32, if n.entropia > 7.5 { ROJO } else { VERDE });
+                barra_segmentada(ui, (n.entropia / 8.0) as f32, if n.entropia > 7.5 { rojo() } else { verde() });
                 if !n.resultados.is_empty() {
                     ui.add_space(4.0);
-                    ui.label(RichText::new("RESULTADOS").font(mono(11.0)).color(NARANJA));
+                    ui.label(RichText::new(tr("RESULTS", "RESULTADOS")).font(mono(11.0)).color(naranja()));
                     for r in &n.resultados {
                         let corto = r.rsplit('/').next().unwrap_or(r);
-                        if ui.add(boton(&format!("▸ {corto}"), VERDE)).on_hover_text(r).clicked() {
+                        if ui.add(boton(&format!("▸ {corto}"), verde())).on_hover_text(r).clicked() {
                             abrir = Some(r.clone());
                         }
                     }
                 }
                 if !n.notas.is_empty() {
                     ui.add_space(4.0);
-                    ui.label(RichText::new("ALERTAS").font(mono(11.0)).color(ROJO));
+                    ui.label(RichText::new(tr("ALERTS", "ALERTAS")).font(mono(11.0)).color(rojo()));
                     for nota in &n.notas {
-                        ui.label(RichText::new(format!("⚠ {nota}")).font(mono(11.0)).color(NARANJA));
+                        ui.label(RichText::new(format!("⚠ {nota}")).font(mono(11.0)).color(naranja()));
                     }
                 }
-                if ui.add(boton("ABRIR CARPETA DEL BLOQUE", MORADO_CLARO)).clicked() {
+                if ui.add(boton(tr("OPEN BLOCK FOLDER", "ABRIR CARPETA DEL BLOQUE"), morado_claro())).clicked() {
                     if let Some(raiz) = &self.raiz {
                         abrir_en_sistema(&raiz.join(&n.directorio));
                     }
@@ -1062,8 +1145,8 @@ impl App {
     }
 
     fn registro_ui(&mut self, ui: &mut Ui) {
-        seccion(ui, ">", "REGISTRO DE OPERACIONES", VERDE, |ui| {
-            egui::Frame::new().fill(Color32::from_rgb(0x08, 0x04, 0x10)).inner_margin(Margin::same(6)).show(ui, |ui| {
+        seccion(ui, ">", tr("OPERATIONS LOG", "REGISTRO DE OPERACIONES"), verde(), |ui| {
+            egui::Frame::new().fill(hondo()).inner_margin(Margin::same(6)).show(ui, |ui| {
                 egui::ScrollArea::vertical()
                     .id_salt("log")
                     .stick_to_bottom(true)
@@ -1094,7 +1177,7 @@ fn arbol_nodo(ui: &mut Ui, n: &Nodo, ruta: Vec<usize>, sel: &Option<Vec<usize>>,
     let c = color_tipo(n.tipo);
     let texto = RichText::new(format!("[{}] {}  · {}", codigo_tipo(n.tipo), n.nombre, humano(n.tamano)))
         .font(mono(12.0))
-        .color(if elegido { FONDO } else { c })
+        .color(if elegido { fondo() } else { c })
         .background_color(if elegido { c } else { Color32::TRANSPARENT });
     if n.hijos.is_empty() {
         ui.horizontal(|ui| {
@@ -1125,17 +1208,17 @@ fn arbol_nodo(ui: &mut Ui, n: &Nodo, ruta: Vec<usize>, sel: &Option<Vec<usize>>,
 /// Panel con pestaña de título al estilo de los monitores de mando.
 fn seccion<R>(ui: &mut Ui, codigo: &str, nombre: &str, color: Color32, contenido: impl FnOnce(&mut Ui) -> R) -> R {
     egui::Frame::new()
-        .fill(MORADO_OSCURO)
+        .fill(morado_oscuro())
         .stroke(Stroke::new(1.5, color.gamma_multiply(0.8)))
         .inner_margin(Margin { left: 8, right: 8, top: 4, bottom: 8 })
         .outer_margin(Margin { left: 0, right: 0, top: 0, bottom: 6 })
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
-                let galley_cod = ui.painter().layout_no_wrap(codigo.to_string(), titulo(13.0), FONDO);
+                let galley_cod = ui.painter().layout_no_wrap(codigo.to_string(), titulo(13.0), fondo());
                 let (r, p) = ui.allocate_painter(galley_cod.size() + Vec2::new(14.0, 4.0), Sense::hover());
                 p.rect_filled(r.rect, 0.0, color);
-                p.galley(r.rect.center() - galley_cod.size() / 2.0, galley_cod, FONDO);
+                p.galley(r.rect.center() - galley_cod.size() / 2.0, galley_cod, fondo());
                 ui.label(RichText::new(nombre).font(titulo(15.0)).color(color));
                 let resto = ui.available_rect_before_wrap();
                 let y = resto.center().y;
@@ -1152,7 +1235,7 @@ fn seccion<R>(ui: &mut Ui, codigo: &str, nombre: &str, color: Color32, contenido
 
 fn boton(texto: &str, color: Color32) -> egui::Button<'static> {
     egui::Button::new(RichText::new(texto.to_string()).font(titulo(14.0)).color(color))
-        .fill(MORADO_OSCURO)
+        .fill(morado_oscuro())
         .stroke(Stroke::new(1.5, color))
         .corner_radius(CornerRadius::ZERO)
 }
@@ -1193,8 +1276,8 @@ fn rayas(p: &egui::Painter, r: Rect, a: Color32, b: Color32, desplaz: f32) {
 }
 
 fn rejilla(p: &egui::Painter, r: Rect, paso: f32) {
-    p.rect_filled(r, 0.0, Color32::from_rgb(0x12, 0x08, 0x22));
-    let s = Stroke::new(0.5, MORADO.gamma_multiply(0.9));
+    p.rect_filled(r, 0.0, rejilla_bg());
+    let s = Stroke::new(0.5, morado().gamma_multiply(0.9));
     let mut x = r.left();
     while x <= r.right() {
         p.line_segment([Pos2::new(x, r.top()), Pos2::new(x, r.bottom())], s);
@@ -1205,7 +1288,7 @@ fn rejilla(p: &egui::Painter, r: Rect, paso: f32) {
         p.line_segment([Pos2::new(r.left(), y), Pos2::new(r.right(), y)], s);
         y += paso;
     }
-    p.rect_stroke(r, 0.0, Stroke::new(1.0, MORADO_MEDIO), StrokeKind::Inside);
+    p.rect_stroke(r, 0.0, Stroke::new(1.0, morado_medio()), StrokeKind::Inside);
 }
 
 fn barra_segmentada(ui: &mut Ui, frac: f32, color: Color32) {
@@ -1216,7 +1299,7 @@ fn barra_segmentada(ui: &mut Ui, frac: f32, color: Color32) {
     let llenos = (frac.clamp(0.0, 1.0) * n as f32).round() as usize;
     for i in 0..n {
         let s = Rect::from_min_size(Pos2::new(r.left() + i as f32 * w, r.top()), Vec2::new(w - 2.0, r.height()));
-        let c = if i < llenos { if i as f32 / n as f32 > 0.8 { NARANJA } else { color } } else { MORADO };
+        let c = if i < llenos { if i as f32 / n as f32 > 0.8 { naranja() } else { color } } else { morado() };
         p.rect_filled(s, 0.0, c);
     }
 }
@@ -1249,13 +1332,13 @@ fn mezclar(a: Color32, b: Color32, t: f32) -> Color32 {
 fn color_linea(l: &str) -> Color32 {
     let t = l.trim_start();
     if t.starts_with(';') || t.starts_with("//") || t.starts_with("--") || t.starts_with("==") {
-        MORADO_CLARO
+        morado_claro()
     } else if t.ends_with(':') || t.contains("PUNTO DE ENTRADA") {
-        NARANJA
+        naranja()
     } else if [" call ", " jmp ", " ret", " j"].iter().any(|k| l.contains(k)) {
-        VERDE
+        verde()
     } else {
-        TEXTO
+        texto()
     }
 }
 
@@ -1310,37 +1393,41 @@ fn configurar_estilo(ctx: &egui::Context) {
     fuentes.families.insert(FontFamily::Name("titulo".into()), familia_titulo);
     ctx.set_fonts(fuentes);
 
+    aplicar_visuals(ctx);
+    ctx.global_style_mut(|s| {
+        s.spacing.item_spacing = Vec2::new(6.0, 4.0);
+        s.spacing.button_padding = Vec2::new(10.0, 5.0);
+    });
+}
+
+fn aplicar_visuals(ctx: &egui::Context) {
     let mut v = egui::Visuals::dark();
-    v.override_text_color = Some(TEXTO);
-    v.panel_fill = FONDO;
-    v.window_fill = MORADO_OSCURO;
-    v.extreme_bg_color = Color32::from_rgb(0x08, 0x04, 0x10);
-    v.faint_bg_color = MORADO_OSCURO;
-    v.selection.bg_fill = VERDE_OSCURO;
-    v.selection.stroke = Stroke::new(1.0, VERDE);
-    v.hyperlink_color = VERDE;
+    v.override_text_color = Some(texto());
+    v.panel_fill = fondo();
+    v.window_fill = morado_oscuro();
+    v.extreme_bg_color = hondo();
+    v.faint_bg_color = morado_oscuro();
+    v.selection.bg_fill = verde_oscuro();
+    v.selection.stroke = Stroke::new(1.0, verde());
+    v.hyperlink_color = verde();
     v.window_corner_radius = CornerRadius::ZERO;
-    v.window_stroke = Stroke::new(1.5, NARANJA);
+    v.window_stroke = Stroke::new(1.5, naranja());
     for (w, fondo, borde) in [
-        (&mut v.widgets.noninteractive, MORADO_OSCURO, MORADO),
-        (&mut v.widgets.inactive, MORADO, MORADO_MEDIO),
-        (&mut v.widgets.hovered, MORADO_MEDIO, VERDE),
-        (&mut v.widgets.active, NARANJA_OSCURO, NARANJA),
-        (&mut v.widgets.open, MORADO_MEDIO, NARANJA),
+        (&mut v.widgets.noninteractive, morado_oscuro(), morado()),
+        (&mut v.widgets.inactive, morado(), morado_medio()),
+        (&mut v.widgets.hovered, morado_medio(), verde()),
+        (&mut v.widgets.active, naranja_oscuro(), naranja()),
+        (&mut v.widgets.open, morado_medio(), naranja()),
     ] {
         w.bg_fill = fondo;
         w.weak_bg_fill = fondo;
         w.bg_stroke = Stroke::new(1.0, borde);
         w.corner_radius = CornerRadius::ZERO;
     }
-    v.widgets.hovered.fg_stroke = Stroke::new(1.5, VERDE);
-    v.widgets.active.fg_stroke = Stroke::new(1.5, NARANJA);
+    v.widgets.hovered.fg_stroke = Stroke::new(1.5, verde());
+    v.widgets.active.fg_stroke = Stroke::new(1.5, naranja());
     v.slider_trailing_fill = true;
     ctx.set_visuals(v);
-    ctx.global_style_mut(|s| {
-        s.spacing.item_spacing = Vec2::new(6.0, 4.0);
-        s.spacing.button_padding = Vec2::new(10.0, 5.0);
-    });
 }
 
 /// Icono generado por código: hexágono naranja con núcleo verde sobre morado.
@@ -1356,11 +1443,11 @@ fn icono() -> egui::IconData {
         for x in 0..n {
             let (fx, fy) = (x as f32 + 0.5, y as f32 + 0.5);
             let px = if dentro(fx, fy, 12.0) {
-                VERDE
+                verde()
             } else if dentro(fx, fy, 21.0) {
-                MORADO
+                morado()
             } else if dentro(fx, fy, 30.0) {
-                NARANJA
+                naranja()
             } else {
                 Color32::TRANSPARENT
             };

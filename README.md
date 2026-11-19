@@ -1,73 +1,58 @@
 # capas
 
-**por @angelazo**
+**by @angelazo** · [Español](README.es.md)
 
-![capas analizando](docs/analizando.png)
+![capas analyzing a file](docs/analizando.png)
 
-Desmonta y decompila archivos **capa a capa** usando los recursos del ordenador:
-todos los núcleos de la CPU, un límite de memoria ajustado a la RAM libre y las
-herramientas de ingeniería inversa que tengas instaladas.
+Take files (or folders) apart **layer by layer** and decompile them using your
+computer's resources: every CPU core, a memory budget tuned to the free RAM, and
+whatever reverse-engineering tools you have installed.
 
 ```
-prueba.tar.gz  (GZIP)
-└─ prueba.tar  (TAR)
-   └─ interno.zip  (ZIP)
-      ├─ app.jar (ZIP) ─ Hola.class ─> javap / CFR
-      ├─ hola (ELF x86-64) ─> cabeceras, símbolos, desensamblado, objdump, Ghidra...
-      ├─ autoextraible (ELF) ─ tallado_0x3e78.zip ─ h.c      ← zip escondido tras el binario
-      └─ instalar.sh (texto) ─ base64_0x13.gz ─ secreto.txt   ← payload en base64
+sample.tar.gz  (GZIP)
+└─ sample.tar  (TAR)
+   └─ inner.zip  (ZIP)
+      ├─ app.jar (ZIP) ─ Main.class ─> javap / CFR
+      ├─ app (ELF x86-64) ─> headers, symbols, disassembly, objdump, Ghidra…
+      ├─ sfx (ELF) ─ carved_0x3e78.zip ─ main.c   ← zip hidden after the binary
+      └─ install.sh (text) ─ base64_0x13.gz ─ secret.txt   ← embedded payload
 ```
 
-## Cómo funciona
+A single program with a **graphical interface** and a **console mode**. Builds to a
+portable Windows `.exe`. Default UI language is **English** (Spanish available), and
+it ships with a calm **"Serene"** theme plus the original intense **"Command"** look.
 
-Cada archivo es un **bloque**. Para cada bloque, `capas`:
+## How it works
 
-1. **Identifica** el formato por su contenido (números mágicos), no por la extensión.
-2. **Analiza / decompila** según lo que sea: desensambla los ejecutables, saca sus
-   cabeceras y símbolos, descompila bytecode, extrae los textos y mide la entropía.
-3. **Extrae la siguiente capa**: descomprime, abre el contenedor, talla archivos
-   incrustados por firma… y obtiene los bloques hijo.
-4. **Repite** con cada hijo, en **paralelo** sobre todos los núcleos, hasta que no
-   quedan más capas o se alcanza la profundidad máxima.
+Every file is a **block**. For each block, capas:
 
-El tamaño máximo de cada bloque en memoria se ajusta a la **RAM libre** y al número
-de hilos. Los bloques con el mismo contenido (SHA-256) se analizan una sola vez, y
-hay límites por bloque y totales para frenar las bombas de descompresión.
+1. **Identifies** the format by its content (magic numbers), not its extension.
+2. **Analyzes / decompiles** it: disassembles executables, pulls their headers and
+   symbols, decompiles bytecode, extracts strings, measures entropy.
+3. **Extracts the next layer**: decompresses, opens the container, carves embedded
+   files by signature, and produces the child blocks.
+4. **Repeats** on each child, in **parallel** across all cores, until there are no
+   more layers or the depth limit is hit.
 
-Al terminar, el **módulo de clasificación** agrupa todos los archivos finales por
-categoría y el **módulo de claves** habrá abierto, por el camino, los ZIP
-protegidos cuya contraseña estuviera entre las candidatas.
+Identical blocks (same SHA-256) are analyzed once. There are per-block and total
+limits to stop decompression bombs.
 
-![interfaz con los módulos de claves y clasificación](docs/modulos.png)
-
-## Windows: `.exe` portable
-
-`capas.exe` (x64) es **portable**: un único archivo, sin instalación ni DLLs
-externas (solo usa las de Windows).
-
-**Descarga directa:** [`dist/capas.exe`](https://github.com/AngelazoGit/capas/raw/main/dist/capas.exe)
-
-Descárgalo y:
-
-- **doble clic** → abre la interfaz gráfica;
-- desde `cmd`/PowerShell → `capas.exe archivo.zip` funciona en consola.
-
-Al ejecutarlo, Windows SmartScreen puede avisar de que es de un autor desconocido
-(el ejecutable no está firmado con certificado): *Más información → Ejecutar de todas formas*.
-
-## Compilar
+## Build
 
 ```bash
 cargo build --release
 ```
 
-El ejecutable queda en `target/release/capas` (en Windows `capas.exe`). Es un único
-programa: con interfaz gráfica y con modo consola.
+The binary lands at `target/release/capas` (`capas.exe` on Windows).
 
-En Linux, la interfaz necesita las bibliotecas de escritorio habituales
-(`libxkbcommon-x11`, OpenGL); cualquier escritorio las trae.
+### Windows: portable `.exe`
 
-Para generar el `.exe` desde Linux (compilación cruzada, un solo archivo portable):
+`capas.exe` (x64) is **portable**: a single file, no install, no external DLLs.
+Double-click it for the GUI, or run `capas.exe file.zip` from a terminal for the
+console mode. **Direct download:** [`dist/capas.exe`](https://github.com/AngelazoGit/capas/raw/main/dist/capas.exe)
+(SmartScreen may warn because it is unsigned → *More info → Run anyway*).
+
+Cross-compile the `.exe` from Linux:
 
 ```bash
 rustup target add x86_64-pc-windows-gnu
@@ -75,283 +60,99 @@ sudo apt-get install -y gcc-mingw-w64-x86-64
 cargo build --release --target x86_64-pc-windows-gnu
 ```
 
-## Interfaz gráfica
+On Linux the GUI needs the usual desktop libraries (`libxkbcommon-x11`, OpenGL).
+
+## Usage
 
 ```bash
-./target/release/capas
+capas                      # open the GUI (empty)
+capas --gui file.zip       # open the GUI and start analyzing
+capas file.zip -s out      # console mode
+capas --recursos           # show detected CPU/RAM/tools and exit
+capas --idioma es          # Spanish UI (default is English; also auto-detected)
+capas --help               # all options
 ```
 
-```bash
-./target/release/capas --gui archivo.zip
-```
+## What each layer does
 
-El primero abre la ventana vacía; el segundo la abre y empieza a analizar `archivo.zip`.
-
-- **Muestras**: arrastra archivos o carpetas a la ventana (o usa *+ ARCHIVOS* / *+ CARPETA*) y pulsa **▶ INICIAR DESCOMPOSICIÓN**. *■ ABORTAR* lo detiene.
-- **01 Núcleos**: un hexágono por núcleo; se encienden en verde mientras trabajan.
-- **02 Memoria** y **03 Subsistemas externos**: RAM libre, límite por bloque y qué decompiladores se han encontrado.
-- **04 Parámetros**: hilos, profundidad, timeout, búsqueda de archivos incrustados.
-- **A Clasificación**: el último formato detectado, en grande.
-- **B Profundidad**: cuántos bloques hay en cada capa.
-- **C Rendimiento**: bloques por segundo en tiempo real.
-- **E Árbol de estratos** y **F Ficha**: navega por las capas; pulsa un resultado (desensamblado, cabeceras, javap…) para verlo en el **visor** con resaltado.
-- **Registro**: todo lo que ocurre, con marca de tiempo.
-
-![visor de desensamblado](docs/visor.png)
-
-## Modo consola
-
-```bash
-./target/release/capas archivo1 archivo2 carpeta/ -s salida
-```
-
-Con archivos como argumentos (y sin `--gui`) funciona en la terminal.
-
-```bash
-./target/release/capas --recursos
-```
-
-`--recursos` muestra CPU, RAM y qué herramientas externas se han encontrado.
-
-Opciones principales: `-j` hilos, `-p` profundidad máxima, `-t` timeout por
-herramienta, `--max-archivo-mb`, `--max-total-mb`, `--sin-tallado`,
-`--sin-externas`, `--max-instrucciones`.
-
-## Qué hace en cada capa
-
-| Formato | Interno (Rust) | Externo si está instalado |
+| Format | Built-in (Rust) | External if installed |
 |---|---|---|
-| gzip, bzip2, xz, lzma, zlib, zip/jar/apk/docx, tar, ar/.deb, Mach-O fat | extracción | — |
+| gzip, bzip2, xz, lzma, zlib, zip/jar/apk, tar, ar/.deb, Mach-O fat | extraction | — |
 | 7z, RAR, CAB | — | `7z` |
-| PDF | extrae y descomprime los flujos | — |
-| ELF / PE / Mach-O | cabeceras, secciones, importaciones, símbolos, desensamblado x86/x64 con etiquetas | `readelf`, `objdump`, `r2`, `retdec-decompiler`, Ghidra (`analyzeHeadless` o `GHIDRA_HOME`) → C |
-| Clase Java | — | `javap`, `cfr`, `procyon` |
+| PDF | extracts and inflates its streams | — |
+| ELF / PE / Mach-O | headers, sections, imports, symbols, x86/x64 disassembly with symbol labels | `readelf`, `objdump`, `r2`, `retdec-decompiler`, Ghidra → C |
+| Java class | — | `javap`, `cfr`, `procyon` |
 | DEX | — | `jadx` |
 | .pyc | — | `pycdc`, `decompyle3`, `uncompyle6` |
 | WebAssembly | — | `wasm2wat`, `wasm-decompile` |
-| Texto/scripts | detecta cargas base64 embebidas | — |
-| Audio/vídeo/fuentes/BD | OGG, WAV, MP3, FLAC, MP4, WebM, AVI, SQLite, TTF/OTF/WOFF… por contenido | — |
-| Cualquier binario | cadenas ASCII/UTF-16, entropía y búsqueda de archivos incrustados por firma | `file` |
+| audio/video/fonts/DB | OGG, WAV, MP3, FLAC, MP4, WebM, AVI, SQLite, TTF/OTF/WOFF… by content | — |
+| text/scripts | detects embedded base64 payloads | — |
+| any binary | ASCII/UTF-16 strings, entropy, signature carving of embedded files | `file` |
 
-Lo que no se reconoce por contenido se recoge en **`desconocidos.txt`**: agrupa los
-archivos por sus bytes mágicos y extensión, para poder ampliar la detección con los
-formatos propios que aparezcan.
+Whatever isn't recognized by content is collected in **`desconocidos.txt`**, grouped
+by magic bytes + extension, so detection can be extended for custom formats.
 
-## Informe de plugins / código activo
+## Features
 
-Siempre que aparece **código** (ELF/PE/Mach-O o bytecode Java/DEX/.pyc/WASM), capas
-escribe **`plugins.md`**: una lista consolidada de cada plugin/librería con sus
-**funciones** y las **APIs que importa**, resaltando las **capacidades sensibles**:
-red, ficheros, procesos, registro/persistencia y cripto. Así ves de un vistazo "qué
-hace y qué toca" cada plugin, sin abrir carpeta por carpeta.
+- **Classification** — sorts every final file into a category and gathers copies in
+  `extraidos/<category>/` (hard links, no disk duplication).
+- **Password recovery** (`--clave`, `--comunes`, `--diccionario`, `--fuerza-bruta`) —
+  opens protected ZIPs (ZipCrypto and AES) you are entitled to open, so it keeps
+  peeling them. Does not break strong AES passwords.
+- **Package audit** (`--auditar`) — a defensive verdict per package
+  (APPROVED / QUARANTINE / REJECTED) from escape paths, manifest validity, active
+  code / native libs, and an extension allowlist. Writes `auditoria.md`.
+- **Gate mode** (`--vigilar … --aprobados … --cuarentena …`) — watches an `incoming/`
+  folder, audits each package and routes it: approved → the server's Mods folder,
+  the rest → quarantine. The server only loads audited packs.
+- **Client cache watch** (`--vigilar … --solo-informe`) — audits/classifies whatever
+  a server writes to your cache, **without moving or deleting anything**. Detection,
+  not pre-load blocking.
+- **Cache locator** (`--localizar-cache "App" [--observar N]`) — finds where an app
+  stores its cache (by name, or by watching which folder it writes while running).
+- **Group related resources** (`--agrupar`) — files sharing a base name in the same
+  folder (`world.blocky` + `world.png` + `world.json`) are bundled into one `.zip`.
+- **Rebuild packages** (`--reconstruir`) — rebuilds each package's original folder
+  tree and a loadable `.zip`, from the already-extracted bytes (decrypted if it was
+  password-protected) so files find their dependencies by path again.
+- **Plugin / active-code report** — whenever code appears (ELF/PE/Mach-O or bytecode),
+  writes `plugins.md`: each plugin with its **functions** and **imported APIs**,
+  highlighting sensitive capabilities (network, files, processes, registry, crypto).
+  capas **never runs** the code.
 
-Combinado con la vigilancia de caché del cliente (`--solo-informe`), un plugin que un
-servidor deje en tu caché queda capturado, clasificado como ejecutable, marcado por la
-auditoría como código activo (→ cuarentena) y con sus funciones en `plugins.md`.
-**capas no ejecuta el código**: es detección y análisis, no bloqueo.
-
-## Módulo de clasificación
-
-Al terminar, `capas` decide la **categoría** de cada archivo (por su contenido y su
-extensión) y reúne una copia de todos en `extraidos/<categoria>/`, con un informe
-`clasificacion.md`. Así tienes juntas todas las imágenes, los ejecutables, los
-recursos de juego (`.blocky`, `.dds`, `.pak`, `.nbt`…), el código fuente, etc.
-
-Categorías: imágenes, audio, vídeo, ejecutables, bytecode, código fuente,
-documentos, comprimidos, recursos de juego / 3D, datos, texto y desconocidos.
-
-Se desactiva con `--sin-clasificar`.
-
-### Agrupar recursos relacionados
-
-Los archivos que comparten nombre base en la misma carpeta (un `mundo.blocky` y su
-`mundo.png`, su `mundo.json`…) son un mismo recurso repartido en varios archivos.
-Con `--agrupar`, capas los junta en **un `.zip` por conjunto** en
-`extraidos/conjuntos/<nombre>.zip`, y lista los conjuntos en `conjuntos.md`.
-
-```bash
-./target/release/capas pack.zip --agrupar -s salida
-```
-
-### Reconstruir paquetes (que vuelvan a funcionar)
-
-`--reconstruir` rearma cada paquete con su **estructura de carpetas original** en
-`extraidos/reconstruido/<paquete>/` y en un **`.zip` cargable**, usando los bytes ya
-extraídos. Así cada archivo vuelve a encontrar sus dependencias por su ruta; si el
-paquete venía **con contraseña**, el reconstruido sale ya descifrado y se abre sin
-clave.
-
-```bash
-./target/release/capas pack.zip --reconstruir -s salida
-```
-
-Nota honesta: esto restaura la **estructura** (co-locación y rutas), que es lo que
-hace que un pack cargue. No interpreta las referencias internas propias de cada
-formato (eso es específico de cada juego); para esos casos, dime el formato.
-
-## Módulo de claves (ZIP protegidos)
-
-Para archivos **que tengas derecho a abrir** (tus propios ZIP con la contraseña
-olvidada, retos CTF, análisis forense autorizado). Cuando `capas` encuentra un ZIP
-cifrado, prueba las contraseñas candidatas; si acierta, lo abre y sigue pelándolo.
-
-```bash
-./target/release/capas paquete.zip --clave "mi clave"      # una o varias (--clave a --clave b)
-```
-
-```bash
-./target/release/capas paquete.zip --comunes               # lista de contraseñas habituales
-```
-
-```bash
-./target/release/capas paquete.zip --diccionario lista.txt # una contraseña por línea
-```
-
-```bash
-./target/release/capas paquete.zip --fuerza-bruta d --fuerza-long 6   # solo dígitos, hasta 6
-```
-
-Soporta ZipCrypto clásico y AES. Alfabetos de fuerza bruta: `d` dígitos, `l`
-minúsculas, `a` alfanumérico, `A` completo con mayúsculas, o los caracteres que
-escribas. La prueba de cada contraseña se reparte entre todos los núcleos y hay un
-tope de intentos (`--max-intentos`). No descifra AES con contraseña fuerte: solo
-la encuentra si está entre las que se prueban. En la interfaz está en el panel
-**05 CLAVES**.
-
-![módulos de claves y clasificación](docs/claves.png)
-
-## Módulo de auditoría (asset packs / mods)
-
-Revisión **defensiva** de paquetes (asset packs, mods…) **antes de activarlos**:
-sobre el árbol ya extraído —sin ejecutar nada— aplica reglas y da un veredicto por
-paquete: **APROBADO**, **CUARENTENA** o **RECHAZADO**.
-
-```bash
-./target/release/capas pack1.zip pack2.zip --auditar -s revision
-```
-
-Reglas (alineadas con la guía de captura y auditoría de assets):
-
-- **Rutas de escape** (zip-slip): `../`, rutas absolutas o `C:\…` → RECHAZADO.
-- **Manifest** `manifest.json` ausente o no válido → RECHAZADO; si falta algún
-  campo recomendado (Group, Name, Version, Authors, Dependencies…) se avisa.
-- **Código activo / librerías nativas** (`.exe .dll .so .jar .class .bat .ps1`…) o
-  ejecutables detectados por contenido → CUARENTENA.
-- **Allowlist** de extensiones de recursos (`.json .png .ogg .model .animation`…);
-  lo que queda fuera → CUARENTENA (revisar).
-- Calcula SHA-256 (ya lo hacía) y escribe `auditoria.md` / `auditoria.json`.
-
-En la interfaz es el panel **H AUDITORÍA DE PAQUETES** y se activa con la casilla
-*AUDITAR PAQUETES*. Recuerda: un hash demuestra identidad, no inocencia; analiza los
-paquetes en cuarentena con antivirus/sandbox y mantén el software actualizado.
-
-![auditoría de paquetes](docs/auditoria.png)
-
-### Modo vigilancia (puerta antes de la carga del servidor)
-
-Para que **ningún pack llegue al servidor sin auditar**, capas puede vigilar una
-carpeta y encaminar solo cada pack que aparece. La interceptación se hace
-**controlando la carpeta de la que el servidor carga los mods**, no tocando la red
-ni el TLS:
+## Output
 
 ```
-fuente no confiable ─▶ incoming/ ─▶ [capas audita] ─▶ approved/ (= Mods del servidor)
-                                            └────────▶ quarantine/  (rechazados / a revisar)
+out/
+  informe.md / .json       the layer tree
+  clasificacion.md / .json  files grouped by category
+  desconocidos.txt          magic + extension of unrecognized files
+  plugins.md / .json        active code with its functions and APIs
+  conjuntos.md              resources grouped by base name (--agrupar)
+  auditoria.md / .json      per-package verdict (--auditar)
+  extraidos/<category>/     a copy of each final file, by category
+  extraidos/conjuntos/<name>.zip        each resource set bundled (--agrupar)
+  extraidos/reconstruido/<pack>/ and .zip   rebuilt, loadable package (--reconstruir)
+  <file>/
+    analisis/   headers.txt, disassembly.asm, objdump.asm, javap.txt, strings.txt…
+    capas/<child>/   the extracted file + its own analisis/ and capas/ (recursive)
 ```
 
-```bash
-./target/release/capas --vigilar /ruta/incoming \
-    --aprobados /ruta/servidor/Mods \
-    --cuarentena /ruta/quarantine \
-    --reportes  /ruta/reports
-```
+## Security
 
-Observa `incoming/`; cuando un pack termina de escribirse lo audita y lo mueve:
-**APROBADO → `approved/`** (la carpeta de Mods), **lo demás → `quarantine/`**, con
-el informe por pack en `reports/`. El servidor solo carga de `approved/` y el único
-que escribe ahí es capas, así que la auditoría es obligatoria por diseño. Corre en
-bucle (Ctrl-C para parar); `--intervalo` ajusta el sondeo. Si no indicas las
-carpetas, se crean junto a `incoming/`.
+- Extracted paths are sanitized (no `..`, no absolute paths); everything stays under
+  the output folder.
+- Per-block and total extraction limits guard against decompression bombs.
+- Duplicate contents (same SHA-256) are analyzed once.
+- Analyzed files are **never executed**; external tools run with a timeout.
+- The password module is for archives you are entitled to open (your own forgotten
+  passwords, CTFs, authorized forensics). It works on a single file you give it, has
+  an attempt cap, and does not brute-force strong crypto.
 
-> Interceptar por red/TLS o falsificar la carga **no** es el enfoque: hazlo sobre
-> archivos que controlas, en la carpeta de la que el servidor lee, antes de activarlos.
+## Author
 
-### Vigilancia de caché del cliente (solo informe)
+Created by **@angelazo**. The signature appears in the window, in `capas --help` and
+at the end of each report. MIT license (see `LICENSE`).
 
-Si eres el **cliente** y un servidor te escribe archivos en tu **caché**, no puedes
-moverlos ni borrarlos (el juego los necesita) ni bloquearlos antes de que se
-carguen sin enganchar el cliente. Lo que sí puedes es **detectarlos**: capas vigila
-la carpeta de caché (recursivo), y de cada archivo nuevo **audita y clasifica una
-copia sin tocar el original**, avisándote del veredicto y de lo peligroso.
-
-```bash
-./target/release/capas --vigilar "/ruta/a/la/cache" --solo-informe
-```
-
-No mueve ni borra nada; los informes van a una carpeta `reports/` **fuera** de la
-caché. Es **detección, no bloqueo previo**: el cliente puede haber cargado ya el
-archivo cuando lo ves, pero te queda el aviso, la clasificación y una copia en
-`reports/` para decidir (desconectar, borrar, revisar en sandbox). No toca la red
-ni el cliente.
-
-### Localizar la caché de una aplicación
-
-¿No sabes dónde deja la caché una app? capas la busca por ti (solo mira el sistema
-de archivos; no engancha el proceso ni la red):
-
-```bash
-# por nombre, en las carpetas de caché estándar del sistema
-./target/release/capas --localizar-cache "MiJuego"
-
-# observando: arranca la app y mira qué carpeta escribe de verdad (lo más fiable)
-./target/release/capas --localizar-cache "MiJuego" --observar 15
-
-# además, pistas de ruta dentro del propio ejecutable
-./target/release/capas --localizar-cache "MiJuego" --exe "C:\\Juego\\juego.exe"
-```
-
-Busca en AppData/LocalLow/Temp (Windows), `~/.cache` · `~/.local/share` (Linux) o
-`~/Library/Caches` (macOS). Con `--observar N` arrancas la app y capas detecta qué
-carpeta recibe archivos nuevos en esos N segundos —esa es la caché, coincida o no
-el nombre— y te da directamente el comando para vigilarla con `--solo-informe`.
-
-## Salida
-
-```
-salida/
-  informe.md         árbol de capas legible
-  informe.json       el mismo árbol, para procesar
-  clasificacion.md   archivos agrupados por categoría
-  clasificacion.json
-  desconocidos.txt   magic + extensión de lo no reconocido (para ampliar la detección)
-  plugins.md         código activo con sus funciones y APIs (si hay ejecutables/bytecode)
-  plugins.json
-  conjuntos.md       recursos agrupados por nombre base (con --agrupar)
-  auditoria.md       veredicto por paquete (con --auditar)
-  auditoria.json
-  extraidos/conjuntos/<nombre>.zip     cada conjunto de recursos junto (con --agrupar)
-  extraidos/reconstruido/<pack>/ y .zip  paquete rearmado y cargable (con --reconstruir)
-  extraidos/<categoria>/   una copia de cada archivo final, por categoría
-  <archivo>/
-    analisis/     cabeceras.txt, desensamblado.asm, objdump.asm, javap.txt, cadenas.txt...
-    capas/<hijo>/ el archivo extraído + su propio analisis/ y capas/ (recursivo)
-```
-
-## Seguridad
-
-- Las rutas de los archivos extraídos se sanean (sin `..` ni rutas absolutas).
-- Límite por bloque y total de extracción contra bombas de descompresión.
-- Los contenidos duplicados (mismo SHA-256) se analizan una sola vez.
-- Los archivos analizados **nunca se ejecutan**; las herramientas externas tienen timeout.
-- El módulo de claves es para archivos que tengas derecho a abrir (contraseñas
-  propias olvidadas, CTF, forense autorizado). Trabaja sobre un único archivo que
-  tú le das; tiene un tope de intentos y no descifra cifrado fuerte por fuerza bruta.
-
-## Autor
-
-Creado por **@angelazo**. La firma aparece en la ventana, en `capas --help`
-y al final de cada `informe.md`. Licencia MIT (ver `LICENSE`).
-
-La interfaz es un diseño original con una estética de "centro de mando" de anime de
-los 90 (morado, verde neón y naranja). No usa logotipos, nombres ni recursos
-de ninguna obra existente.
+The interface is an original design with a '90s "command center" aesthetic (purple,
+green, orange). It uses no logos, names or assets from any existing work.
