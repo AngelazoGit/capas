@@ -10,8 +10,10 @@ license = "MIT"
 anyhow = "1.0.104"
 bzip2 = "0.6.1"
 clap = { version = "4.6.7", features = ["derive"] }
+ed25519-dalek = "3.0.0"
 eframe = { version = "0.37.0", default-features = false, features = ["glow", "x11", "wayland", "default_fonts", "clipboard"] }
 flate2 = "1.1.11"
+getrandom = "0.4.3"
 goblin = "0.10.7"
 iced-x86 = "1.22.0"
 lzma-rs = "0.3.0"

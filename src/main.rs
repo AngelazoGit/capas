@@ -19,6 +19,7 @@ mod extraer;
 mod gui;
 mod idioma;
 mod indice;
+mod licencia;
 mod localizar;
 mod motor;
 mod plugins;
@@ -217,6 +218,30 @@ struct Args {
     /// [Studio] Serve the index as a local API on this port and exit
     #[arg(long, value_name = "PUERTO")]
     api: Option<u16>,
+
+    /// License file (also CAPAS_LICENCIA, or capas.lic next to the binary)
+    #[arg(long, value_name = "FILE")]
+    licencia: Option<PathBuf>,
+
+    /// [Vendor] Generate an Ed25519 key pair in this folder and exit
+    #[arg(long, value_name = "DIR")]
+    generar_clave: Option<PathBuf>,
+
+    /// [Vendor] Sign a license (with --clave-privada, --edicion, --titular, --dias) and exit
+    #[arg(long)]
+    firmar_licencia: bool,
+
+    /// [Vendor] Private key file (.key) used to sign
+    #[arg(long, value_name = "FILE")]
+    clave_privada: Option<PathBuf>,
+
+    /// [Vendor] License holder (name or email)
+    #[arg(long, value_name = "HOLDER")]
+    titular: Option<String>,
+
+    /// [Vendor] License validity in days (0 = no expiry)
+    #[arg(long, default_value_t = 0)]
+    dias: u64,
 }
 
 fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
@@ -255,7 +280,41 @@ fn main() -> Result<()> {
         Some(l) => idioma::set_es(l.eq_ignore_ascii_case("es")),
         None => idioma::autodetectar(),
     }
+    // [Vendedor] Generar par de claves.
+    if let Some(dir) = &a.generar_clave {
+        match licencia::generar_clave() {
+            Ok((priv_hex, pub_hex)) => {
+                let _ = std::fs::create_dir_all(dir);
+                let pk = dir.join("capas_public.txt");
+                let sk = dir.join("capas_private.key");
+                let _ = std::fs::write(&sk, &priv_hex);
+                let _ = std::fs::write(&pk, &pub_hex);
+                eprintln!("Clave privada (SECRETA, guárdala): {}", sk.display());
+                eprintln!("Clave pública  (incrústala en PUBLICA_HEX): {}", pk.display());
+                eprintln!("\nPUBLICA_HEX = \"{pub_hex}\"");
+            }
+            Err(e) => eprintln!("generar-clave: {e}"),
+        }
+        return Ok(());
+    }
+    // [Vendedor] Firmar una licencia.
+    if a.firmar_licencia {
+        let priv_file = a.clave_privada.as_ref().ok_or_else(|| anyhow::anyhow!("falta --clave-privada"))?;
+        let priv_hex = std::fs::read_to_string(priv_file)?;
+        let titular = a.titular.clone().ok_or_else(|| anyhow::anyhow!("falta --titular"))?;
+        let ed = a.edicion.as_deref().unwrap_or("pro");
+        match licencia::firmar(priv_hex.trim(), ed, &titular, a.dias) {
+            Ok(json) => println!("{json}"),
+            Err(e) => {
+                eprintln!("firmar-licencia: {e}");
+                std::process::exit(1);
+            }
+        }
+        return Ok(());
+    }
+
     edicion::resolver(a.edicion.as_deref());
+    licencia::aplicar(a.licencia.clone());
     let sis = Sistema::detectar();
 
     // [Studio] API local de solo lectura sobre el índice.
