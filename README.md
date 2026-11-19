@@ -20,7 +20,8 @@ sample.tar.gz  (GZIP)
 
 A single program with a **graphical interface** and a **console mode**. Builds to a
 portable Windows `.exe`. Default UI language is **English** (Spanish available), and
-it ships with a calm **"Serene"** theme plus the original intense **"Command"** look.
+it ships with a clean light **"Clean"** business theme by default, plus **"Serene"**,
+**"Neutral"** and the original intense **"Command"** look.
 
 ## How it works
 
