@@ -2,6 +2,8 @@
 
 use serde::Serialize;
 
+use crate::idioma::tr;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 pub enum Tipo {
     Zip,
@@ -36,7 +38,7 @@ pub enum Tipo {
 impl Tipo {
     pub fn nombre(self) -> &'static str {
         match self {
-            Tipo::Zip => "ZIP (zip/jar/apk/docx...)",
+            Tipo::Zip => tr("ZIP (zip/jar/apk/docx...)","ZIP (zip/jar/apk/docx...)"),
             Tipo::Gzip => "GZIP",
             Tipo::Bzip2 => "BZIP2",
             Tipo::Xz => "XZ",
@@ -47,22 +49,22 @@ impl Tipo {
             Tipo::Rar => "RAR",
             Tipo::Cab => "CAB",
             Tipo::ArUnix => "AR (.a/.deb)",
-            Tipo::Elf => "ELF ejecutable",
-            Tipo::Pe => "PE ejecutable (Windows)",
-            Tipo::MachO => "Mach-O ejecutable",
-            Tipo::MachOFat => "Mach-O universal (fat)",
-            Tipo::ClaseJava => "Clase Java",
+            Tipo::Elf => tr("ELF executable","ELF ejecutable"),
+            Tipo::Pe => tr("PE executable (Windows)","PE ejecutable (Windows)"),
+            Tipo::MachO => tr("Mach-O executable","Mach-O ejecutable"),
+            Tipo::MachOFat => tr("Mach-O universal (fat)","Mach-O universal (fat)"),
+            Tipo::ClaseJava => tr("Java class","Clase Java"),
             Tipo::Dex => "Android DEX",
-            Tipo::Pyc => "Bytecode Python",
+            Tipo::Pyc => tr("Python bytecode","Bytecode Python"),
             Tipo::Wasm => "WebAssembly",
             Tipo::Pdf => "PDF",
-            Tipo::Imagen => "Imagen",
+            Tipo::Imagen => tr("Image","Imagen"),
             Tipo::Audio => "Audio",
-            Tipo::Video => "Vídeo",
-            Tipo::Fuente => "Fuente tipográfica",
-            Tipo::BaseDatos => "Base de datos",
-            Tipo::Texto => "Texto / script",
-            Tipo::Desconocido => "Binario desconocido",
+            Tipo::Video => tr("Video","Vídeo"),
+            Tipo::Fuente => tr("Font","Fuente tipográfica"),
+            Tipo::BaseDatos => tr("Database","Base de datos"),
+            Tipo::Texto => tr("Text / script","Texto / script"),
+            Tipo::Desconocido => tr("Unknown binary","Binario desconocido"),
         }
     }
 

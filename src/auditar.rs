@@ -13,6 +13,7 @@ use serde::Serialize;
 
 use crate::clasificar::{categoria, Categoria};
 use crate::motor::Nodo;
+use crate::idioma::tr;
 use crate::recursos::humano;
 
 /// Extensiones de recursos aceptadas en una revisión inicial (allowlist de la
@@ -43,9 +44,9 @@ pub enum Veredicto {
 impl Veredicto {
     pub fn etiqueta(self) -> &'static str {
         match self {
-            Veredicto::Aprobado => "APROBADO",
-            Veredicto::Cuarentena => "CUARENTENA",
-            Veredicto::Rechazado => "RECHAZADO",
+            Veredicto::Aprobado => tr("APPROVED","APROBADO"),
+            Veredicto::Cuarentena => tr("QUARANTINE","CUARENTENA"),
+            Veredicto::Rechazado => tr("REJECTED","RECHAZADO"),
         }
     }
 }

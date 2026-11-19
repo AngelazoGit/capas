@@ -11,6 +11,7 @@ use serde::Serialize;
 
 use crate::detectar::Tipo;
 use crate::motor::Nodo;
+use crate::idioma::tr;
 use crate::recursos::humano;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize)]
@@ -49,18 +50,18 @@ impl Categoria {
 
     pub fn etiqueta(self) -> &'static str {
         match self {
-            Categoria::Imagen => "IMÁGENES",
-            Categoria::Audio => "AUDIO",
-            Categoria::Video => "VÍDEO",
-            Categoria::Ejecutable => "EJECUTABLES",
-            Categoria::Bytecode => "BYTECODE",
-            Categoria::Codigo => "CÓDIGO FUENTE",
-            Categoria::Documento => "DOCUMENTOS",
-            Categoria::Comprimido => "COMPRIMIDOS",
-            Categoria::RecursoJuego => "RECURSOS DE JUEGO / 3D",
-            Categoria::Datos => "DATOS",
-            Categoria::Texto => "TEXTO",
-            Categoria::Desconocido => "DESCONOCIDOS",
+            Categoria::Imagen => tr("IMAGES","IMÁGENES"),
+            Categoria::Audio => tr("AUDIO","AUDIO"),
+            Categoria::Video => tr("VIDEO","VÍDEO"),
+            Categoria::Ejecutable => tr("EXECUTABLES","EJECUTABLES"),
+            Categoria::Bytecode => tr("BYTECODE","BYTECODE"),
+            Categoria::Codigo => tr("SOURCE CODE","CÓDIGO FUENTE"),
+            Categoria::Documento => tr("DOCUMENTS","DOCUMENTOS"),
+            Categoria::Comprimido => tr("ARCHIVES","COMPRIMIDOS"),
+            Categoria::RecursoJuego => tr("GAME / 3D RESOURCES","RECURSOS DE JUEGO / 3D"),
+            Categoria::Datos => tr("DATA","DATOS"),
+            Categoria::Texto => tr("TEXT","TEXTO"),
+            Categoria::Desconocido => tr("UNKNOWN","DESCONOCIDOS"),
         }
     }
 

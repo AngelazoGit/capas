@@ -14,6 +14,7 @@ mod detectar;
 mod ejecutables;
 mod extraer;
 mod gui;
+mod idioma;
 mod localizar;
 mod motor;
 mod plugins;
@@ -38,145 +39,149 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
     name = "capas",
     version,
     author = AUTOR,
-    about = "Desmonta y decompila archivos por capas usando los recursos del ordenador — por @angelazo",
-    long_about = "Mete archivos (o carpetas) y el programa los pela capa a capa:\n\
-                  comprimidos -> contenedores -> ejecutables/bytecode -> desensamblado/código.\n\
-                  Usa todos los núcleos, ajusta la memoria a la RAM libre y aprovecha\n\
-                  objdump, readelf, javap, jadx, CFR, pycdc, wabt, radare2, RetDec, Ghidra y 7z\n\
-                  si están instalados.\n\n\
-                  Clasifica los archivos finales por categoría en extraidos/ y puede abrir\n\
-                  ZIP protegidos con el módulo de claves (--clave, --comunes, --diccionario).\n\
-                  Con --auditar revisa paquetes (asset packs/mods) y da un veredicto\n\
-                  APROBADO/CUARENTENA/RECHAZADO sin ejecutar nada.\n\n\
-                  Sin argumentos abre la interfaz gráfica.\n\n\
-                  Firmado por @angelazo."
+    about = "Take files apart layer by layer and decompile them using your computer's resources — by @angelazo",
+    long_about = "Feed in files (or folders) and the program peels them layer by layer:\n\
+                  archives -> containers -> executables/bytecode -> disassembly/code.\n\
+                  Uses all cores, tunes memory to the free RAM, and leverages\n\
+                  objdump, readelf, javap, jadx, CFR, pycdc, wabt, radare2, RetDec, Ghidra and 7z\n\
+                  if installed.\n\n\
+                  Classifies the final files by category in extraidos/ and can open\n\
+                  protected ZIPs with the key module (--clave, --comunes, --diccionario).\n\
+                  With --auditar it reviews packages (asset packs/mods) and gives an\n\
+                  APPROVED/QUARANTINE/REJECTED verdict without running anything.\n\n\
+                  With no arguments it opens the GUI.\n\n\
+                  Signed by @angelazo."
 )]
 struct Args {
-    /// Archivos o carpetas a analizar (si no hay ninguno se abre la interfaz)
+    /// Files or folders to analyze (with none, the GUI opens)
     archivos: Vec<PathBuf>,
 
-    /// Carpeta de salida
+    /// Output folder
     #[arg(short, long, default_value = "salida_capas")]
     salida: PathBuf,
 
-    /// Hilos de trabajo (por defecto: todos los núcleos)
+    /// Worker threads (default: all cores)
     #[arg(short = 'j', long)]
     hilos: Option<usize>,
 
-    /// Profundidad máxima de capas
+    /// Maximum layer depth
     #[arg(short, long, default_value_t = 12)]
     profundidad: usize,
 
-    /// Tamaño máximo de un bloque extraído en MiB (por defecto: según RAM libre)
+    /// Max size of an extracted block in MiB (default: based on free RAM)
     #[arg(long)]
     max_archivo_mb: Option<u64>,
 
-    /// Total máximo a extraer en MiB (protección contra bombas zip)
+    /// Max total to extract in MiB (zip-bomb protection)
     #[arg(long, default_value_t = 16384)]
     max_total_mb: u64,
 
-    /// Tiempo máximo por herramienta externa, en segundos
+    /// Max time per external tool, in seconds
     #[arg(short, long, default_value_t = 300)]
     timeout: u64,
 
-    /// Máximo de instrucciones del desensamblador interno por binario
+    /// Max instructions of the built-in disassembler per binary
     #[arg(long, default_value_t = 500_000)]
     max_instrucciones: usize,
 
-    /// No buscar archivos incrustados por firma (carving)
+    /// Do not carve embedded files by signature
     #[arg(long)]
     sin_tallado: bool,
 
-    /// No usar herramientas externas, solo el análisis interno
+    /// Do not use external tools, built-in analysis only
     #[arg(long)]
     sin_externas: bool,
 
-    /// No clasificar ni reunir los archivos en extraidos/<categoria>/
+    /// Do not classify or gather files into extraidos/<category>/
     #[arg(long)]
     sin_clasificar: bool,
 
-    /// Auditar paquetes (asset packs/mods): veredicto APROBADO/CUARENTENA/RECHAZADO
+    /// Audit packages (asset packs/mods): APPROVED/QUARANTINE/REJECTED verdict
     #[arg(long)]
     auditar: bool,
 
-    /// Agrupar recursos con el mismo nombre base (mundo.blocky + mundo.png) en un .zip por conjunto
+    /// Group resources sharing a base name (world.blocky + world.png) into one .zip per set
     #[arg(long)]
     agrupar: bool,
 
-    /// Reconstruir cada paquete con su estructura original (carpeta + .zip cargable)
+    /// Rebuild each package with its original structure (folder + loadable .zip)
     #[arg(long)]
     reconstruir: bool,
 
     // ── Modo vigilancia: puerta de auditoría antes de la carga del servidor ──
-    /// Vigilar esta carpeta: audita cada pack que llega y lo encamina solo
+    /// Watch this folder: audit each incoming pack and route it automatically
     #[arg(long, value_name = "INCOMING")]
     vigilar: Option<PathBuf>,
 
-    /// Vigilancia de caché del cliente: audita/clasifica sin mover ni borrar nada
+    /// Client cache watch: audit/classify without moving or deleting anything
     #[arg(long)]
     solo_informe: bool,
 
     // ── Localizador: averiguar dónde guarda su caché una aplicación ──
-    /// Buscar la carpeta de caché de esta aplicación (por nombre)
+    /// Find the cache folder of this application (by name)
     #[arg(long, value_name = "APP")]
     localizar_cache: Option<String>,
 
-    /// Ejecutable de la app, para buscar pistas de ruta en su binario
+    /// The app executable, to look for path hints in its binary
     #[arg(long, value_name = "RUTA")]
     exe: Option<PathBuf>,
 
-    /// Observar N segundos qué carpetas escribe la app mientras corre
+    /// Watch for N seconds which folders the app writes while running
     #[arg(long, value_name = "SEGUNDOS")]
     observar: Option<u64>,
 
-    /// Carpeta de aprobados (la de Mods del servidor). Por defecto: ../approved
+    /// Approved folder (the server's Mods folder). Default: ../approved
     #[arg(long, value_name = "DIR")]
     aprobados: Option<PathBuf>,
 
-    /// Carpeta de cuarentena. Por defecto: ../quarantine
+    /// Quarantine folder. Default: ../quarantine
     #[arg(long, value_name = "DIR")]
     cuarentena: Option<PathBuf>,
 
-    /// Carpeta de informes. Por defecto: ../reports
+    /// Reports folder. Default: ../reports
     #[arg(long, value_name = "DIR")]
     reportes: Option<PathBuf>,
 
-    /// Segundos entre sondeos de la carpeta vigilada
+    /// Seconds between polls of the watched folder
     #[arg(long, default_value_t = 5)]
     intervalo: u64,
 
     // ── Módulo de claves (abrir ZIP protegidos que tengas derecho a abrir) ──
-    /// Contraseña a probar (se puede repetir: --clave a --clave b)
+    /// Password to try (repeatable: --clave a --clave b)
     #[arg(long = "clave", value_name = "CLAVE")]
     claves: Vec<String>,
 
-    /// Probar una lista incorporada de contraseñas habituales
+    /// Try a built-in list of common passwords
     #[arg(long)]
     comunes: bool,
 
-    /// Diccionario de contraseñas: un archivo de texto, una por línea
+    /// Password dictionary: a text file, one per line
     #[arg(long, value_name = "ARCHIVO")]
     diccionario: Option<PathBuf>,
 
-    /// Fuerza bruta: alfabeto (d=dígitos, l=minúsculas, a=alfanumérico, A=completo, o literal)
+    /// Brute force: alphabet (d=digits, l=lowercase, a=alphanumeric, A=full, or literal)
     #[arg(long, value_name = "ALFABETO")]
     fuerza_bruta: Option<String>,
 
-    /// Longitud máxima para la fuerza bruta
+    /// Maximum length for brute force
     #[arg(long, default_value_t = 4)]
     fuerza_long: usize,
 
-    /// Tope de contraseñas a probar por archivo (0 = sin tope)
+    /// Cap on passwords tried per file (0 = no cap)
     #[arg(long, default_value_t = 2_000_000)]
     max_intentos: u64,
 
-    /// Mostrar los recursos detectados y salir
+    /// Show detected resources and exit
     #[arg(long)]
     recursos: bool,
 
-    /// Abrir la interfaz gráfica; si se indican archivos, empieza a analizarlos
+    /// Open the GUI; if files are given, start analyzing them
     #[arg(long)]
     gui: bool,
+
+    /// Interface and message language: en | es (default: auto-detected)
+    #[arg(long, value_name = "LANG")]
+    idioma: Option<String>,
 }
 
 fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
@@ -209,11 +214,15 @@ fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
 
 fn main() -> Result<()> {
     let a = Args::parse();
+    match a.idioma.as_deref() {
+        Some(l) => idioma::set_es(l.eq_ignore_ascii_case("es")),
+        None => idioma::autodetectar(),
+    }
     let sis = Sistema::detectar();
 
     // Localizador de caché: descubre dónde escribe una app y sugiere vigilarla.
     if a.localizar_cache.is_some() || a.observar.is_some() {
-        eprintln!("capas v{VERSION} — por {AUTOR} · localizador de caché\n");
+        eprintln!("capas v{VERSION} — {} {AUTOR} · {}\n", idioma::tr("by","por"), idioma::tr("cache locator","localizador de caché"));
         localizar::localizar(
             a.localizar_cache.as_deref().unwrap_or(""),
             a.exe.as_deref(),
@@ -228,7 +237,7 @@ fn main() -> Result<()> {
         let mut op = opciones(&a, &sis);
         op.auditar = true;
         let c = vigilar::Carpetas::desde(incoming, a.aprobados.clone(), a.cuarentena.clone(), a.reportes.clone());
-        eprintln!("capas v{VERSION} — por {AUTOR} · modo vigilancia\n");
+        eprintln!("capas v{VERSION} — {} {AUTOR} · {}\n", idioma::tr("by","por"), idioma::tr("watch mode","modo vigilancia"));
         return vigilar::vigilar(&c, &op, &herr, &sis, Duration::from_secs(a.intervalo.max(1)), a.solo_informe, Arc::new(AtomicBool::new(false)));
     }
 
@@ -240,12 +249,12 @@ fn main() -> Result<()> {
     let herr = Herramientas::detectar(a.sin_externas);
     let op = opciones(&a, &sis);
 
-    eprintln!("capas v{VERSION} — por {AUTOR}\n");
-    eprintln!("== Recursos del ordenador ==");
-    eprintln!("  Núcleos lógicos : {} (usando {} hilos)", sis.nucleos, op.hilos);
-    eprintln!("  Memoria         : {} libre de {}", humano(sis.memoria_libre), humano(sis.memoria_total));
-    eprintln!("  Límite por bloque: {}", humano(op.max_archivo));
-    eprintln!("  Herramientas externas:");
+    eprintln!("capas v{VERSION} — {} {AUTOR}\n", idioma::tr("by","por"));
+    eprintln!("== {} ==", idioma::tr("Computer resources","Recursos del ordenador"));
+    eprintln!("  {} : {} ({} {} )", idioma::tr("Logical cores","Núcleos lógicos"), sis.nucleos, idioma::tr("using","usando"), format!("{} {}", op.hilos, idioma::tr("threads","hilos")));
+    eprintln!("  {} : {} / {}", idioma::tr("Memory       ","Memoria      "), humano(sis.memoria_libre), humano(sis.memoria_total));
+    eprintln!("  {}: {}", idioma::tr("Per-block limit","Límite por bloque"), humano(op.max_archivo));
+    eprintln!("  {}:", idioma::tr("External tools","Herramientas externas"));
     for (n, desc) in HERRAMIENTAS_CONOCIDAS {
         let marca = if herr.get(n).is_some() { "[x]" } else { "[ ]" };
         eprintln!("    {marca} {n:<18} {desc}");
@@ -254,34 +263,37 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    eprintln!("\n== Analizando ==");
+    eprintln!("\n== {} ==", idioma::tr("Analyzing","Analizando"));
     let r = analisis::ejecutar(&a.archivos, &a.salida, &op, herr, &sis, None, Arc::new(AtomicBool::new(false)))?;
     eprintln!(
-        "\n== Terminado en {:.1}s: {} bloques procesados, {} extraídos ==",
+        "\n== {} {:.1}s: {} {}, {} {} ==",
+        idioma::tr("Done in","Terminado en"),
         r.duracion.as_secs_f64(),
         r.bloques,
-        humano(r.bytes)
+        idioma::tr("blocks processed","bloques procesados"),
+        humano(r.bytes),
+        idioma::tr("extracted","extraídos")
     );
     if let Some(c) = &r.clasificacion {
-        eprintln!("\n== Clasificación ==");
+        eprintln!("\n== {} ==", idioma::tr("Classification","Clasificación"));
         for cat in clasificar::Categoria::TODAS {
             let n = c.por_categoria.get(cat.nombre()).copied().unwrap_or(0);
             if n > 0 {
                 eprintln!("  {:<22} {n}", cat.etiqueta());
             }
         }
-        eprintln!("  Archivos reunidos en: {}", r.raiz.join("extraidos").display());
+        eprintln!("  {}: {}", idioma::tr("Files gathered in","Archivos reunidos en"), r.raiz.join("extraidos").display());
     }
     if let Some(au) = &r.auditoria {
-        eprintln!("\n== Auditoría de paquetes ==");
+        eprintln!("\n== {} ==", idioma::tr("Package audit","Auditoría de paquetes"));
         for p in &au.paquetes {
             eprintln!("  [{}] {}", p.veredicto.etiqueta(), p.nombre);
             for h in p.hallazgos.iter().filter(|h| h.nivel != auditar::Nivel::Info) {
                 eprintln!("      - {}: {}", h.regla, h.detalle);
             }
         }
-        eprintln!("  Informe: {}", r.raiz.join("auditoria.md").display());
+        eprintln!("  {}: {}", idioma::tr("Report","Informe"), r.raiz.join("auditoria.md").display());
     }
-    eprintln!("Informe: {}", r.raiz.join("informe.md").display());
+    eprintln!("{}: {}", idioma::tr("Report","Informe"), r.raiz.join("informe.md").display());
     Ok(())
 }
