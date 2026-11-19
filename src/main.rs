@@ -7,10 +7,13 @@
 //! Sin argumentos abre la interfaz gráfica; con archivos funciona en consola.
 
 mod analisis;
+mod api;
 mod auditar;
+mod comparar;
 mod clasificar;
 mod claves;
 mod detectar;
+mod edicion;
 mod ejecutables;
 mod extraer;
 mod gui;
@@ -19,6 +22,7 @@ mod indice;
 mod localizar;
 mod motor;
 mod plugins;
+mod politica;
 mod recursos;
 mod relaciones;
 mod vigilar;
@@ -192,6 +196,27 @@ struct Args {
     /// No escribir el índice SQLite
     #[arg(long)]
     sin_indice: bool,
+
+    // ── Edición / monetización ──
+    /// Edition: core (free) | pro | studio (also CAPAS_EDICION)
+    #[arg(long, value_name = "ED")]
+    edicion: Option<String>,
+
+    /// [Pro] Evaluate policy (allow/warn/review/block) and write politica.md
+    #[arg(long)]
+    politica: bool,
+
+    /// [Pro] Compare this run index against an earlier baseline (.db)
+    #[arg(long, value_name = "BASE_DB")]
+    comparar: Option<PathBuf>,
+
+    /// [Studio] CI/CD mode: machine output and exit code from the policy
+    #[arg(long)]
+    ci: bool,
+
+    /// [Studio] Serve the index as a local API on this port and exit
+    #[arg(long, value_name = "PUERTO")]
+    api: Option<u16>,
 }
 
 fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
@@ -230,7 +255,18 @@ fn main() -> Result<()> {
         Some(l) => idioma::set_es(l.eq_ignore_ascii_case("es")),
         None => idioma::autodetectar(),
     }
+    edicion::resolver(a.edicion.as_deref());
     let sis = Sistema::detectar();
+
+    // [Studio] API local de solo lectura sobre el índice.
+    if let Some(puerto) = a.api {
+        if !edicion::permite(edicion::API) {
+            eprintln!("{}", edicion::bloqueado("--api", edicion::API));
+            std::process::exit(7);
+        }
+        let db = a.indice.clone().unwrap_or_else(|| a.salida.join("capas.db"));
+        return api::servir(db, puerto).map_err(Into::into);
+    }
 
     // Localizador de caché: descubre dónde escribe una app y sugiere vigilarla.
     if a.localizar_cache.is_some() || a.observar.is_some() {
@@ -259,9 +295,13 @@ fn main() -> Result<()> {
     }
 
     let herr = Herramientas::detectar(a.sin_externas);
-    let op = opciones(&a, &sis);
+    let mut op = opciones(&a, &sis);
+    // La política y el modo CI necesitan la auditoría.
+    if (a.politica && edicion::permite(edicion::POLITICA)) || (a.ci && edicion::permite(edicion::CI)) {
+        op.auditar = true;
+    }
 
-    eprintln!("capas v{VERSION} — {} {AUTOR}\n", idioma::tr("by","por"));
+    eprintln!("capas v{VERSION} — {} {AUTOR}  ·  {} {}\n", idioma::tr("by","por"), idioma::tr("edition","edición"), edicion::actual().nombre());
     eprintln!("== {} ==", idioma::tr("Computer resources","Recursos del ordenador"));
     eprintln!("  {} : {} ({} {} )", idioma::tr("Logical cores","Núcleos lógicos"), sis.nucleos, idioma::tr("using","usando"), format!("{} {}", op.hilos, idioma::tr("threads","hilos")));
     eprintln!("  {} : {} / {}", idioma::tr("Memory       ","Memoria      "), humano(sis.memoria_libre), humano(sis.memoria_total));
@@ -307,5 +347,48 @@ fn main() -> Result<()> {
         eprintln!("  {}: {}", idioma::tr("Report","Informe"), r.raiz.join("auditoria.md").display());
     }
     eprintln!("{}: {}", idioma::tr("Report","Informe"), r.raiz.join("informe.md").display());
+
+    // [Pro] Comparación entre versiones.
+    if let Some(base) = &a.comparar {
+        if edicion::permite(edicion::COMPARAR) {
+            let db = a.indice.clone().unwrap_or_else(|| r.raiz.join("capas.db"));
+            match comparar::comparar(&db, base, &r.raiz) {
+                Ok(d) => eprintln!(
+                    "\n== {} ==\n  {} +{} · -{} · ✳{}  →  {}",
+                    idioma::tr("Version comparison","Comparación entre versiones"),
+                    idioma::tr("vs base:","vs base:"),
+                    d.anadidos.len(), d.quitados.len(), d.cambiados.len(),
+                    r.raiz.join("comparacion.md").display(),
+                ),
+                Err(e) => eprintln!("  comparar: {e}"),
+            }
+        } else {
+            eprintln!("{}", edicion::bloqueado("--comparar", edicion::COMPARAR));
+        }
+    }
+
+    // [Pro] Política / [Studio] CI.
+    let quiere_pol = a.politica || a.ci;
+    if quiere_pol {
+        let min = if a.ci { edicion::CI } else { edicion::POLITICA };
+        if edicion::permite(min) {
+            let pol = politica::evaluar(r.auditoria.as_ref(), &r.arbol);
+            let _ = politica::escribir(&r.raiz, &pol);
+            eprintln!(
+                "\n== {} ==\n  {}: {}  →  {}",
+                idioma::tr("Operational policy","Política operativa"),
+                idioma::tr("overall action","acción global"),
+                pol.global.etiqueta(),
+                r.raiz.join("politica.md").display(),
+            );
+            if a.ci {
+                // Línea máquina a stdout + código de salida.
+                println!("capas action={} code={} packages={}", pol.global.etiqueta(), pol.global.codigo(), pol.paquetes.len());
+                std::process::exit(pol.global.codigo());
+            }
+        } else {
+            eprintln!("{}", edicion::bloqueado(if a.ci { "--ci" } else { "--politica" }, min));
+        }
+    }
     Ok(())
 }

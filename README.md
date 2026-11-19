@@ -136,6 +136,27 @@ by magic bytes + extension, so detection can be extended for custom formats.
   highlighting sensitive capabilities (network, files, processes, registry, crypto).
   capas **never runs** the code.
 
+## Editions (Core / Pro / Studio)
+
+Everything above is **Core** — free and complete for analysis. A few advanced,
+operational features are reserved for paid editions, selected with `--edicion` (or
+the `CAPAS_EDICION` env var); in a real release this is where a signed license key
+would be validated. Each feature's required edition is a one-line constant, so the
+tiering is easy to adjust.
+
+| Edition | Adds |
+|---|---|
+| **Core** (free) | all analysis, classification, confidence, relations, SQLite index, reports, audit, password module, watch/locate |
+| **Pro** | `--politica` (operational policy: ALLOW/WARN/REVIEW/BLOCK → `politica.md`), `--comparar base.db` (version diff between two indexes → `comparacion.md`) |
+| **Studio** | `--ci` (CI/CD: machine line on stdout + exit code 0/1/2/3 from the policy), `--api <port>` (local read-only REST over the index: `/`, `/files`, `/relations`, `/findings`, `/runs`) |
+
+```bash
+capas mod.zip --politica --edicion pro -s out      # verdict → policy action
+capas v2.zip --indice v2.db --comparar v1.db --edicion pro -s out
+capas mod.zip --ci --edicion studio -s out         # exit code for pipelines
+capas --api 8080 --indice capas.db --edicion studio   # serve the index
+```
+
 ## Output
 
 ```
