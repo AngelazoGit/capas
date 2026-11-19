@@ -13,6 +13,7 @@ use anyhow::{Context, Result};
 use rayon::prelude::*;
 
 use crate::motor::{self, Config, Evento, Motor, Nodo};
+use crate::idioma::{tfmt, tr};
 use crate::recursos::{humano, Herramientas, Sistema};
 use crate::{AUTOR, VERSION};
 
@@ -126,11 +127,7 @@ pub fn ejecutar(
                 }
                 let tam = fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
                 if tam > op.max_archivo {
-                    m.emitir(Evento::Aviso(format!(
-                        "{} ({}) supera el límite por bloque",
-                        p.display(),
-                        humano(tam)
-                    )));
+                    m.emitir(Evento::Aviso(tfmt(tr("{} ({}) exceeds the per-block limit","{} ({}) supera el límite por bloque"), &[p.display().to_string(), humano(tam)])));
                     return None;
                 }
                 match fs::read(&p) {
@@ -155,27 +152,23 @@ pub fn ejecutar(
     fs::write(raiz.join("informe.md"), informe_md(&arbol, sis, op.hilos, duracion, bloques, &m.herr))?;
     if let Some(n) = diagnostico_desconocidos(&arbol, &raiz) {
         if n > 0 {
-            m.emitir(Evento::Aviso(format!("{n} archivo(s) desconocidos → desconocidos.txt (mándamelo para añadir su detección)")));
+            m.emitir(Evento::Aviso(tfmt(tr("{} unknown file(s) → desconocidos.txt (send it to me to add detection)","{} archivo(s) desconocidos → desconocidos.txt (mándamelo para añadir su detección)"), &[n.to_string()])));
         }
     }
     if let Some(n) = crate::plugins::analizar(&arbol, &raiz) {
         if n > 0 {
-            m.emitir(Evento::Aviso(format!("{n} plugin(s)/código activo → plugins.md (funciones y APIs que importan)")));
+            m.emitir(Evento::Aviso(tfmt(tr("{} plugin(s)/active code → plugins.md (functions and imported APIs)","{} plugin(s)/código activo → plugins.md (funciones y APIs que importan)"), &[n.to_string()])));
         }
     }
 
     let clasificacion = if op.clasificar && !arbol.is_empty() {
         match crate::clasificar::clasificar(&arbol, &raiz, true) {
             Ok(c) => {
-                m.emitir(Evento::Aviso(format!(
-                    "clasificados {} archivo(s) en {} categorías → extraidos/",
-                    c.total,
-                    c.por_categoria.values().filter(|&&n| n > 0).count()
-                )));
+                m.emitir(Evento::Aviso(tfmt(tr("classified {} file(s) in {} categories → extraidos/","clasificados {} archivo(s) en {} categorías → extraidos/"), &[c.total.to_string(), c.por_categoria.values().filter(|&&n| n > 0).count().to_string()])));
                 Some(c)
             }
             Err(e) => {
-                m.emitir(Evento::Aviso(format!("clasificación: {e}")));
+                m.emitir(Evento::Aviso(tfmt(tr("classification: {}","clasificación: {}"), &[e.to_string()])));
                 None
             }
         }
@@ -185,20 +178,15 @@ pub fn ejecutar(
 
     if op.agrupar && !arbol.is_empty() {
         match crate::clasificar::agrupar(&arbol, &raiz, true) {
-            Ok(c) => m.emitir(Evento::Aviso(format!(
-                "{} conjunto(s) de recursos agrupados ({} archivos) → extraidos/conjuntos/",
-                c.grupos, c.archivos
-            ))),
-            Err(e) => m.emitir(Evento::Aviso(format!("agrupación: {e}"))),
+            Ok(c) => m.emitir(Evento::Aviso(tfmt(tr("{} resource set(s) grouped ({} files) → extraidos/conjuntos/","{} conjunto(s) de recursos agrupados ({} archivos) → extraidos/conjuntos/"), &[c.grupos.to_string(), c.archivos.to_string()]))),
+            Err(e) => m.emitir(Evento::Aviso(tfmt(tr("grouping: {}","agrupación: {}"), &[e.to_string()]))),
         }
     }
 
     if op.reconstruir && !arbol.is_empty() {
         match crate::clasificar::reconstruir(&arbol, &raiz, true) {
-            Ok((p, a)) => m.emitir(Evento::Aviso(format!(
-                "{p} paquete(s) reconstruidos ({a} archivos) → extraidos/reconstruido/"
-            ))),
-            Err(e) => m.emitir(Evento::Aviso(format!("reconstrucción: {e}"))),
+            Ok((p, a)) => m.emitir(Evento::Aviso(tfmt(tr("{} package(s) rebuilt ({} files) → extraidos/reconstruido/","{} paquete(s) reconstruidos ({} archivos) → extraidos/reconstruido/"), &[p.to_string(), a.to_string()]))),
+            Err(e) => m.emitir(Evento::Aviso(tfmt(tr("rebuild: {}","reconstrucción: {}"), &[e.to_string()]))),
         }
     }
 
@@ -206,12 +194,12 @@ pub fn ejecutar(
         match crate::auditar::auditar(&arbol, &raiz) {
             Ok(a) => {
                 for p in &a.paquetes {
-                    m.emitir(Evento::Aviso(format!("auditoría «{}»: {}", p.nombre, p.veredicto.etiqueta())));
+                    m.emitir(Evento::Aviso(tfmt(tr("audit «{}»: {}","auditoría «{}»: {}"), &[p.nombre.clone(), p.veredicto.etiqueta().to_string()])));
                 }
                 Some(a)
             }
             Err(e) => {
-                m.emitir(Evento::Aviso(format!("auditoría: {e}")));
+                m.emitir(Evento::Aviso(tfmt(tr("audit: {}","auditoría: {}"), &[e.to_string()])));
                 None
             }
         }
@@ -246,40 +234,21 @@ fn recoger_en(p: &Path, v: &mut Vec<PathBuf>) -> Result<()> {
 
 fn informe_md(arbol: &[Nodo], sis: &Sistema, hilos: usize, t: Duration, bloques: usize, herr: &Herramientas) -> String {
     let mut s = String::new();
-    let _ = writeln!(s, "# Informe de capas\n");
-    let _ = writeln!(
-        s,
-        "- Recursos: {} núcleos ({} hilos usados), {} de RAM libre",
-        sis.nucleos,
-        hilos,
-        humano(sis.memoria_libre)
-    );
-    let _ = writeln!(
-        s,
-        "- Herramientas externas usadas: {}",
-        if herr.rutas.is_empty() { "ninguna".to_string() } else { herr.rutas.keys().cloned().collect::<Vec<_>>().join(", ") }
-    );
-    let _ = writeln!(s, "- Duración: {:.1}s, bloques: {bloques}\n", t.as_secs_f64());
-    let _ = writeln!(s, "## Árbol de capas\n");
+    let _ = writeln!(s, "# {}\n", tr("Layer report","Informe de capas"));
+    let _ = writeln!(s, "{}", tfmt(tr("- Resources: {} cores ({} threads used), {} free RAM","- Recursos: {} núcleos ({} hilos usados), {} de RAM libre"), &[sis.nucleos.to_string(), hilos.to_string(), humano(sis.memoria_libre)]));
+    let _ = writeln!(s, "{}", tfmt(tr("- External tools used: {}","- Herramientas externas usadas: {}"), &[if herr.rutas.is_empty() { tr("none","ninguna").to_string() } else { herr.rutas.keys().cloned().collect::<Vec<_>>().join(", ") }]));
+    let _ = writeln!(s, "{}", tfmt(tr("- Duration: {}s, blocks: {}\n","- Duración: {}s, bloques: {}\n"), &[format!("{:.1}", t.as_secs_f64()), bloques.to_string()]));
+    let _ = writeln!(s, "## {}\n", tr("Layer tree","Árbol de capas"));
     for n in arbol {
         nodo_md(n, 0, &mut s);
     }
-    let _ = writeln!(s, "\n---\n*Generado por capas v{VERSION} — firmado por {AUTOR}*");
+    let _ = writeln!(s, "{}", tfmt(tr("\n---\n*Generated by capas v{} — signed by {}*","\n---\n*Generado por capas v{} — firmado por {}*"), &[VERSION.to_string(), AUTOR.to_string()]));
     s
 }
 
 fn nodo_md(n: &Nodo, nivel: usize, s: &mut String) {
     let sang = "  ".repeat(nivel);
-    let _ = writeln!(
-        s,
-        "{sang}- **{}** — capa {} · {} · {} · entropía {:.2} · `{}`",
-        n.nombre,
-        n.capa,
-        n.descripcion,
-        humano(n.tamano),
-        n.entropia,
-        &n.sha256[..16]
-    );
+    let _ = writeln!(s, "{}", tfmt(tr("{}- **{}** — layer {} · {} · {} · entropy {} · `{}`","{}- **{}** — capa {} · {} · {} · entropía {} · `{}`"), &[sang.clone(), n.nombre.clone(), n.capa.to_string(), n.descripcion.clone(), humano(n.tamano), format!("{:.2}", n.entropia), n.sha256[..16].to_string()]));
     for r in &n.resultados {
         let _ = writeln!(s, "{sang}  - 📄 `{r}`");
     }
@@ -312,18 +281,18 @@ fn diagnostico_desconocidos(arbol: &[Nodo], raiz: &Path) -> Option<usize> {
         }
     }
     let mut s = String::new();
-    let _ = writeln!(s, "# Archivos desconocidos — diagnóstico\n");
-    let _ = writeln!(s, "{} archivo(s) sin detección por contenido.\n", muestras.len());
-    let _ = writeln!(s, "## Agrupados por firma (primeros bytes) + extensión\n");
-    let _ = writeln!(s, "| nº | extensión | firma (hex) | ejemplos |");
+    let _ = writeln!(s, "# {}\n", tr("Unknown files — diagnostics","Archivos desconocidos — diagnóstico"));
+    let _ = writeln!(s, "{}", tfmt(tr("{} file(s) with no content-based detection.\n","{} archivo(s) sin detección por contenido.\n"), &[muestras.len().to_string()]));
+    let _ = writeln!(s, "## {}\n", tr("Grouped by signature (first bytes) + extension","Agrupados por firma (primeros bytes) + extensión"));
+    let _ = writeln!(s, "| {} | {} | {} | {} |", tr("#","nº"), tr("extension","extensión"), tr("signature (hex)","firma (hex)"), tr("examples","ejemplos"));
     let _ = writeln!(s, "|--:|---|---|---|");
     let mut orden: Vec<_> = grupos.into_iter().collect();
     orden.sort_by(|a, b| b.1 .0.cmp(&a.1 .0));
     for ((firma, ext), (n, ejemplos)) in &orden {
-        let ext = if ext.is_empty() { "(sin)" } else { ext.as_str() };
+        let ext = if ext.is_empty() { tr("(none)","(sin)") } else { ext.as_str() };
         let _ = writeln!(s, "| {n} | {ext} | `{firma}` | {} |", ejemplos.join(", "));
     }
-    let _ = writeln!(s, "\n## Detalle (primeros 16 bytes)\n");
+    let _ = writeln!(s, "\n## {}\n", tr("Detail (first 16 bytes)","Detalle (primeros 16 bytes)"));
     for (nombre, _ext, tam, hex) in muestras.iter().take(500) {
         let ascii: String = hex
             .split_whitespace()
@@ -332,7 +301,7 @@ fn diagnostico_desconocidos(arbol: &[Nodo], raiz: &Path) -> Option<usize> {
             .collect();
         let _ = writeln!(s, "- {nombre} ({}) `{hex}`  |{ascii}|", humano(*tam));
     }
-    let _ = writeln!(s, "\n---\nMándame este archivo (o pega la tabla de arriba) y añado la detección de tus formatos.");
+    let _ = writeln!(s, "\n---\n{}", tr("Send me this file (or paste the table above) and I will add detection for your formats.","Mándame este archivo (o pega la tabla de arriba) y añado la detección de tus formatos."));
     let _ = fs::write(raiz.join("desconocidos.txt"), s);
     Some(muestras.len())
 }

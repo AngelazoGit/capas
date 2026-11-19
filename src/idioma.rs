@@ -27,3 +27,22 @@ pub fn es() -> bool {
 pub fn tr(en: &'static str, es_txt: &'static str) -> &'static str {
     if es() { es_txt } else { en }
 }
+
+/// Formateo en runtime: sustituye cada `{}` de la plantilla por el siguiente
+/// argumento, en orden. Permite plantillas traducibles con tr() (que `format!`
+/// no admite porque exige un literal). Valores con formato especial (p. ej.
+/// `{:.2}`) se preformatean a String antes de pasarlos.
+pub fn tfmt(tpl: &str, args: &[String]) -> String {
+    let mut out = String::with_capacity(tpl.len() + 16);
+    let mut it = args.iter();
+    let mut rest = tpl;
+    while let Some(pos) = rest.find("{}") {
+        out.push_str(&rest[..pos]);
+        if let Some(a) = it.next() {
+            out.push_str(a);
+        }
+        rest = &rest[pos + 2..];
+    }
+    out.push_str(rest);
+    out
+}

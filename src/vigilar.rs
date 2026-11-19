@@ -21,6 +21,7 @@ use anyhow::{Context, Result};
 use crate::analisis::{self, Opciones};
 use crate::auditar::Veredicto;
 use crate::clasificar::Categoria;
+use crate::idioma::{tfmt, tr};
 use crate::recursos::{humano, Herramientas, Sistema};
 
 pub struct Carpetas {
@@ -56,14 +57,14 @@ pub fn vigilar(
     fs::create_dir_all(&c.incoming).with_context(|| format!("creando {}", c.incoming.display()))?;
     fs::create_dir_all(&c.reports)?;
     if solo_informe {
-        eprintln!("Vigilando (solo informe, sin mover): {}", c.incoming.display());
-        eprintln!("  informes → {}\n(Ctrl-C para parar)\n", c.reports.display());
+        eprintln!("{}", tfmt(tr("Watching (report only, no moving): {}","Vigilando (solo informe, sin mover): {}"), &[c.incoming.display().to_string()]));
+        eprintln!("{}", tfmt(tr("  reports → {}\n(Ctrl-C to stop)\n","  informes → {}\n(Ctrl-C para parar)\n"), &[c.reports.display().to_string()]));
     } else {
         fs::create_dir_all(&c.approved)?;
         fs::create_dir_all(&c.quarantine)?;
-        eprintln!("Puerta de auditoría: {}", c.incoming.display());
-        eprintln!("  APROBADO → {}\n  resto    → {}\n  informes → {}\n(Ctrl-C para parar)\n",
-            c.approved.display(), c.quarantine.display(), c.reports.display());
+        eprintln!("{}", tfmt(tr("Audit gate: {}","Puerta de auditoría: {}"), &[c.incoming.display().to_string()]));
+        eprintln!("{}", tfmt(tr("  APPROVED → {}\n  rest     → {}\n  reports  → {}\n(Ctrl-C to stop)\n","  APROBADO → {}\n  resto    → {}\n  informes → {}\n(Ctrl-C para parar)\n"),
+            &[c.approved.display().to_string(), c.quarantine.display().to_string(), c.reports.display().to_string()]));
     }
 
     // Espera a que un archivo deje de crecer (no procesar a medio escribir).
@@ -114,7 +115,7 @@ pub fn vigilar(
         }
         std::thread::sleep(intervalo);
     }
-    eprintln!("Vigilancia detenida.");
+    eprintln!("{}", tr("Watch stopped.","Vigilancia detenida."));
     Ok(())
 }
 
@@ -161,7 +162,7 @@ fn procesar(archivo: &Path, c: &Carpetas, op: &Opciones, herr: &Herramientas, si
     let destino_dir = if veredicto == Veredicto::Aprobado { &c.approved } else { &c.quarantine };
     let destino = destino_unico(destino_dir, &nombre);
     mover(archivo, &destino)?;
-    eprintln!("  [{}] → {}   (informe: {})", veredicto.etiqueta(), destino.display(), dir_informe.join("auditoria.md").display());
+    eprintln!("{}", tfmt(tr("  [{}] → {}   (report: {})","  [{}] → {}   (informe: {})"), &[veredicto.etiqueta().to_string(), destino.display().to_string(), dir_informe.join("auditoria.md").display().to_string()]));
     Ok(())
 }
 
@@ -184,7 +185,7 @@ fn informar(archivo: &Path, c: &Carpetas, op: &Opciones, herr: &Herramientas, si
         if resumen.is_empty() { "—".into() } else { resumen }
     );
     if veredicto != Veredicto::Aprobado {
-        eprintln!("    informe: {}", dir_informe.join("auditoria.md").display());
+        eprintln!("{}", tfmt(tr("    report: {}","    informe: {}"), &[dir_informe.join("auditoria.md").display().to_string()]));
     }
     Ok(())
 }

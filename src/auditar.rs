@@ -13,7 +13,7 @@ use serde::Serialize;
 
 use crate::clasificar::{categoria, Categoria};
 use crate::motor::Nodo;
-use crate::idioma::tr;
+use crate::idioma::{tfmt, tr};
 use crate::recursos::humano;
 
 /// Extensiones de recursos aceptadas en una revisión inicial (allowlist de la
@@ -104,7 +104,7 @@ fn auditar_paquete(raiz: &Nodo) -> Paquete {
             h.push(Hallazgo {
                 nivel: Nivel::Rechazo,
                 regla: "ruta-escape".into(),
-                detalle: format!("{motivo}: «{}»", n.nombre),
+                detalle: tfmt(tr("{}: «{}»","{}: «{}»"), &[motivo.to_string(), n.nombre.clone()]),
             });
         }
         // 2) Código activo / ejecutables / librerías nativas.
@@ -126,7 +126,7 @@ fn auditar_paquete(raiz: &Nodo) -> Paquete {
                         h.push(Hallazgo {
                             nivel: Nivel::Info,
                             regla: "manifest-campos".into(),
-                            detalle: format!("faltan campos recomendados: {}", faltan.join(", ")),
+                            detalle: tfmt(tr("missing recommended fields: {}","faltan campos recomendados: {}"), &[faltan.join(", ")]),
                         });
                     }
                 }
@@ -146,7 +146,7 @@ fn auditar_paquete(raiz: &Nodo) -> Paquete {
             h.push(Hallazgo {
                 nivel: Nivel::Aviso,
                 regla: "fuera-allowlist".into(),
-                detalle: format!("extensión no reconocida: {} (.{ext})", n.nombre),
+                detalle: tfmt(tr("unrecognized extension: {} (.{})","extensión no reconocida: {} (.{})"), &[n.nombre.clone(), ext.clone()]),
             });
         }
     });
@@ -157,7 +157,7 @@ fn auditar_paquete(raiz: &Nodo) -> Paquete {
         h.push(Hallazgo {
             nivel: Nivel::Rechazo,
             regla: "manifest-ausente".into(),
-            detalle: "falta manifest.json en el paquete".into(),
+            detalle: tr("manifest.json is missing from the package","falta manifest.json en el paquete").to_string(),
         });
     }
 
@@ -189,15 +189,15 @@ fn recorrer(n: &Nodo, f: &mut impl FnMut(&Nodo)) {
 fn ruta_escape(nombre: &str) -> Option<&'static str> {
     let n = nombre.replace('\\', "/");
     if n.starts_with('/') {
-        return Some("ruta absoluta");
+        return Some(tr("absolute path","ruta absoluta"));
     }
     // Letra de unidad de Windows (C:\…).
     let b = n.as_bytes();
     if b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':' {
-        return Some("ruta absoluta");
+        return Some(tr("absolute path","ruta absoluta"));
     }
     if n.split('/').any(|seg| seg == "..") {
-        return Some("navegación fuera de la carpeta");
+        return Some(tr("navigation outside the folder","navegación fuera de la carpeta"));
     }
     None
 }
@@ -224,20 +224,20 @@ fn es_manifest(nombre: &str) -> bool {
 fn validar_manifest(ruta: &Path) -> Result<Vec<&'static str>, String> {
     let datos = std::fs::read(ruta).map_err(|e| e.to_string())?;
     let v: serde_json::Value = serde_json::from_slice(&datos).map_err(|e| e.to_string())?;
-    let obj = v.as_object().ok_or("el manifest no es un objeto JSON")?;
+    let obj = v.as_object().ok_or(tr("the manifest is not a JSON object","el manifest no es un objeto JSON"))?;
     // Búsqueda de claves sin distinguir mayúsculas.
     let tiene = |campo: &str| obj.keys().any(|k| k.eq_ignore_ascii_case(campo));
     if !tiene("Name") || !tiene("Version") {
-        return Err("faltan campos obligatorios Name/Version".into());
+        return Err(tr("missing required Name/Version fields","faltan campos obligatorios Name/Version").into());
     }
     Ok(CAMPOS_MANIFEST.iter().copied().filter(|c| !tiene(c)).collect())
 }
 
 fn informe(a: &Auditoria) -> String {
     let mut s = String::new();
-    let _ = writeln!(s, "# Auditoría de paquetes\n");
-    let _ = writeln!(s, "{} paquete(s) auditados.\n", a.paquetes.len());
-    let _ = writeln!(s, "| Paquete | Veredicto | Archivos | Tamaño | Manifest |");
+    let _ = writeln!(s, "# {}\n", tr("Package audit","Auditoría de paquetes"));
+    let _ = writeln!(s, "{}", tfmt(tr("{} package(s) audited.\n","{} paquete(s) auditados.\n"), &[a.paquetes.len().to_string()]));
+    let _ = writeln!(s, "| {} | {} | {} | {} | {} |", tr("Package","Paquete"), tr("Verdict","Veredicto"), tr("Files","Archivos"), tr("Size","Tamaño"), tr("Manifest","Manifest"));
     let _ = writeln!(s, "|---|---|--:|--:|:--:|");
     for p in &a.paquetes {
         let _ = writeln!(
@@ -247,15 +247,15 @@ fn informe(a: &Auditoria) -> String {
             p.veredicto.etiqueta(),
             p.archivos,
             humano(p.tamano),
-            if p.manifest_ok { "sí" } else { "no" }
+            if p.manifest_ok { tr("yes","sí") } else { tr("no","no") }
         );
     }
     for p in &a.paquetes {
         let _ = writeln!(s, "\n## {} — {}\n", p.nombre, p.veredicto.etiqueta());
         let _ = writeln!(s, "- SHA-256: `{}`", p.sha256);
-        let _ = writeln!(s, "- Tamaño: {} · Archivos: {}", humano(p.tamano), p.archivos);
+        let _ = writeln!(s, "{}", tfmt(tr("- Size: {} · Files: {}","- Tamaño: {} · Archivos: {}"), &[humano(p.tamano), p.archivos.to_string()]));
         if p.hallazgos.is_empty() {
-            let _ = writeln!(s, "- Sin hallazgos.");
+            let _ = writeln!(s, "- {}", tr("No findings.","Sin hallazgos."));
             continue;
         }
         for h in &p.hallazgos {
@@ -267,13 +267,15 @@ fn informe(a: &Auditoria) -> String {
             let _ = writeln!(s, "- {marca} [{}] {}", h.regla, h.detalle);
         }
     }
-    let _ = writeln!(
-        s,
+    let _ = writeln!(s, "{}", tr(
+        "\n---\n**Approve only if:** valid manifest, no escape paths, no executables or native \
+         libraries, reviewed hash, expected dependencies, reasonable size. A hash proves identity, \
+         not innocence: analyze in quarantine with antivirus/sandbox and keep the game updated. \
+         Audit by @angelazo.",
         "\n---\n**Aprobar solo si:** manifest válido, sin rutas de escape, sin ejecutables ni \
          librerías nativas, hash revisado, dependencias esperadas, tamaño razonable. Un hash \
          demuestra identidad, no inocencia: analiza en cuarentena con antivirus/sandbox y mantén \
-         el juego actualizado. Auditoría de @angelazo."
-    );
+         el juego actualizado. Auditoría de @angelazo."));
     s
 }
 
