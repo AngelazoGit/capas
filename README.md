@@ -94,6 +94,11 @@ by magic bytes + extension, so detection can be extended for custom formats.
 
 ## Features
 
+- **Confidence levels** — every file is labelled **Confirmed / Compatible / Probable
+  / Unknown** with the evidence behind it: Confirmed = a magic signature proves it;
+  Probable = extension only or text heuristic; Unknown = no evidence. `Unknown` is not
+  a failure — it is what keeps the report honest instead of falsely confident. Shown in
+  the GUI (confidence panel + per-block badge) and in the reports.
 - **Classification** — sorts every final file into a category and gathers copies in
   `extraidos/<category>/` (hard links, no disk duplication).
 - **Password recovery** (`--clave`, `--comunes`, `--diccionario`, `--fuerza-bruta`) —

@@ -18,7 +18,7 @@ use eframe::egui::{
 
 use crate::analisis::{self, Opciones, Resumen};
 use crate::auditar::{Nivel, Veredicto};
-use crate::clasificar::Categoria;
+use crate::clasificar::{Categoria, Confianza};
 use crate::idioma::{tfmt, tr};
 use crate::claves::{Claves, FuerzaBruta};
 use crate::detectar::Tipo;
@@ -140,6 +140,15 @@ fn color_veredicto(v: Veredicto) -> Color32 {
         Veredicto::Aprobado => verde(),
         Veredicto::Cuarentena => naranja(),
         Veredicto::Rechazado => rojo(),
+    }
+}
+
+fn color_confianza(c: Confianza) -> Color32 {
+    match c {
+        Confianza::Confirmado => verde(),
+        Confianza::Compatible => morado_claro(),
+        Confianza::Probable => naranja(),
+        Confianza::Desconocido => rojo(),
     }
 }
 
@@ -1045,6 +1054,28 @@ impl App {
     }
 
     fn estratos_ui(&mut self, ui: &mut Ui) {
+        if !self.arbol.is_empty() {
+            let mut conf: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+            cuenta_conf(&self.arbol, &mut conf);
+            let total: usize = conf.values().sum();
+            seccion(ui, "I", tr("CONFIDENCE", "CONFIANZA"), verde(), |ui| {
+                for c in Confianza::TODAS {
+                    let n = conf.get(c.clave()).copied().unwrap_or(0);
+                    if n == 0 {
+                        continue;
+                    }
+                    let col = color_confianza(c);
+                    ui.horizontal(|ui| {
+                        let (r, p) = ui.allocate_painter(Vec2::new(ui.available_width(), 15.0), Sense::hover());
+                        let rr = r.rect;
+                        let w = (n as f32 / total.max(1) as f32) * (rr.width() * 0.45);
+                        p.rect_filled(Rect::from_min_size(rr.left_top(), Vec2::new(w, rr.height())), 0.0, col.gamma_multiply(0.5));
+                        p.text(rr.left_center() + Vec2::new(4.0, 0.0), Align2::LEFT_CENTER, c.etiqueta(), mono(11.0), col);
+                        p.text(rr.right_center() - Vec2::new(4.0, 0.0), Align2::RIGHT_CENTER, n.to_string(), mono(11.0), texto());
+                    });
+                }
+            });
+        }
         if !self.audit.is_empty() {
             seccion(ui, "H", tr("PACKAGE AUDIT", "AUDITORÍA DE PAQUETES"), naranja(), |ui| {
                 for (nombre, veredicto, hallazgos) in &self.audit {
@@ -1122,8 +1153,18 @@ impl App {
         seccion(ui, "F", tr("BLOCK DETAILS", "FICHA DEL BLOQUE"), naranja(), |ui| {
             egui::ScrollArea::vertical().id_salt("ficha").show(ui, |ui| {
                 ui.label(RichText::new(&n.nombre).font(titulo(18.0)).color(color_tipo(n.tipo)));
+                ui.horizontal(|ui| {
+                    let c = color_confianza(n.confianza);
+                    let (r, p) = ui.allocate_painter(Vec2::new(108.0, 18.0), Sense::hover());
+                    let rr = r.rect;
+                    p.rect_filled(rr, 0.0, c.gamma_multiply(0.22));
+                    p.rect_stroke(rr, 0.0, Stroke::new(1.0, c), StrokeKind::Inside);
+                    p.text(rr.center(), Align2::CENTER_CENTER, n.confianza.etiqueta(), titulo(12.0), c);
+                    ui.add(egui::Label::new(RichText::new(&n.evidencia).font(mono(10.0)).color(morado_claro())).truncate());
+                });
                 egui::Grid::new("ficha_grid").num_columns(2).spacing([10.0, 2.0]).show(ui, |ui| {
                     for (k, v) in [
+                        (tr("CONFIDENCE", "CONFIANZA"), n.confianza.etiqueta().to_string()),
                         (tr("LAYER", "CAPA"), n.capa.to_string()),
                         (tr("TYPE", "TIPO"), n.descripcion.clone()),
                         (tr("SIZE", "TAMAÑO"), humano(n.tamano)),
@@ -1186,6 +1227,13 @@ impl App {
 }
 
 // ── Árbol ───────────────────────────────────────────────────────────────
+fn cuenta_conf(nodos: &[Nodo], conf: &mut std::collections::BTreeMap<&'static str, usize>) {
+    for n in nodos {
+        *conf.entry(n.confianza.clave()).or_insert(0) += 1;
+        cuenta_conf(&n.hijos, conf);
+    }
+}
+
 fn buscar_nodo<'a>(arbol: &'a [Nodo], ruta: &[usize]) -> Option<&'a Nodo> {
     let mut n = arbol.get(*ruta.first()?)?;
     for &i in &ruta[1..] {

@@ -238,6 +238,17 @@ fn informe_md(arbol: &[Nodo], sis: &Sistema, hilos: usize, t: Duration, bloques:
     let _ = writeln!(s, "{}", tfmt(tr("- Resources: {} cores ({} threads used), {} free RAM","- Recursos: {} núcleos ({} hilos usados), {} de RAM libre"), &[sis.nucleos.to_string(), hilos.to_string(), humano(sis.memoria_libre)]));
     let _ = writeln!(s, "{}", tfmt(tr("- External tools used: {}","- Herramientas externas usadas: {}"), &[if herr.rutas.is_empty() { tr("none","ninguna").to_string() } else { herr.rutas.keys().cloned().collect::<Vec<_>>().join(", ") }]));
     let _ = writeln!(s, "{}", tfmt(tr("- Duration: {}s, blocks: {}\n","- Duración: {}s, bloques: {}\n"), &[format!("{:.1}", t.as_secs_f64()), bloques.to_string()]));
+    // Resumen de confianza.
+    let mut conf: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
+    cuenta_confianza(arbol, &mut conf);
+    let _ = writeln!(s, "## {}\n", tr("Confidence","Confianza"));
+    for c in crate::clasificar::Confianza::TODAS {
+        let n = conf.get(c.clave()).copied().unwrap_or(0);
+        if n > 0 {
+            let _ = writeln!(s, "- **{}**: {}", c.etiqueta(), n);
+        }
+    }
+    let _ = writeln!(s);
     let _ = writeln!(s, "## {}\n", tr("Layer tree","Árbol de capas"));
     for n in arbol {
         nodo_md(n, 0, &mut s);
@@ -246,9 +257,17 @@ fn informe_md(arbol: &[Nodo], sis: &Sistema, hilos: usize, t: Duration, bloques:
     s
 }
 
+fn cuenta_confianza(nodos: &[Nodo], conf: &mut std::collections::BTreeMap<&'static str, usize>) {
+    for n in nodos {
+        *conf.entry(n.confianza.clave()).or_insert(0) += 1;
+        cuenta_confianza(&n.hijos, conf);
+    }
+}
+
 fn nodo_md(n: &Nodo, nivel: usize, s: &mut String) {
     let sang = "  ".repeat(nivel);
-    let _ = writeln!(s, "{}", tfmt(tr("{}- **{}** — layer {} · {} · {} · entropy {} · `{}`","{}- **{}** — capa {} · {} · {} · entropía {} · `{}`"), &[sang.clone(), n.nombre.clone(), n.capa.to_string(), n.descripcion.clone(), humano(n.tamano), format!("{:.2}", n.entropia), n.sha256[..16].to_string()]));
+    let _ = writeln!(s, "{}", tfmt(tr("{}- **{}** — [{}] {} · {} · entropy {} · `{}`","{}- **{}** — [{}] {} · {} · entropía {} · `{}`"), &[sang.clone(), n.nombre.clone(), n.confianza.etiqueta().to_string(), n.descripcion.clone(), humano(n.tamano), format!("{:.2}", n.entropia), n.sha256[..16].to_string()]));
+    let _ = writeln!(s, "{}", tfmt(tr("{}  - {} · evidence: {}","{}  - {} · evidencia: {}"), &[sang.clone(), tfmt(tr("layer {}","capa {}"), &[n.capa.to_string()]), n.evidencia.clone()]));
     for r in &n.resultados {
         let _ = writeln!(s, "{sang}  - 📄 `{r}`");
     }
