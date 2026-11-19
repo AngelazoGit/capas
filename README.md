@@ -99,6 +99,11 @@ by magic bytes + extension, so detection can be extended for custom formats.
   Probable = extension only or text heuristic; Unknown = no evidence. `Unknown` is not
   a failure — it is what keeps the report honest instead of falsely confident. Shown in
   the GUI (confidence panel + per-block badge) and in the reports.
+- **SQLite index** — every run writes an index (`capas.db` in the output, or a fixed DB
+  with `--indice path.db`) that is the source of truth: tables `files` (keyed by SHA-256),
+  `containers`, `relations`, `findings`, `runs`. With the hash as key, the same file is one
+  row even across folders and runs, so it is counted once and you can query and compare
+  versions. Disable with `--sin-indice`.
 - **Family relations** — builds the relation graph inside a package generically (no
   per-game branding): a text/manifest file that names another → *references*; files
   sharing a base name in the same folder → *family*; same SHA-256 → *duplicate*. A file
