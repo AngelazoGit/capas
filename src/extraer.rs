@@ -5,6 +5,7 @@ use std::io::{Cursor, Read, Write};
 
 use anyhow::{anyhow, bail, Result};
 
+use crate::idioma::{tfmt, tr};
 use crate::detectar::{self, Tipo};
 
 pub struct Hijo {
@@ -17,7 +18,7 @@ fn leer_limitado<R: Read>(r: R, limite: u64) -> Result<Vec<u8>> {
     let mut v = Vec::new();
     r.take(limite + 1).read_to_end(&mut v)?;
     if v.len() as u64 > limite {
-        bail!("supera el límite de {} bytes (¿bomba de descompresión?)", limite);
+        bail!("{}", tfmt(tr("exceeds the limit of {} bytes (decompression bomb?)","supera el límite de {} bytes (¿bomba de descompresión?)"), &[limite.to_string()]));
     }
     Ok(v)
 }
@@ -29,7 +30,7 @@ struct EscritorLimitado {
 impl Write for EscritorLimitado {
     fn write(&mut self, b: &[u8]) -> std::io::Result<usize> {
         if self.v.len() + b.len() > self.limite {
-            return Err(std::io::Error::other("supera el límite de tamaño"));
+            return Err(std::io::Error::other(tr("size limit exceeded","supera el límite de tamaño")));
         }
         self.v.extend_from_slice(b);
         Ok(b.len())
@@ -103,7 +104,7 @@ pub fn zip(d: &[u8], lim: u64, notas: &mut Vec<String>) -> Result<Vec<Hijo>> {
         let mut f = match z.by_index(i) {
             Ok(f) => f,
             Err(e) => {
-                notas.push(format!("entrada #{i} no legible: {e}"));
+                notas.push(tfmt(tr("entry #{} not readable: {}","entrada #{} no legible: {}"), &[i.to_string(), e.to_string()]));
                 continue;
             }
         };
@@ -112,7 +113,7 @@ pub fn zip(d: &[u8], lim: u64, notas: &mut Vec<String>) -> Result<Vec<Hijo>> {
         }
         let nombre = f.name().to_string();
         if f.encrypted() {
-            notas.push(format!("'{nombre}' está cifrado, se omite"));
+            notas.push(tfmt(tr("'{}' is encrypted, skipped","'{}' está cifrado, se omite"), &[nombre.clone()]));
             continue;
         }
         let restante = lim.saturating_sub(total);

@@ -19,7 +19,7 @@ use eframe::egui::{
 use crate::analisis::{self, Opciones, Resumen};
 use crate::auditar::{Nivel, Veredicto};
 use crate::clasificar::Categoria;
-use crate::idioma::tr;
+use crate::idioma::{tfmt, tr};
 use crate::claves::{Claves, FuerzaBruta};
 use crate::detectar::Tipo;
 use crate::motor::{Evento, Nodo};
@@ -78,11 +78,31 @@ const MANDO: Paleta = Paleta {
     rejilla_bg: Color32::from_rgb(0x12, 0x08, 0x22),
 };
 
-// 0 = Sereno (por defecto), 1 = Mando.
+const NEUTRO: Paleta = Paleta {
+    fondo: Color32::from_rgb(0x1e, 0x1e, 0x22),
+    morado_oscuro: Color32::from_rgb(0x28, 0x28, 0x2e),
+    morado: Color32::from_rgb(0x33, 0x33, 0x3b),
+    morado_medio: Color32::from_rgb(0x5a, 0x5a, 0x66),
+    morado_claro: Color32::from_rgb(0xb8, 0xb8, 0xc4),
+    verde: Color32::from_rgb(0x8f, 0xb9, 0x8a),
+    verde_oscuro: Color32::from_rgb(0x44, 0x53, 0x3f),
+    naranja: Color32::from_rgb(0xcf, 0xa8, 0x78),
+    naranja_oscuro: Color32::from_rgb(0x6b, 0x5a, 0x42),
+    rojo: Color32::from_rgb(0xc9, 0x8a, 0x8a),
+    texto: Color32::from_rgb(0xe8, 0xe8, 0xec),
+    hondo: Color32::from_rgb(0x16, 0x16, 0x19),
+    rejilla_bg: Color32::from_rgb(0x24, 0x24, 0x28),
+};
+
+// 0 = Sereno (por defecto), 1 = Mando, 2 = Neutro.
 static TEMA: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
 
 fn pal() -> Paleta {
-    if TEMA.load(Ordering::Relaxed) == 1 { MANDO } else { SERENO }
+    match TEMA.load(Ordering::Relaxed) {
+        1 => MANDO,
+        2 => NEUTRO,
+        _ => SERENO,
+    }
 }
 fn fondo() -> Color32 { pal().fondo }
 fn morado_oscuro() -> Color32 { pal().morado_oscuro }
@@ -230,7 +250,7 @@ const ALFABETOS: &[(&str, &str)] = &[
 pub fn lanzar(sis: Sistema, archivos: Vec<PathBuf>, salida: PathBuf, auto_iniciar: bool) -> anyhow::Result<()> {
     let opciones = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title(format!("CAPAS · layered decomposition system · {AUTOR}"))
+            .with_title(tfmt(tr("CAPAS · layered decomposition system · {}","CAPAS · sistema de descomposición estratificada · {}"), &[AUTOR.to_string()]))
             .with_inner_size([1440.0, 900.0])
             .with_min_inner_size([1100.0, 700.0])
             .with_icon(icono())
@@ -288,7 +308,7 @@ impl App {
             audit: Vec::new(),
             sis,
         };
-        app.log(0.0, format!("CAPAS v{VERSION} STARTED · OPERATOR {AUTOR}"), naranja());
+        app.log(0.0, tfmt(tr("CAPAS v{} STARTED · OPERATOR {}","CAPAS v{} INICIADO · OPERADOR {}"), &[VERSION.to_string(), AUTOR.to_string()]), naranja());
         app.log(
             0.0,
             format!(
@@ -369,7 +389,7 @@ impl App {
         self.audit.clear();
         self.t_inicio = ahora;
         self.ult_muestra = (ahora, 0);
-        self.log(ahora, format!("DECOMPOSITION START · {} SAMPLE(S) · {} THREADS", self.archivos.len(), self.op.hilos), naranja());
+        self.log(ahora, tfmt(tr("DECOMPOSITION START · {} SAMPLE(S) · {} THREADS","INICIO DE DESCOMPOSICIÓN · {} MUESTRA(S) · {} HILOS"), &[self.archivos.len().to_string(), self.op.hilos.to_string()]), naranja());
         self.fase = Fase::Analizando { rx, hilo, cancelar };
     }
 
@@ -395,7 +415,7 @@ impl App {
                     self.ultimo = Some((tipo, ruta.clone(), ahora));
                     self.log(
                         ahora,
-                        format!("LAYER {capa:02} │ {:<11} │ {:>10} │ {ruta}", codigo_tipo(tipo), humano(tamano)),
+                        tfmt(tr("LAYER {} │ {} │ {} │ {}","CAPA {} │ {} │ {} │ {}"), &[format!("{capa:02}"), format!("{:<11}", codigo_tipo(tipo)), format!("{:>10}", humano(tamano)), ruta.clone()]),
                         color_tipo(tipo),
                     );
                 }
@@ -404,12 +424,12 @@ impl App {
                     if let Some(resto) = a.strip_prefix("contraseña hallada para '") {
                         if let Some((arch, clave)) = resto.split_once("': ") {
                             self.claves_halladas.push((arch.to_string(), clave.to_string()));
-                            self.log(ahora, format!("🔓 KEY «{clave}» → {arch}"), verde());
+                            self.log(ahora, tfmt(tr("🔓 KEY «{}» → {}","🔓 CLAVE «{}» → {}"), &[clave.to_string(), arch.to_string()]), verde());
                             continue;
                         }
                     }
                     let col = if a.contains('✔') || a.contains("clasificados") { verde() } else { naranja() };
-                    self.log(ahora, format!("NOTICE: {a}"), col);
+                    self.log(ahora, tfmt(tr("NOTICE: {}","AVISO: {}"), &[a.to_string()]), col);
                 }
             }
         }
@@ -430,15 +450,16 @@ impl App {
                     Ok(Ok(r)) => {
                         self.log(
                             ahora,
-                            format!(
-                                "DECOMPOSITION COMPLETE · {} BLOCKS · {} EXTRACTED · {:.2}s",
-                                r.bloques,
-                                humano(r.bytes),
-                                r.duracion.as_secs_f64()
+                            tfmt(
+                                tr(
+                                    "DECOMPOSITION COMPLETE · {} BLOCKS · {} EXTRACTED · {}s",
+                                    "DESCOMPOSICIÓN COMPLETADA · {} BLOQUES · {} EXTRAÍDOS · {}s",
+                                ),
+                                &[r.bloques.to_string(), humano(r.bytes), format!("{:.2}", r.duracion.as_secs_f64())],
                             ),
                             verde(),
                         );
-                        self.log(ahora, format!("REPORT: {}", r.raiz.join("informe.md").display()), verde());
+                        self.log(ahora, tfmt(tr("REPORT: {}","INFORME: {}"), &[r.raiz.join("informe.md").display().to_string()]), verde());
                         if let Some(c) = &r.clasificacion {
                             self.clasif = Categoria::TODAS
                                 .iter()
@@ -447,7 +468,7 @@ impl App {
                                     (n > 0).then_some((*cat, n))
                                 })
                                 .collect();
-                            self.log(ahora, format!("CLASSIFIED {} FILE(S) → extraidos/", c.total), verde());
+                            self.log(ahora, tfmt(tr("CLASSIFIED {} FILE(S) → extraidos/","CLASIFICADOS {} ARCHIVO(S) → extraidos/"), &[c.total.to_string()]), verde());
                         }
                         if let Some(au) = &r.auditoria {
                             self.audit = au
@@ -465,7 +486,7 @@ impl App {
                                 .collect();
                             for p in &au.paquetes {
                                 let col = color_veredicto(p.veredicto);
-                                self.log(ahora, format!("AUDIT [{}] {}", p.veredicto.etiqueta(), p.nombre), col);
+                                self.log(ahora, tfmt(tr("AUDIT [{}] {}","AUDITORÍA [{}] {}"), &[p.veredicto.etiqueta().to_string(), p.nombre.clone()]), col);
                             }
                         }
                         self.arbol = r.arbol;
@@ -474,7 +495,7 @@ impl App {
                             self.seleccion = Some(vec![0]);
                         }
                     }
-                    Ok(Err(e)) => self.log(ahora, format!("FAILURE: {e:#}"), rojo()),
+                    Ok(Err(e)) => self.log(ahora, tfmt(tr("FAILURE: {}","FALLO: {}"), &[format!("{e:#}")]), rojo()),
                     Err(_) => self.log(ahora, tr("FAILURE: the analysis thread stopped", "FALLO: el hilo de análisis se ha detenido").into(), rojo()),
                 }
             }
@@ -501,7 +522,7 @@ impl App {
                 });
             }
             Err(e) => {
-                self.visor = Some(Visor { titulo: rel.into(), lineas: vec![format!("could not read: {e}")], truncado: false })
+                self.visor = Some(Visor { titulo: rel.into(), lineas: vec![tfmt(tr("could not read: {}","no se pudo leer: {}"), &[e.to_string()])], truncado: false })
             }
         }
     }
@@ -521,7 +542,7 @@ impl eframe::App for App {
         if !soltados.is_empty() && !self.analizando() {
             for p in soltados {
                 if !self.archivos.contains(&p) {
-                    self.log(ahora, format!("SAMPLE RECEIVED: {}", p.display()), morado_claro());
+                    self.log(ahora, tfmt(tr("SAMPLE RECEIVED: {}","MUESTRA RECIBIDA: {}"), &[p.display().to_string()]), morado_claro());
                     self.archivos.push(p);
                 }
             }
@@ -581,7 +602,7 @@ impl App {
         p.text(
             Pos2::new(x, r.top() + 56.0),
             Align2::LEFT_TOP,
-            format!("v{VERSION}  ·  OPERATOR {AUTOR}"),
+            tfmt(tr("v{}  ·  OPERATOR {}","v{}  ·  OPERADOR {}"), &[VERSION.to_string(), AUTOR.to_string()]),
             mono(12.0),
             verde(),
         );
@@ -608,7 +629,7 @@ impl App {
         p.text(
             Pos2::new(r.right(), r.top() + 63.0),
             Align2::RIGHT_CENTER,
-            format!("{} BLOCKS", self.bloques),
+            tfmt(tr("{} BLOCKS","{} BLOQUES"), &[self.bloques.to_string()]),
             mono(14.0),
             verde(),
         );
@@ -647,7 +668,7 @@ impl App {
                     hexagono(&p, centro, radio, relleno, Stroke::new(1.5, borde));
                     p.text(centro, Align2::CENTER_CENTER, format!("{:02}", i + 1), mono(10.0), if i < activos { fondo() } else { morado_claro() });
                 }
-                ui.label(RichText::new(format!("{} LOGICAL · {} ASSIGNED", self.sis.nucleos, self.op.hilos)).font(mono(11.0)).color(verde()));
+                ui.label(RichText::new(tfmt(tr("{} LOGICAL · {} ASSIGNED","{} LÓGICOS · {} ASIGNADOS"), &[self.sis.nucleos.to_string(), self.op.hilos.to_string()])).font(mono(11.0)).color(verde()));
             });
 
             seccion(ui, "02", tr("MEMORY", "MEMORIA"), verde(), |ui| {
@@ -655,11 +676,11 @@ impl App {
                 let usada = total.saturating_sub(self.sis.memoria_libre);
                 barra_segmentada(ui, usada as f32 / total as f32, morado_claro());
                 ui.label(
-                    RichText::new(format!("{} FREE / {}", humano(self.sis.memoria_libre), humano(self.sis.memoria_total)))
+                    RichText::new(tfmt(tr("{} FREE / {}","{} LIBRE / {}"), &[humano(self.sis.memoria_libre), humano(self.sis.memoria_total)]))
                         .font(mono(11.0))
                         .color(texto()),
                 );
-                ui.label(RichText::new(format!("PER-BLOCK LIMIT: {}", humano(self.op.max_archivo))).font(mono(11.0)).color(naranja()));
+                ui.label(RichText::new(tfmt(tr("PER-BLOCK LIMIT: {}","LÍMITE POR BLOQUE: {}"), &[humano(self.op.max_archivo)])).font(mono(11.0)).color(naranja()));
             });
 
             seccion(ui, "03", tr("EXTERNAL SUBSYSTEMS", "SUBSISTEMAS EXTERNOS"), naranja(), |ui| {
@@ -705,9 +726,10 @@ impl App {
                     ui.separator();
                     let mut tema = self.tema;
                     egui::ComboBox::from_id_salt("tema")
-                        .selected_text(if tema == 0 { tr("THEME: SERENE (clean)", "TEMA: SERENO (limpio)") } else { tr("THEME: COMMAND (intense)", "TEMA: MANDO (intenso)") })
+                        .selected_text(match tema { 1 => tr("THEME: COMMAND", "TEMA: MANDO"), 2 => tr("THEME: NEUTRAL", "TEMA: NEUTRO"), _ => tr("THEME: SERENE", "TEMA: SERENO") })
                         .show_ui(ui, |ui| {
                             ui.selectable_value(&mut tema, 0u8, tr("SERENE (clean)", "SERENO (limpio)"));
+                            ui.selectable_value(&mut tema, 2u8, tr("NEUTRAL (grayscale)", "NEUTRO (grises)"));
                             ui.selectable_value(&mut tema, 1u8, tr("COMMAND (intense)", "MANDO (intenso)"));
                         });
                     if tema != self.tema {
@@ -838,7 +860,7 @@ impl App {
             p.text(Pos2::new(b.center().x, r.bottom() - 2.0), Align2::CENTER_BOTTOM, format!("{i}"), mono(10.0), morado_claro());
         }
         ui.label(
-            RichText::new(format!("LAYERS: {} · VOLUME: {}", self.por_capa.len(), humano(self.bytes_vistos)))
+            RichText::new(tfmt(tr("LAYERS: {} · VOLUME: {}","ESTRATOS: {} · VOLUMEN: {}"), &[self.por_capa.len().to_string(), humano(self.bytes_vistos)]))
                 .font(mono(10.0))
                 .color(verde()),
         );
@@ -934,8 +956,8 @@ impl App {
                     self.archivos.clear();
                 }
                 if ui
-                    .add_enabled(libre, boton(&format!("OUTPUT: {}", acortar(&self.salida.display().to_string(), 26)), verde()))
-                    .on_hover_text(format!("Folder where extracted layers are saved:\n{}", self.salida.display()))
+                    .add_enabled(libre, boton(&tfmt(tr("OUTPUT: {}","SALIDA: {}"), &[acortar(&self.salida.display().to_string(), 26)]), verde()))
+                    .on_hover_text(tfmt(tr("Folder where extracted layers are saved:\n{}","Carpeta donde se guardan las capas extraídas:\n{}"), &[self.salida.display().to_string()]))
                     .clicked()
                 {
                     if let Some(d) = rfd::FileDialog::new().pick_folder() {
@@ -992,7 +1014,7 @@ impl App {
                         cerrar = true;
                     }
                     ui.label(
-                        RichText::new(format!("{} LINES{}", v.lineas.len(), if v.truncado { tr(" · TRUNCATED AT 4 MiB", " · TRUNCADO A 4 MiB") } else { "" }))
+                        RichText::new(tfmt(tr("{} LINES{}","{} LÍNEAS{}"), &[v.lineas.len().to_string(), if v.truncado { tr(" · TRUNCATED AT 4 MiB", " · TRUNCADO A 4 MiB").to_string() } else { String::new() }]))
                             .font(mono(10.0))
                             .color(morado_claro()),
                     );
@@ -1061,7 +1083,7 @@ impl App {
                     });
                 }
                 ui.add_space(2.0);
-                if ui.add(boton(&format!("▸ OPEN extraidos/ ({total} files)"), verde())).clicked() {
+                if ui.add(boton(&tfmt(tr("▸ OPEN extraidos/ ({} files)","▸ ABRIR extraidos/ ({} archivos)"), &[total.to_string()]), verde())).clicked() {
                     if let Some(raiz) = &self.raiz {
                         abrir_en_sistema(&raiz.join("extraidos"));
                     }

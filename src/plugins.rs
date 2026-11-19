@@ -12,6 +12,7 @@ use serde::Serialize;
 
 use crate::detectar::Tipo;
 use crate::motor::Nodo;
+use crate::idioma::{tfmt, tr};
 use crate::recursos::humano;
 
 /// Capacidad sensible → subcadenas de nombres de API que la delatan.
@@ -91,11 +92,11 @@ fn construir(n: &Nodo) -> Plugin {
     };
     // Bytecode: las funciones se ven en su analisis/ (javap/decompilador).
     if matches!(n.tipo, Tipo::ClaseJava | Tipo::Dex | Tipo::Pyc | Tipo::Wasm) {
-        p.nota = Some("funciones y métodos en su carpeta analisis/ (javap / decompilador)".into());
+        p.nota = Some(tr("functions and methods in its analisis/ folder (javap / decompiler)","funciones y métodos en su carpeta analisis/ (javap / decompilador)").into());
         return p;
     }
     let Ok(datos) = fs::read(&n.ruta_fisica) else {
-        p.nota = Some("no se pudo leer para extraer funciones".into());
+        p.nota = Some(tr("could not be read to extract functions","no se pudo leer para extraer funciones").into());
         return p;
     };
     extraer_nativo(&datos, &mut p);
@@ -167,7 +168,7 @@ fn extraer_nativo(datos: &[u8], p: &mut Plugin) {
             }
         }
         _ => {
-            p.nota = Some("formato nativo no analizado para funciones".into());
+            p.nota = Some(tr("native format not analyzed for functions","formato nativo no analizado para funciones").into());
         }
     }
 }
@@ -194,9 +195,9 @@ fn capacidades(importaciones: &[String]) -> Vec<String> {
 
 fn informe(inf: &InformePlugins) -> String {
     let mut s = String::new();
-    let _ = writeln!(s, "# Plugins / código activo\n");
-    let _ = writeln!(s, "{} elemento(s) de código encontrados. **capas no los ejecuta.**\n", inf.plugins.len());
-    let _ = writeln!(s, "| Plugin | Tipo | Tamaño | Funciones | Capacidades sensibles |");
+    let _ = writeln!(s, "# {}\n", tr("Plugins / active code","Plugins / código activo"));
+    let _ = writeln!(s, "{}", tfmt(tr("{} code item(s) found. **capas does not run them.**\n","{} elemento(s) de código encontrados. **capas no los ejecuta.**\n"), &[inf.plugins.len().to_string()]));
+    let _ = writeln!(s, "| {} | {} | {} | {} | {} |", tr("Plugin","Plugin"), tr("Type","Tipo"), tr("Size","Tamaño"), tr("Functions","Funciones"), tr("Sensitive capabilities","Capacidades sensibles"));
     let _ = writeln!(s, "|---|---|--:|--:|---|");
     for p in &inf.plugins {
         let caps = if p.capacidades.is_empty() {
@@ -208,27 +209,27 @@ fn informe(inf: &InformePlugins) -> String {
     }
     for p in &inf.plugins {
         let _ = writeln!(s, "\n## {}\n", p.nombre);
-        let _ = writeln!(s, "- Tipo: {}{}", p.tipo, p.arquitectura.as_ref().map(|a| format!(" · {a}")).unwrap_or_default());
-        let _ = writeln!(s, "- Tamaño: {} · SHA-256: `{}`", humano(p.tamano), &p.sha256[..16]);
+        let _ = writeln!(s, "{}", tfmt(tr("- Type: {}{}","- Tipo: {}{}"), &[p.tipo.clone(), p.arquitectura.as_ref().map(|a| format!(" · {a}")).unwrap_or_default()]));
+        let _ = writeln!(s, "{}", tfmt(tr("- Size: {} · SHA-256: `{}`","- Tamaño: {} · SHA-256: `{}`"), &[humano(p.tamano), p.sha256[..16].to_string()]));
         if let Some(nota) = &p.nota {
             let _ = writeln!(s, "- {nota}");
         }
         if !p.capacidades.is_empty() {
-            let _ = writeln!(s, "\n**⚠ Capacidades sensibles:**");
+            let _ = writeln!(s, "\n**⚠ {}:**", tr("Sensitive capabilities","Capacidades sensibles"));
             for c in &p.capacidades {
                 let _ = writeln!(s, "- {c}");
             }
         }
         if !p.funciones.is_empty() {
-            let _ = writeln!(s, "\n**Funciones ({}):**", p.funciones.len());
+            let _ = writeln!(s, "{}", tfmt(tr("\n**Functions ({}):**","\n**Funciones ({}):**"), &[p.funciones.len().to_string()]));
             let _ = writeln!(s, "```\n{}\n```", muestra(&p.funciones, 60));
         }
         if !p.importaciones.is_empty() {
-            let _ = writeln!(s, "**Importa ({}):**", p.importaciones.len());
+            let _ = writeln!(s, "{}", tfmt(tr("**Imports ({}):**","**Importa ({}):**"), &[p.importaciones.len().to_string()]));
             let _ = writeln!(s, "```\n{}\n```", muestra(&p.importaciones, 60));
         }
     }
-    let _ = writeln!(s, "\n---\n*Informe de plugins — capas, de @angelazo. Detección y análisis, no bloqueo: capas no ejecuta el código.*");
+    let _ = writeln!(s, "\n---\n{}", tr("*Plugin report — capas, by @angelazo. Detection and analysis, not blocking: capas does not run the code.*","*Informe de plugins — capas, de @angelazo. Detección y análisis, no bloqueo: capas no ejecuta el código.*"));
     s
 }
 

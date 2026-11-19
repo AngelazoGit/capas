@@ -16,6 +16,7 @@ use std::sync::Mutex;
 use anyhow::Result;
 use rayon::prelude::*;
 
+use crate::idioma::{tfmt, tr};
 use crate::extraer::Hijo;
 
 /// Configuración de la búsqueda de contraseñas.
@@ -111,19 +112,19 @@ impl Claves {
             return Ok((crate::extraer::zip(d, lim, notas)?, None));
         }
         if !self.activa() {
-            notas.push("ZIP protegido con contraseña: activa el módulo de claves (--clave / --diccionario / --comunes) para abrirlo".into());
+            notas.push(tr("Password-protected ZIP: enable the key module (--clave / --diccionario / --comunes) to open it","ZIP protegido con contraseña: activa el módulo de claves (--clave / --diccionario / --comunes) para abrirlo").into());
             return Ok((crate::extraer::zip(d, lim, notas)?, None));
         }
         let candidatas = self.candidatas();
-        notas.push(format!("ZIP cifrado: probando {} contraseña(s) candidata(s)…", candidatas.len()));
+        notas.push(tfmt(tr("Encrypted ZIP: trying {} candidate password(s)…","ZIP cifrado: probando {} contraseña(s) candidata(s)…"), &[candidatas.len().to_string()]));
         match buscar(d, &candidatas) {
             Some(clave) => {
-                notas.push(format!("✔ CONTRASEÑA ENCONTRADA: «{clave}»"));
+                notas.push(tfmt(tr("✔ PASSWORD FOUND: «{}»","✔ CONTRASEÑA ENCONTRADA: «{}»"), &[clave.clone()]));
                 let hijos = extraer_con_clave(d, &clave, lim, notas)?;
                 Ok((hijos, Some(clave)))
             }
             None => {
-                notas.push("✘ contraseña no encontrada entre las candidatas".into());
+                notas.push(tr("✘ password not found among the candidates","✘ contraseña no encontrada entre las candidatas").into());
                 Ok((crate::extraer::zip(d, lim, notas)?, None))
             }
         }
@@ -215,7 +216,7 @@ fn extraer_con_clave(d: &[u8], clave: &str, lim: u64, notas: &mut Vec<String>) -
         let (nombre, cifrada, es_archivo) = match z.by_index_raw(i) {
             Ok(f) => (f.name().to_string(), f.encrypted(), f.is_file()),
             Err(e) => {
-                notas.push(format!("entrada #{i} no legible: {e}"));
+                notas.push(tfmt(tr("entry #{} not readable: {}","entrada #{} no legible: {}"), &[i.to_string(), e.to_string()]));
                 continue;
             }
         };
@@ -233,7 +234,7 @@ fn extraer_con_clave(d: &[u8], clave: &str, lim: u64, notas: &mut Vec<String>) -
                 let mut datos = Vec::new();
                 match (&mut f).take(restante + 1).read_to_end(&mut datos) {
                     Ok(_) if datos.len() as u64 > restante => {
-                        notas.push(format!("'{nombre}': supera el límite de {restante} bytes"))
+                        notas.push(tfmt(tr("'{}': exceeds the limit of {} bytes","'{}': supera el límite de {} bytes"), &[nombre.clone(), restante.to_string()]))
                     }
                     Ok(_) => {
                         total += datos.len() as u64;

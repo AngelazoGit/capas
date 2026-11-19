@@ -15,6 +15,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::idioma::{tfmt, tr};
+
 const MAX_ENTRADAS: usize = 200_000; // tope del recorrido, por si una raíz es enorme
 const PROFUNDIDAD: usize = 3;
 
@@ -118,7 +120,7 @@ pub fn por_nombre(app: &str, raices: &[PathBuf]) -> Vec<Candidato> {
             }
             let n = p.file_name().map(|s| s.to_string_lossy().to_lowercase()).unwrap_or_default();
             if toks.iter().any(|t| n.contains(t.as_str())) {
-                out.push(Candidato { ruta: p.to_path_buf(), razon: "coincide el nombre".into(), archivos_recientes: 0, mtime });
+                out.push(Candidato { ruta: p.to_path_buf(), razon: tr("name matches","coincide el nombre").into(), archivos_recientes: 0, mtime });
             }
         });
     }
@@ -131,7 +133,7 @@ pub fn observando(raices: &[PathBuf], dur: Duration) -> Vec<Candidato> {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    eprintln!("Observando durante {}s… (deja la aplicación funcionando)", dur.as_secs());
+    eprintln!("{}", tfmt(tr("Watching for {}s… (keep the application running)","Observando durante {}s… (deja la aplicación funcionando)"), &[dur.as_secs().to_string()]));
     std::thread::sleep(dur);
 
     // Cuenta, por carpeta, cuántos archivos tienen mtime posterior al inicio.
@@ -153,7 +155,7 @@ pub fn observando(raices: &[PathBuf], dur: Duration) -> Vec<Candidato> {
         .into_iter()
         .map(|(ruta, (n, mtime))| Candidato {
             ruta,
-            razon: "escrita mientras la app corría".into(),
+            razon: tr("written while the app was running","escrita mientras la app corría").into(),
             archivos_recientes: n,
             mtime,
         })
@@ -195,7 +197,7 @@ pub fn pistas_exe(exe: &Path) -> Vec<String> {
 /// Orquesta la localización y lo imprime; devuelve el mejor candidato.
 pub fn localizar(app: &str, exe: Option<&Path>, observar: Option<Duration>) -> Option<PathBuf> {
     let raices = raices();
-    eprintln!("Raíces de caché del sistema: {}", raices.len());
+    eprintln!("{}", tfmt(tr("System cache roots: {}","Raíces de caché del sistema: {}"), &[raices.len().to_string()]));
     for r in &raices {
         eprintln!("  · {}", r.display());
     }
@@ -222,7 +224,7 @@ pub fn localizar(app: &str, exe: Option<&Path>, observar: Option<Duration>) -> O
     if let Some(exe) = exe {
         let pistas = pistas_exe(exe);
         if !pistas.is_empty() {
-            eprintln!("Pistas de ruta en {}:", exe.display());
+            eprintln!("{}", tfmt(tr("Path hints in {}:","Pistas de ruta en {}:"), &[exe.display().to_string()]));
             for p in &pistas {
                 eprintln!("  → {p}");
             }
@@ -231,25 +233,26 @@ pub fn localizar(app: &str, exe: Option<&Path>, observar: Option<Duration>) -> O
     }
 
     if candidatos.is_empty() {
-        eprintln!("No se encontraron carpetas de caché candidatas.");
+        eprintln!("{}", tr("No candidate cache folders found.","No se encontraron carpetas de caché candidatas."));
         if observar.is_none() {
-            eprintln!("Prueba a arrancar la aplicación y usar --observar <segundos> para detectar\n\
-                       qué carpeta escribe, aunque su nombre no coincida.");
+            eprintln!("{}", tr("Try launching the app and using --observar <seconds> to detect\n\
+                       which folder it writes to, even if the name does not match.","Prueba a arrancar la aplicación y usar --observar <segundos> para detectar\n\
+                       qué carpeta escribe, aunque su nombre no coincida."));
         }
         return None;
     }
 
-    eprintln!("Candidatos (mejor primero):");
+    eprintln!("{}", tr("Candidates (best first):","Candidatos (mejor primero):"));
     for (i, c) in candidatos.iter().take(10).enumerate() {
         let act = if c.archivos_recientes > 0 {
-            format!("  · {} archivo(s) recién escritos", c.archivos_recientes)
+            tfmt(tr("  · {} file(s) just written","  · {} archivo(s) recién escritos"), &[c.archivos_recientes.to_string()])
         } else {
             String::new()
         };
         eprintln!("  {}. {}  [{}]{act}", i + 1, c.ruta.display(), c.razon);
     }
     let mejor = &candidatos[0].ruta;
-    eprintln!("\nPara vigilar la caché (sin tocarla):");
+    eprintln!("\n{}", tr("To watch the cache (without touching it):","Para vigilar la caché (sin tocarla):"));
     eprintln!("  capas --vigilar \"{}\" --solo-informe", mejor.display());
     Some(mejor.clone())
 }

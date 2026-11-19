@@ -4,6 +4,7 @@
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
+use crate::idioma::{tfmt, tr};
 use goblin::{elf, mach, pe, Object};
 use iced_x86::{Decoder, DecoderOptions, Formatter, Instruction, IntelFormatter};
 
@@ -39,17 +40,17 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
             };
             entrada = e.entry;
             writeln!(c, "== ELF ==")?;
-            writeln!(c, "Arquitectura : {arquitectura} ({} bits)", if e.is_64 { 64 } else { 32 })?;
-            writeln!(c, "Tipo         : {}", elf::header::et_to_str(e.header.e_type))?;
-            writeln!(c, "Entrada      : 0x{:x}", e.entry)?;
+            writeln!(c, "{}", tfmt(tr("Architecture : {} ({} bits)","Arquitectura : {} ({} bits)"), &[arquitectura.clone(), (if e.is_64 { 64 } else { 32 }).to_string()]))?;
+            writeln!(c, "{}", tfmt(tr("Type         : {}","Tipo         : {}"), &[elf::header::et_to_str(e.header.e_type).to_string()]))?;
+            writeln!(c, "{}", tfmt(tr("Entry        : 0x{}","Entrada      : 0x{}"), &[format!("{:x}", e.entry)]))?;
             if let Some(i) = e.interpreter {
-                writeln!(c, "Intérprete   : {i}")?;
+                writeln!(c, "{}", tfmt(tr("Interpreter  : {}","Intérprete   : {}"), &[i.to_string()]))?;
             }
-            writeln!(c, "\n-- Bibliotecas dinámicas --")?;
+            writeln!(c, "\n-- {} --", tr("Dynamic libraries","Bibliotecas dinámicas"))?;
             for l in &e.libraries {
                 writeln!(c, "  {l}")?;
             }
-            writeln!(c, "\n-- Secciones --")?;
+            writeln!(c, "\n-- {} --", tr("Sections","Secciones"))?;
             for sh in &e.section_headers {
                 let n = e.shdr_strtab.get_at(sh.sh_name).unwrap_or("?");
                 writeln!(
@@ -87,11 +88,11 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
                 }
             }
             if e.syms.is_empty() {
-                notas.push("binario sin tabla de símbolos (stripped)".into());
+                notas.push(tr("binary without symbol table (stripped)","binario sin tabla de símbolos (stripped)").into());
             }
             imp.sort();
             imp.dedup();
-            writeln!(c, "\n-- Símbolos importados ({}) --", imp.len())?;
+            writeln!(c, "{}", tfmt(tr("\n-- Imported symbols ({}) --","\n-- Símbolos importados ({}) --"), &[imp.len().to_string()]))?;
             for n in &imp {
                 writeln!(c, "  {n}")?;
             }
@@ -113,17 +114,17 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
             let base = p.image_base as u64;
             entrada = base + p.entry as u64;
             writeln!(c, "== PE ==")?;
-            writeln!(c, "Arquitectura : {arquitectura}")?;
-            writeln!(c, "Tipo         : {}", if p.is_lib { "DLL" } else { "EXE" })?;
-            writeln!(c, "Image base   : 0x{base:x}")?;
-            writeln!(c, "Entrada      : 0x{entrada:x}")?;
+            writeln!(c, "{}", tfmt(tr("Architecture : {}","Arquitectura : {}"), &[arquitectura.clone()]))?;
+            writeln!(c, "{}", tfmt(tr("Type         : {}","Tipo         : {}"), &[(if p.is_lib { "DLL" } else { "EXE" }).to_string()]))?;
+            writeln!(c, "{}", tfmt(tr("Image base   : 0x{}","Image base   : 0x{}"), &[format!("{base:x}")]))?;
+            writeln!(c, "{}", tfmt(tr("Entry        : 0x{}","Entrada      : 0x{}"), &[format!("{entrada:x}")]))?;
             if let Some(oh) = p.header.optional_header {
                 if oh.data_directories.get_clr_runtime_header().is_some() {
-                    notas.push(".NET / CLR: usa ILSpy o dnSpy para decompilar a C#".into());
-                    writeln!(c, "Ensamblado .NET (CLR)")?;
+                    notas.push(tr(".NET / CLR: use ILSpy or dnSpy to decompile to C#",".NET / CLR: usa ILSpy o dnSpy para decompilar a C#").into());
+                    writeln!(c, "{}", tr(".NET assembly (CLR)","Ensamblado .NET (CLR)"))?;
                 }
             }
-            writeln!(c, "\n-- Secciones --")?;
+            writeln!(c, "\n-- {} --", tr("Sections","Secciones"))?;
             for s in &p.sections {
                 let n = s.name().unwrap_or("?").to_string();
                 let x = s.characteristics & pe::section_table::IMAGE_SCN_MEM_EXECUTE != 0;
@@ -137,7 +138,7 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
                     if x { "EJEC" } else { "" }
                 )?;
                 if n.starts_with("UPX") {
-                    notas.push("empaquetado con UPX: ejecuta `upx -d` para otra capa".into());
+                    notas.push(tr("packed with UPX: run `upx -d` for another layer","empaquetado con UPX: ejecuta `upx -d` para otra capa").into());
                 }
                 if x {
                     let (o, t) = (s.pointer_to_raw_data as usize, s.size_of_raw_data as usize);
@@ -146,12 +147,12 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
                     }
                 }
             }
-            writeln!(c, "\n-- Importaciones ({}) --", p.imports.len())?;
+            writeln!(c, "{}", tfmt(tr("\n-- Imports ({}) --","\n-- Importaciones ({}) --"), &[p.imports.len().to_string()]))?;
             for i in &p.imports {
                 writeln!(c, "  {:<28} {}", i.dll, i.name)?;
                 simbolos.insert(base + i.rva as u64, format!("{}!{}", i.dll, i.name));
             }
-            writeln!(c, "\n-- Exportaciones ({}) --", p.exports.len())?;
+            writeln!(c, "{}", tfmt(tr("\n-- Exports ({}) --","\n-- Exportaciones ({}) --"), &[p.exports.len().to_string()]))?;
             for e in &p.exports {
                 let n = e.name.unwrap_or("<ordinal>");
                 writeln!(c, "  0x{:x}  {n}", base + e.rva as u64)?;
@@ -169,13 +170,13 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
             };
             entrada = m.entry;
             writeln!(c, "== Mach-O ==")?;
-            writeln!(c, "Arquitectura : {arquitectura}")?;
-            writeln!(c, "Entrada      : 0x{:x}", m.entry)?;
-            writeln!(c, "\n-- Bibliotecas --")?;
+            writeln!(c, "{}", tfmt(tr("Architecture : {}","Arquitectura : {}"), &[arquitectura.clone()]))?;
+            writeln!(c, "{}", tfmt(tr("Entry        : 0x{}","Entrada      : 0x{}"), &[format!("{:x}", m.entry)]))?;
+            writeln!(c, "\n-- {} --", tr("Libraries","Bibliotecas"))?;
             for l in &m.libs {
                 writeln!(c, "  {l}")?;
             }
-            writeln!(c, "\n-- Segmentos / secciones --")?;
+            writeln!(c, "\n-- {} --", tr("Segments / sections","Segmentos / secciones"))?;
             for seg in &m.segments {
                 for (s, datos) in seg.sections()? {
                     let n = format!("{},{}", s.segname().unwrap_or("?"), s.name().unwrap_or("?"));
@@ -194,7 +195,7 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
                 }
             }
             if let Ok(imps) = m.imports() {
-                writeln!(c, "\n-- Importaciones ({}) --", imps.len())?;
+                writeln!(c, "{}", tfmt(tr("\n-- Imports ({}) --","\n-- Importaciones ({}) --"), &[imps.len().to_string()]))?;
                 for i in imps {
                     writeln!(c, "  {:<28} {}", i.dylib, i.name)?;
                 }
@@ -203,7 +204,7 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
         _ => anyhow::bail!("formato ejecutable no soportado por el analizador interno"),
     }
 
-    writeln!(c, "\n-- Símbolos con dirección ({}) --", simbolos.len())?;
+    writeln!(c, "{}", tfmt(tr("\n-- Symbols with address ({}) --","\n-- Símbolos con dirección ({}) --"), &[simbolos.len().to_string()]))?;
     let mut ord: Vec<_> = simbolos.iter().collect();
     ord.sort();
     for (a, n) in ord.iter().take(20_000) {
@@ -214,9 +215,7 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
         Some(b) if !ejec.is_empty() => Some(desensamblar(b, &ejec, &simbolos, entrada, max_instr)),
         Some(_) => None,
         None => {
-            notas.push(format!(
-                "arquitectura {arquitectura}: sin desensamblador interno, se usa objdump si está instalado"
-            ));
+            notas.push(tfmt(tr("architecture {}: no built-in disassembler, objdump is used if installed","arquitectura {}: sin desensamblador interno, se usa objdump si está instalado"), &[arquitectura.clone()]));
             None
         }
     };

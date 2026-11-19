@@ -14,6 +14,7 @@ use rayon::prelude::*;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
+use crate::idioma::{tfmt, tr};
 use crate::detectar::{self, Tipo};
 use crate::ejecutables;
 use crate::extraer::{self, Hijo};
@@ -132,23 +133,23 @@ impl Motor {
         {
             let mut v = self.vistos.lock().unwrap();
             if let Some(prev) = v.get(&sha) {
-                nodo.notas.push(format!("contenido idéntico a {prev}: no se repite el análisis"));
+                nodo.notas.push(tfmt(tr("identical content to {}: analysis not repeated","contenido idéntico a {}: no se repite el análisis"), &[prev.clone()]));
                 return nodo;
             }
             v.insert(sha, nodo.directorio.clone());
         }
 
         if self.cancelar.load(Ordering::Relaxed) {
-            nodo.notas.push("análisis cancelado por el operador".into());
+            nodo.notas.push(tr("analysis cancelled by the operator","análisis cancelado por el operador").into());
             return nodo;
         }
 
         let analisis = dir.join("analisis");
         let _ = fs::create_dir_all(&analisis);
         if nodo.entropia > 7.5 && !tipo.es_contenedor() && tipo != Tipo::Imagen {
-            nodo.notas.push(format!(
-                "entropía muy alta ({:.2}): probablemente comprimido o cifrado",
-                nodo.entropia
+            nodo.notas.push(tfmt(
+                tr("very high entropy ({}): probably compressed or encrypted", "entropía muy alta ({}): probablemente comprimido o cifrado"),
+                &[format!("{:.2}", nodo.entropia)],
             ));
         }
 
@@ -170,7 +171,7 @@ impl Motor {
         match recursos::ejecutar(ruta, args, self.cfg.timeout, 256 << 20) {
             Ok(s) => {
                 if s.agotado {
-                    nodo.notas.push(format!("{prog}: tiempo agotado ({}s)", self.cfg.timeout.as_secs()));
+                    nodo.notas.push(tfmt(tr("{}: timed out ({}s)","{}: tiempo agotado ({}s)"), &[prog.to_string(), self.cfg.timeout.as_secs().to_string()]));
                 }
                 if !s.stdout.is_empty() {
                     self.guardar(analisis, archivo, &s.stdout, nodo);
@@ -224,7 +225,7 @@ impl Motor {
                 let fuente = self.externa("cfr", &[r], an, "decompilado.java", nodo)
                     || self.externa("procyon", &[r], an, "decompilado.java", nodo);
                 if !ok && !fuente {
-                    nodo.notas.push("instala un JDK (javap) o CFR/Procyon para decompilar".into());
+                    nodo.notas.push(tr("install a JDK (javap) or CFR/Procyon to decompile","instala un JDK (javap) o CFR/Procyon para decompilar").into());
                 }
                 Ok(Vec::new())
             }
@@ -234,7 +235,7 @@ impl Motor {
                     self.externa("jadx", &[OsStr::new("-d"), out.as_os_str(), r], an, "jadx.log", nodo);
                     nodo.resultados.push(format!("{}/jadx/", nodo.directorio));
                 } else {
-                    nodo.notas.push("instala jadx para decompilar DEX a Java".into());
+                    nodo.notas.push(tr("install jadx to decompile DEX to Java","instala jadx para decompilar DEX a Java").into());
                 }
                 Ok(Vec::new())
             }
@@ -243,7 +244,7 @@ impl Motor {
                     || self.externa("decompyle3", &[r], an, "decompilado.py", nodo)
                     || self.externa("uncompyle6", &[r], an, "decompilado.py", nodo);
                 if !ok {
-                    nodo.notas.push("instala pycdc/uncompyle6 para decompilar .pyc".into());
+                    nodo.notas.push(tr("install pycdc/uncompyle6 to decompile .pyc","instala pycdc/uncompyle6 para decompilar .pyc").into());
                 }
                 Ok(Vec::new())
             }
@@ -251,7 +252,7 @@ impl Motor {
                 let a = self.externa("wasm2wat", &[r], an, "modulo.wat", nodo);
                 let b = self.externa("wasm-decompile", &[r], an, "decompilado.dcmp", nodo);
                 if !a && !b {
-                    nodo.notas.push("instala wabt (wasm2wat / wasm-decompile)".into());
+                    nodo.notas.push(tr("install wabt (wasm2wat / wasm-decompile)","instala wabt (wasm2wat / wasm-decompile)").into());
                 }
                 Ok(Vec::new())
             }
@@ -278,7 +279,7 @@ impl Motor {
         let mut hijos = match res {
             Ok(h) => h,
             Err(e) => {
-                nodo.notas.push(format!("no se pudo extraer la capa: {e}"));
+                nodo.notas.push(tfmt(tr("could not extract the layer: {}","no se pudo extraer la capa: {}"), &[e.to_string()]));
                 Vec::new()
             }
         };
@@ -294,7 +295,7 @@ impl Motor {
         if self.cfg.tallar && !tipo.es_contenedor() && tipo != Tipo::Texto {
             let t = extraer::tallar(d, lim);
             if !t.is_empty() {
-                nodo.notas.push(format!("{} bloque(s) incrustado(s) encontrados por firma", t.len()));
+                nodo.notas.push(tfmt(tr("{} embedded block(s) found by signature","{} bloque(s) incrustado(s) encontrados por firma"), &[t.len().to_string()]));
             }
             hijos.extend(t);
         }
@@ -313,7 +314,7 @@ impl Motor {
                 }
                 nodo.notas.extend(inf.notas);
             }
-            Err(e) => nodo.notas.push(format!("análisis interno: {e}")),
+            Err(e) => nodo.notas.push(tfmt(tr("internal analysis: {}","análisis interno: {}"), &[e.to_string()])),
         }
         if tipo == Tipo::Elf {
             self.externa("readelf", &[OsStr::new("-a"), OsStr::new("-W"), r], an, "readelf.txt", nodo);
@@ -415,7 +416,7 @@ impl Motor {
             return;
         }
         if capa + 1 > self.cfg.profundidad_max {
-            nodo.notas.push(format!("{} hijos sin explorar: profundidad máxima alcanzada", hijos.len()));
+            nodo.notas.push(tfmt(tr("{} unexplored children: maximum depth reached","{} hijos sin explorar: profundidad máxima alcanzada"), &[hijos.len().to_string()]));
         }
         // Nombres de directorio únicos y seguros (sin "..", rutas absolutas...).
         let mut usados = HashSet::new();
@@ -423,7 +424,7 @@ impl Motor {
         for h in hijos {
             let total = self.usado.fetch_add(h.datos.len() as u64, Ordering::Relaxed) + h.datos.len() as u64;
             if total > self.cfg.max_total {
-                nodo.notas.push(format!("'{}' omitido: presupuesto total de extracción agotado", h.nombre));
+                nodo.notas.push(tfmt(tr("'{}' skipped: total extraction budget exhausted","'{}' omitido: presupuesto total de extracción agotado"), &[h.nombre.clone()]));
                 continue;
             }
             let mut rel = ruta_segura(&h.nombre);
@@ -436,7 +437,7 @@ impl Motor {
             let archivo = rel.file_name().map(|s| s.to_os_string()).unwrap_or_else(|| "datos".into());
             let fisico = dir.join(&archivo);
             if fs::create_dir_all(&dir).is_err() || fs::write(&fisico, &h.datos).is_err() {
-                nodo.notas.push(format!("no se pudo escribir '{}'", h.nombre));
+                nodo.notas.push(tfmt(tr("could not write '{}'","no se pudo escribir '{}'"), &[h.nombre.clone()]));
                 continue;
             }
             tareas.push((h, dir, fisico));
