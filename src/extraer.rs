@@ -74,7 +74,7 @@ pub fn gzip(d: &[u8], nombre: &str, lim: u64) -> Result<Vec<Hijo>> {
 pub fn zlib(d: &[u8], nombre: &str, lim: u64) -> Result<Vec<Hijo>> {
     let datos = leer_limitado(flate2::read::ZlibDecoder::new(d), lim)?;
     if datos.is_empty() {
-        bail!("flujo zlib vacío");
+        bail!("{}", tr("empty zlib stream", "flujo zlib vacío"));
     }
     Ok(vec![Hijo { nombre: quitar_extension(nombre, &[".zlib", ".z"]), datos }])
 }
@@ -94,6 +94,17 @@ pub fn lzma(d: &[u8], nombre: &str, lim: u64) -> Result<Vec<Hijo>> {
     let mut w = EscritorLimitado { v: Vec::new(), limite: lim as usize };
     lzma_rs::lzma_decompress(&mut Cursor::new(d), &mut w).map_err(|e| anyhow!("lzma: {e:?}"))?;
     Ok(vec![Hijo { nombre: quitar_extension(nombre, &[".lzma"]), datos: w.v }])
+}
+
+pub fn zstd(d: &[u8], nombre: &str, lim: u64) -> Result<Vec<Hijo>> {
+    let dec = ruzstd::StreamingDecoder::new(d).map_err(|e| anyhow!("zstd: {e}"))?;
+    let datos = leer_limitado(dec, lim)?;
+    Ok(vec![Hijo { nombre: quitar_extension(nombre, &[".zst", ".tzst", ".zstd"]), datos }])
+}
+
+pub fn lz4(d: &[u8], nombre: &str, lim: u64) -> Result<Vec<Hijo>> {
+    let datos = leer_limitado(lz4_flex::frame::FrameDecoder::new(d), lim)?;
+    Ok(vec![Hijo { nombre: quitar_extension(nombre, &[".lz4"]), datos }])
 }
 
 pub fn zip(d: &[u8], lim: u64, notas: &mut Vec<String>) -> Result<Vec<Hijo>> {
@@ -406,5 +417,233 @@ mod pruebas {
         assert_eq!(quitar_extension("İ.GZ", &[".gz"]), "İ");
         assert_eq!(quitar_extension("datos.TGZ", &[".tgz"]), "datos.tar");
         assert_eq!(quitar_extension("sin_ext", &[".gz"]), "sin_ext.descomprimido");
+    }
+}
+
+// ── Desempaquetado de bundles de motores de juego (opción --desempaquetar) ──
+// Lectura defensiva: todo viene de datos no confiables, así que cada acceso se
+// comprueba y un dato corrupto aborta con error en vez de entrar en pánico.
+
+fn be_u16(d: &[u8], o: usize) -> Option<u16> { d.get(o..o + 2).map(|b| u16::from_be_bytes(b.try_into().unwrap())) }
+fn be_u32(d: &[u8], o: usize) -> Option<u32> { d.get(o..o + 4).map(|b| u32::from_be_bytes(b.try_into().unwrap())) }
+fn be_i64(d: &[u8], o: usize) -> Option<i64> { d.get(o..o + 8).map(|b| i64::from_be_bytes(b.try_into().unwrap())) }
+fn le_u32(d: &[u8], o: usize) -> Option<u32> { d.get(o..o + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap())) }
+fn le_u64(d: &[u8], o: usize) -> Option<u64> { d.get(o..o + 8).map(|b| u64::from_le_bytes(b.try_into().unwrap())) }
+
+/// Cadena terminada en NUL a partir de `o`; devuelve (texto, offset siguiente).
+fn cadena(d: &[u8], o: usize) -> Option<(String, usize)> {
+    let fin = d[o..].iter().position(|&b| b == 0)?;
+    let s = String::from_utf8_lossy(&d[o..o + fin]).into_owned();
+    Some((s, o + fin + 1))
+}
+
+/// Si `d` es un bundle reconocido, lo desempaqueta; si no, None.
+pub fn desempaquetar_bundle(d: &[u8], nombre: &str, lim: u64) -> Option<Result<Vec<Hijo>>> {
+    if d.starts_with(b"UnityFS\0") {
+        Some(unity_bundle(d, lim))
+    } else if d.starts_with(b"GDPC") {
+        Some(godot_pck(d, lim))
+    } else {
+        let _ = nombre;
+        None
+    }
+}
+
+fn descomprimir_bloque(tipo: u8, comp: &[u8], tam: usize) -> Result<Vec<u8>> {
+    match tipo {
+        0 => Ok(comp.to_vec()),
+        2 | 3 => lz4_flex::block::decompress(comp, tam).map_err(|e| anyhow!("LZ4: {e}")),
+        1 => bail!("{}", tr("LZMA-compressed block not supported yet", "bloque comprimido con LZMA aún no soportado")),
+        n => bail!("{}", tfmt(tr("unknown block compression: {}", "compresión de bloque desconocida: {}"), &[n.to_string()])),
+    }
+}
+
+/// Bundle de Unity (UnityFS): descomprime los bloques y separa los ficheros
+/// internos (nodos). Soporta bloques sin comprimir y LZ4/LZ4HC.
+pub fn unity_bundle(d: &[u8], lim: u64) -> Result<Vec<Hijo>> {
+    let err = || anyhow!("{}", tr("corrupt or truncated UnityFS bundle", "bundle UnityFS corrupto o truncado"));
+    let mut o = 8; // tras "UnityFS\0"
+    let ver = be_u32(d, o).ok_or_else(err)?;
+    o += 4;
+    let (_uv, o1) = cadena(d, o).ok_or_else(err)?;
+    let (_ur, o2) = cadena(d, o1).ok_or_else(err)?;
+    o = o2;
+    let _size = be_i64(d, o).ok_or_else(err)?;
+    o += 8;
+    let comp_info = be_u32(d, o).ok_or_else(err)? as usize;
+    o += 4;
+    let uncomp_info = be_u32(d, o).ok_or_else(err)? as usize;
+    o += 4;
+    let flags = be_u32(d, o).ok_or_else(err)?;
+    o += 4;
+    // Localiza blocksInfo (al final si el bit 0x80 está puesto).
+    let (info_bruta, mut datos_ini) = if flags & 0x80 != 0 {
+        let ini = d.len().checked_sub(comp_info).ok_or_else(err)?;
+        (d.get(ini..ini + comp_info).ok_or_else(err)?, o)
+    } else {
+        (d.get(o..o + comp_info).ok_or_else(err)?, o + comp_info)
+    };
+    let info = descomprimir_bloque((flags & 0x3f) as u8, info_bruta, uncomp_info)?;
+    // A partir de la versión 7, los datos se alinean a 16 bytes.
+    if ver >= 7 && flags & 0x80 == 0 {
+        datos_ini = (datos_ini + 15) & !15;
+    }
+    // Parseo de blocksInfo: hash(16) · nº bloques · bloques · nº nodos · nodos.
+    let mut p = 16;
+    let nb = be_u32(&info, p).ok_or_else(err)? as usize;
+    p += 4;
+    let mut bloques = Vec::with_capacity(nb.min(4096));
+    for _ in 0..nb {
+        let us = be_u32(&info, p).ok_or_else(err)?;
+        let cs = be_u32(&info, p + 4).ok_or_else(err)?;
+        let fl = be_u16(&info, p + 8).ok_or_else(err)?;
+        p += 10;
+        bloques.push((us, cs, fl));
+    }
+    let nn = be_u32(&info, p).ok_or_else(err)? as usize;
+    p += 4;
+    let mut nodos = Vec::with_capacity(nn.min(65536));
+    for _ in 0..nn {
+        let off = be_i64(&info, p).ok_or_else(err)?;
+        let sz = be_i64(&info, p + 8).ok_or_else(err)?;
+        let (nombre, np) = cadena(&info, p + 20).ok_or_else(err)?; // +4 flags
+        p = np;
+        nodos.push((off, sz, nombre));
+    }
+    // Descomprime los bloques en secuencia hasta formar el bloque de datos.
+    let mut datos = Vec::new();
+    let mut cur = datos_ini;
+    for (us, cs, fl) in bloques {
+        let comp = d.get(cur..cur + cs as usize).ok_or_else(err)?;
+        cur += cs as usize;
+        let dec = descomprimir_bloque((fl & 0x3f) as u8, comp, us as usize)?;
+        if datos.len() as u64 + dec.len() as u64 > lim {
+            bail!("{}", tfmt(tr("exceeds the limit of {} bytes (decompression bomb?)", "supera el límite de {} bytes (¿bomba de descompresión?)"), &[lim.to_string()]));
+        }
+        datos.extend_from_slice(&dec);
+    }
+    // Cada nodo es un trozo del bloque de datos.
+    let mut hijos = Vec::new();
+    for (off, sz, nombre) in nodos {
+        let s = off.max(0) as usize;
+        let e = s.saturating_add(sz.max(0) as usize);
+        if let Some(trozo) = datos.get(s..e) {
+            let limpio = nombre.rsplit(['/', '\\']).next().unwrap_or(&nombre).to_string();
+            hijos.push(Hijo { nombre: if limpio.is_empty() { "nodo".into() } else { limpio }, datos: trozo.to_vec() });
+        }
+    }
+    if hijos.is_empty() {
+        bail!("{}", tr("no files could be unpacked from the bundle", "no se pudo desempaquetar ningún fichero del bundle"));
+    }
+    Ok(hijos)
+}
+
+/// Paquete de Godot (.pck, magia "GDPC"): índice de ficheros + datos.
+pub fn godot_pck(d: &[u8], lim: u64) -> Result<Vec<Hijo>> {
+    let err = || anyhow!("{}", tr("corrupt or truncated Godot .pck", ".pck de Godot corrupto o truncado"));
+    let ver = le_u32(d, 4).ok_or_else(err)?;
+    let mut o = 20; // magia(4) + pack_ver(4) + godot major/minor/patch(12)
+    let mut base = 0u64;
+    if ver >= 2 {
+        let _flags = le_u32(d, o).ok_or_else(err)?;
+        base = le_u64(d, o + 4).ok_or_else(err)?;
+        o += 12;
+    }
+    o += 16 * 4; // 16 u32 reservados
+    let n = le_u32(d, o).ok_or_else(err)? as usize;
+    o += 4;
+    let mut hijos = Vec::new();
+    let mut total = 0u64;
+    for _ in 0..n {
+        let plen = le_u32(d, o).ok_or_else(err)? as usize;
+        o += 4;
+        let bytes = d.get(o..o + plen).ok_or_else(err)?;
+        o += plen;
+        let ruta = String::from_utf8_lossy(bytes).trim_end_matches('\0').trim_start_matches("res://").to_string();
+        let off = le_u64(d, o).ok_or_else(err)?;
+        let sz = le_u64(d, o + 8).ok_or_else(err)? as usize;
+        o += 16 + 16; // offset(8)+size(8)+md5(16)
+        if ver >= 2 {
+            o += 4; // flags por fichero
+        }
+        let ini = (base + off) as usize;
+        let fin = ini.saturating_add(sz);
+        let Some(trozo) = d.get(ini..fin) else { continue };
+        total += sz as u64;
+        if total > lim {
+            bail!("{}", tfmt(tr("exceeds the limit of {} bytes (decompression bomb?)", "supera el límite de {} bytes (¿bomba de descompresión?)"), &[lim.to_string()]));
+        }
+        let nombre = ruta.rsplit(['/', '\\']).next().unwrap_or(&ruta).to_string();
+        hijos.push(Hijo { nombre: if nombre.is_empty() { "recurso".into() } else { nombre }, datos: trozo.to_vec() });
+    }
+    if hijos.is_empty() {
+        bail!("{}", tr("no files could be unpacked from the .pck", "no se pudo desempaquetar ningún fichero del .pck"));
+    }
+    Ok(hijos)
+}
+
+#[cfg(test)]
+mod pruebas_bundle {
+    use super::*;
+
+    #[test]
+    fn godot_pck_v1() {
+        let mut d = Vec::new();
+        d.extend_from_slice(b"GDPC");
+        d.extend_from_slice(&1u32.to_le_bytes()); // pack version 1
+        d.extend_from_slice(&4u32.to_le_bytes()); // godot major
+        d.extend_from_slice(&0u32.to_le_bytes());
+        d.extend_from_slice(&0u32.to_le_bytes());
+        d.extend_from_slice(&[0u8; 64]); // reservado
+        d.extend_from_slice(&1u32.to_le_bytes()); // 1 fichero
+        let ruta = b"a.txt";
+        d.extend_from_slice(&(ruta.len() as u32).to_le_bytes());
+        d.extend_from_slice(ruta);
+        let off_pos = d.len();
+        d.extend_from_slice(&0u64.to_le_bytes()); // offset (se rellena luego)
+        d.extend_from_slice(&4u64.to_le_bytes()); // size
+        d.extend_from_slice(&[0u8; 16]); // md5
+        let data_off = d.len() as u64;
+        d[off_pos..off_pos + 8].copy_from_slice(&data_off.to_le_bytes());
+        d.extend_from_slice(b"HOLA");
+
+        let hijos = godot_pck(&d, 1 << 20).unwrap();
+        assert_eq!(hijos.len(), 1);
+        assert_eq!(hijos[0].nombre, "a.txt");
+        assert_eq!(hijos[0].datos, b"HOLA");
+    }
+
+    #[test]
+    fn unity_fs_sin_comprimir() {
+        let data = b"ASSETDATA";
+        // blocksInfo sin comprimir.
+        let mut info = Vec::new();
+        info.extend_from_slice(&[0u8; 16]); // hash
+        info.extend_from_slice(&1u32.to_be_bytes()); // 1 bloque
+        info.extend_from_slice(&(data.len() as u32).to_be_bytes()); // us
+        info.extend_from_slice(&(data.len() as u32).to_be_bytes()); // cs
+        info.extend_from_slice(&0u16.to_be_bytes()); // flags bloque (sin comprimir)
+        info.extend_from_slice(&1u32.to_be_bytes()); // 1 nodo
+        info.extend_from_slice(&0i64.to_be_bytes()); // off
+        info.extend_from_slice(&(data.len() as i64).to_be_bytes()); // size
+        info.extend_from_slice(&0u32.to_be_bytes()); // flags nodo
+        info.extend_from_slice(b"cab.dat\0");
+
+        let mut d = Vec::new();
+        d.extend_from_slice(b"UnityFS\0");
+        d.extend_from_slice(&6u32.to_be_bytes()); // versión
+        d.extend_from_slice(b"5\0");
+        d.extend_from_slice(b"1\0");
+        d.extend_from_slice(&0i64.to_be_bytes()); // size total (no se usa)
+        d.extend_from_slice(&(info.len() as u32).to_be_bytes()); // comp info
+        d.extend_from_slice(&(info.len() as u32).to_be_bytes()); // uncomp info
+        d.extend_from_slice(&0u32.to_be_bytes()); // flags (sin comprimir, info al inicio)
+        d.extend_from_slice(&info);
+        d.extend_from_slice(data);
+
+        let hijos = unity_bundle(&d, 1 << 20).unwrap();
+        assert_eq!(hijos.len(), 1);
+        assert_eq!(hijos[0].nombre, "cab.dat");
+        assert_eq!(hijos[0].datos, data);
     }
 }

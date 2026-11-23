@@ -189,6 +189,8 @@ fn codigo_tipo(tp: Tipo) -> &'static str {
         Tipo::Xz => "XZ",
         Tipo::Lzma => "LZMA",
         Tipo::Zlib => "ZLIB",
+        Tipo::Zstd => "ZSTD",
+        Tipo::Lz4 => "LZ4",
         Tipo::Tar => "TAR",
         Tipo::SieteZ => "7Z",
         Tipo::Rar => "RAR",
@@ -753,6 +755,15 @@ impl App {
                     ui.checkbox(&mut self.op.agrupar, tr("GROUP RESOURCES (same name → .zip)", "AGRUPAR RECURSOS (mismo nombre → .zip)"));
                     ui.checkbox(&mut self.op.reconstruir, tr("REBUILD PACKAGES (structure + .zip)", "RECONSTRUIR PAQUETES (estructura + .zip)"));
                     ui.checkbox(&mut self.op.auditar, tr("AUDIT PACKAGES (ASSET PACKS/MODS)", "AUDITAR PAQUETES (ASSET PACKS/MODS)"));
+                    // Desempaquetar bundles de motor: función de pago (Pro).
+                    let pro = crate::edicion::permite(crate::edicion::DESEMPAQUETAR);
+                    if pro {
+                        ui.checkbox(&mut self.op.desempaquetar, tr("UNPACK ENGINE BUNDLES (Unity/Godot)", "DESEMPAQUETAR BUNDLES DE MOTOR (Unity/Godot)"));
+                    } else {
+                        self.op.desempaquetar = false;
+                        ui.add_enabled(false, egui::Checkbox::new(&mut false, tr("UNPACK ENGINE BUNDLES (Unity/Godot) · PRO", "DESEMPAQUETAR BUNDLES DE MOTOR (Unity/Godot) · PRO")))
+                            .on_disabled_hover_text(tr("Available in CAPAS Pro.", "Disponible en CAPAS Pro."));
+                    }
                     ui.separator();
                     let mut tema = self.tema;
                     egui::ComboBox::from_id_salt("tema")

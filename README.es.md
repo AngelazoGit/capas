@@ -1,10 +1,29 @@
-# capas
+# capas — desmonta cualquier archivo, capa a capa
 
 **por @angelazo**
 
 > 🇬🇧 English: [README.md](README.md)
 
+> **Mira lo que hay de verdad dentro de un archivo.** Suéltale un comprimido, un
+> ejecutable, un mod de un juego o un binario misterioso y capas lo abre capa a
+> capa: descomprime, decompila, extrae ficheros escondidos y te dice, con pruebas,
+> qué es cada pieza. Rápido, sin conexión y **nunca ejecuta** lo que analiza.
+
 ![capas analizando](docs/analizando.png)
+
+**Gratis y completo.** Todo el motor de análisis es gratuito: cientos de formatos de
+todas las plataformas, extracción por capas en paralelo, niveles de confianza,
+relaciones de familia, un índice SQLite consultable e informes completos. Las ediciones
+de pago **Pro/Studio** añaden el desempaquetado de bundles de motor y herramientas de
+equipo/automatización, pero nunca te chocas con un muro solo por querer entender un archivo.
+
+- 🧅 **Capa a capa**: extracción y decompilación en paralelo en todos los núcleos
+- 🔬 **Detección por contenido** de **cientos de formatos** (Windows, macOS, Linux, Android/iOS, consolas), no solo por extensión
+- 🏷️ **Niveles de confianza** (Confirmado / Compatible / Probable / Desconocido) con la evidencia de cada decisión
+- 🔗 **Relaciones de familia** + **índice SQLite** que puedes consultar y comparar entre versiones
+- 🛡️ **Auditoría de paquetes** (APROBADO / CUARENTENA / RECHAZADO) para asset packs y mods, antes de que un servidor los cargue
+- 🎮 **Desempaquetado de bundles** de motor (Unity, Godot) — *Pro*
+- 🖥️ **Interfaz gráfica + consola**, `.exe` portable de Windows, **inglés/español**, cuatro temas
 
 Desmonta y decompila archivos **capa a capa** usando los recursos del ordenador:
 todos los núcleos de la CPU, un límite de memoria ajustado a la RAM libre y las
@@ -337,6 +356,32 @@ salida/
   <archivo>/
     analisis/     cabeceras.txt, desensamblado.asm, objdump.asm, javap.txt, cadenas.txt...
     capas/<hijo>/ el archivo extraído + su propio analisis/ y capas/ (recursivo)
+```
+
+## Ediciones (Core / Pro / Studio)
+
+capas es **gratis y, por sí solo, completo**: todo el motor de análisis —extracción
+capa a capa (ahora también **Zstandard** y **LZ4**), detección de **cientos de formatos
+de todas las plataformas**, clasificación, niveles de confianza, relaciones de familia,
+índice SQLite, todos los informes, la auditoría de paquetes, el módulo de claves y las
+herramientas de vigilancia/localización de caché— es **Core, y gratuito**. Las ediciones
+de pago añaden funciones operativas y de automatización para equipos y pipelines; se
+eligen con `--edicion` (o la variable `CAPAS_EDICION`) y, en un lanzamiento, se activan
+con una clave de licencia firmada. La edición mínima de cada función es una constante de
+una línea, así que mover una función de plan es trivial.
+
+| Edición | Qué incluye |
+|---|---|
+| **Core** — gratis | El analizador completo: extracción (zip/gzip/bzip2/xz/lzma/zstd/lz4/tar/7z/rar…), detección por contenido de cientos de formatos, clasificación, **niveles de confianza**, **relaciones de familia**, **índice SQLite**, todos los informes, **auditoría de paquetes**, **módulo de claves**, **informe de plugins/código activo** y las herramientas de **vigilancia/localización** de caché. |
+| **Pro** | **`--desempaquetar`** (abre bundles de motor Unity/Godot), **`--politica`** (política operativa PERMITIR/ADVERTIR/REVISAR/BLOQUEAR → `politica.md`), **`--comparar base.db`** (diff entre dos índices → `comparacion.md`). |
+| **Studio** | Todo lo de Pro, más **`--ci`** (CI/CD: línea de máquina en stdout + código de salida 0/1/2/3) y **`--api <puerto>`** (REST local de solo lectura sobre el índice). |
+
+```bash
+capas bundle.unity3d --desempaquetar --edicion pro -s salida   # abre un bundle de Unity
+capas mod.zip --politica --edicion pro -s salida               # veredicto → acción
+capas v2.zip --indice v2.db --comparar v1.db --edicion pro -s salida
+capas mod.zip --ci --edicion studio -s salida                  # código de salida para pipelines
+capas --api 8080 --indice capas.db --edicion studio            # sirve el índice
 ```
 
 ## Seguridad

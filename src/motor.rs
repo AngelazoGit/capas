@@ -27,6 +27,7 @@ pub struct Config {
     pub timeout: Duration,
     pub max_instrucciones: usize,
     pub tallar: bool,
+    pub desempaquetar: bool,
     pub claves: crate::claves::Claves,
 }
 
@@ -216,6 +217,8 @@ impl Motor {
             Tipo::Xz => extraer::xz(d, nombre, lim),
             Tipo::Lzma => extraer::lzma(d, nombre, lim),
             Tipo::Zlib => extraer::zlib(d, nombre, lim),
+            Tipo::Zstd => extraer::zstd(d, nombre, lim),
+            Tipo::Lz4 => extraer::lz4(d, nombre, lim),
             Tipo::Tar => extraer::tar(d, lim, &mut notas),
             Tipo::ArUnix => extraer::ar(d),
             Tipo::MachOFat => extraer::macho_fat(d),
@@ -262,6 +265,12 @@ impl Motor {
                 Ok(Vec::new())
             }
             Tipo::Texto => Ok(extraer::base64_embebido(d)),
+            Tipo::RecursoJuego if self.cfg.desempaquetar => {
+                match extraer::desempaquetar_bundle(d, nombre, lim) {
+                    Some(r) => r,
+                    None => Ok(Vec::new()),
+                }
+            }
             Tipo::Imagen | Tipo::Audio | Tipo::Video | Tipo::Fuente | Tipo::BaseDatos | Tipo::RecursoJuego => Ok(Vec::new()),
             Tipo::Desconocido => {
                 // Pista por extensión: mejor que "Binario desconocido" a secas.

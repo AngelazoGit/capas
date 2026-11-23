@@ -12,6 +12,8 @@ pub enum Tipo {
     Xz,
     Lzma,
     Zlib,
+    Zstd,
+    Lz4,
     Tar,
     SieteZ,
     Rar,
@@ -45,6 +47,8 @@ impl Tipo {
             Tipo::Xz => "XZ",
             Tipo::Lzma => "LZMA",
             Tipo::Zlib => "ZLIB",
+            Tipo::Zstd => "Zstandard",
+            Tipo::Lz4 => "LZ4",
             Tipo::Tar => "TAR",
             Tipo::SieteZ => "7-Zip",
             Tipo::Rar => "RAR",
@@ -78,6 +82,8 @@ impl Tipo {
             Tipo::Xz => "xz",
             Tipo::Lzma => "lzma",
             Tipo::Zlib => "zlib",
+            Tipo::Zstd => "zst",
+            Tipo::Lz4 => "lz4",
             Tipo::Tar => "tar",
             Tipo::SieteZ => "7z",
             Tipo::Rar => "rar",
@@ -112,6 +118,8 @@ impl Tipo {
                 | Tipo::Xz
                 | Tipo::Lzma
                 | Tipo::Zlib
+                | Tipo::Zstd
+                | Tipo::Lz4
                 | Tipo::Tar
                 | Tipo::SieteZ
                 | Tipo::Rar
@@ -154,6 +162,12 @@ pub fn detectar(d: &[u8]) -> Tipo {
     }
     if d.starts_with(&[0xFD, b'7', b'z', b'X', b'Z', 0x00]) {
         return Tipo::Xz;
+    }
+    if d.starts_with(&[0x28, 0xB5, 0x2F, 0xFD]) {
+        return Tipo::Zstd;
+    }
+    if d.starts_with(&[0x04, 0x22, 0x4D, 0x18]) {
+        return Tipo::Lz4;
     }
     if d.starts_with(&[b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C]) {
         return Tipo::SieteZ;

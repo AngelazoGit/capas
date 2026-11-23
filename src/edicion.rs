@@ -32,6 +32,7 @@ pub const POLITICA: Edicion = Edicion::Pro; // Fase 3: política/cuarentena por 
 pub const COMPARAR: Edicion = Edicion::Pro; // Fase 3: comparación entre versiones
 pub const CI: Edicion = Edicion::Studio; // Fase 4: modo CI/CD (códigos de salida)
 pub const API: Edicion = Edicion::Studio; // Fase 4: API local
+pub const DESEMPAQUETAR: Edicion = Edicion::Pro; // Desempaquetado de bundles de motores
 
 static ACTUAL: AtomicU8 = AtomicU8::new(0);
 

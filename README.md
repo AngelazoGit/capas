@@ -1,8 +1,27 @@
-# capas
+# capas — take any file apart, layer by layer
 
 **by @angelazo** · [Español](README.es.md)
 
+> **See what's really inside a file.** Drop in an archive, an executable, a game
+> mod or a mystery blob and capas peels it open layer by layer — decompressing,
+> decompiling, carving out hidden files and telling you, with evidence, what each
+> piece actually is. Fast, offline, and it **never runs** what it inspects.
+
 ![capas analyzing a file](docs/analizando.png)
+
+**Free and complete.** The whole analysis engine is free: hundreds of formats across
+every platform, parallel layer extraction, confidence levels, family relations, a
+queryable SQLite index and full reports. Paid **Pro/Studio** editions add engine-bundle
+unpacking and team/automation tooling — but you never hit a wall just trying to
+understand a file.
+
+- 🧅 **Layer-by-layer** extraction and decompilation, in parallel across every core
+- 🔬 **Content-based detection** of **hundreds of formats** (Windows, macOS, Linux, Android/iOS, consoles) — not just by extension
+- 🏷️ **Confidence levels** (Confirmed / Compatible / Probable / Unknown) with the evidence behind each call
+- 🔗 **Family relations** + a **SQLite index** you can query and diff between versions
+- 🛡️ **Package audit** (APPROVED / QUARANTINE / REJECTED) for asset packs and mods — before a server ever loads them
+- 🎮 **Engine bundle unpacking** (Unity, Godot) — *Pro*
+- 🖥️ **GUI + console**, portable Windows `.exe`, **English/Spanish**, four themes
 
 Take files (or folders) apart **layer by layer** and decompile them using your
 computer's resources: every CPU core, a memory budget tuned to the free RAM, and
@@ -142,26 +161,34 @@ by magic bytes + extension, so detection can be extended for custom formats.
   writes `plugins.md`: each plugin with its **functions** and **imported APIs**,
   highlighting sensitive capabilities (network, files, processes, registry, crypto).
   capas **never runs** the code.
+- **Engine bundle unpacking** (`--desempaquetar`, **Pro**) — opens **Unity** asset
+  bundles (`UnityFS`, LZ4/LZ4HC blocks) and **Godot** packs (`.pck`) and feeds their
+  inner files straight back into the layer pipeline, so everything inside gets detected,
+  classified and analysed too.
 
 ## Editions (Core / Pro / Studio)
 
-Everything above is **Core** — free and complete for analysis. A few advanced,
-operational features are reserved for paid editions, selected with `--edicion` (or
-the `CAPAS_EDICION` env var); in a real release this is where a signed license key
-would be validated. Each feature's required edition is a one-line constant, so the
-tiering is easy to adjust.
+capas is **free to use and genuinely complete on its own**: the whole analysis engine —
+layer-by-layer extraction (now including **Zstandard** and **LZ4**), detection of
+**hundreds of formats across every platform**, classification, confidence levels, family
+relations, the SQLite index, every report, the package audit, the password module and the
+cache watch/locate tools — is **Core, and free**. The paid editions add operational and
+automation features for teams and pipelines; they're selected with `--edicion` (or the
+`CAPAS_EDICION` env var) and, in a release, activated by a signed license key. Each
+feature's required edition is a one-line constant, so the tiering is easy to adjust.
 
-| Edition | Adds |
+| Edition | What you get |
 |---|---|
-| **Core** (free) | all analysis, classification, confidence, relations, SQLite index, reports, audit, password module, watch/locate |
-| **Pro** | `--politica` (operational policy: ALLOW/WARN/REVIEW/BLOCK → `politica.md`), `--comparar base.db` (version diff between two indexes → `comparacion.md`) |
-| **Studio** | `--ci` (CI/CD: machine line on stdout + exit code 0/1/2/3 from the policy), `--api <port>` (local read-only REST over the index: `/`, `/files`, `/relations`, `/findings`, `/runs`) |
+| **Core** — free | The full analyser: extraction (zip/gzip/bzip2/xz/lzma/zstd/lz4/tar/7z/rar…), content detection of hundreds of formats, classification, **confidence levels**, **family relations**, **SQLite index**, all reports, **package audit**, **password module**, **plugin/active-code report**, and the **watch/locate** cache tools. |
+| **Pro** | **`--desempaquetar`** (unpack Unity/Godot engine bundles), **`--politica`** (operational policy ALLOW/WARN/REVIEW/BLOCK → `politica.md`), **`--comparar base.db`** (version diff between two indexes → `comparacion.md`). |
+| **Studio** | Everything in Pro, plus **`--ci`** (CI/CD: machine line on stdout + exit code 0/1/2/3 from the policy) and **`--api <port>`** (local read-only REST over the index: `/`, `/files`, `/relations`, `/findings`, `/runs`). |
 
 ```bash
-capas mod.zip --politica --edicion pro -s out      # verdict → policy action
+capas bundle.unity3d --desempaquetar --edicion pro -s out   # unpack a Unity bundle
+capas mod.zip --politica --edicion pro -s out               # verdict → policy action
 capas v2.zip --indice v2.db --comparar v1.db --edicion pro -s out
-capas mod.zip --ci --edicion studio -s out         # exit code for pipelines
-capas --api 8080 --indice capas.db --edicion studio   # serve the index
+capas mod.zip --ci --edicion studio -s out                  # exit code for pipelines
+capas --api 8080 --indice capas.db --edicion studio         # serve the index
 ```
 
 ### Licensing (offline signed keys)

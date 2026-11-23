@@ -115,6 +115,10 @@ struct Args {
     #[arg(long)]
     reconstruir: bool,
 
+    /// [Pro] Unpack engine bundles (Unity UnityFS, Godot .pck) into their inner files
+    #[arg(long)]
+    desempaquetar: bool,
+
     // ── Modo vigilancia: puerta de auditoría antes de la carga del servidor ──
     /// Watch this folder: audit each incoming pack and route it automatically
     #[arg(long, value_name = "INCOMING")]
@@ -260,6 +264,7 @@ fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
     op.auditar = a.auditar;
     op.agrupar = a.agrupar;
     op.reconstruir = a.reconstruir;
+    op.desempaquetar = a.desempaquetar;
     op.indice = !a.sin_indice;
     op.indice_db = a.indice.clone();
     op.claves = claves::Claves {
@@ -294,8 +299,8 @@ fn main() -> Result<()> {
                 let sk = dir.join("capas_private.key");
                 let _ = std::fs::write(&sk, &priv_hex);
                 let _ = std::fs::write(&pk, &pub_hex);
-                eprintln!("Clave privada (SECRETA, guárdala): {}", sk.display());
-                eprintln!("Clave pública  (incrústala en PUBLICA_HEX): {}", pk.display());
+                eprintln!("{}", idioma::tfmt(idioma::tr("Private key (SECRET, keep it safe): {}", "Clave privada (SECRETA, guárdala): {}"), &[sk.display().to_string()]));
+                eprintln!("{}", idioma::tfmt(idioma::tr("Public key  (embed it in PUBLICA_HEX): {}", "Clave pública  (incrústala en PUBLICA_HEX): {}"), &[pk.display().to_string()]));
                 eprintln!("\nPUBLICA_HEX = \"{pub_hex}\"");
             }
             Err(e) => eprintln!("generar-clave: {e}"),
@@ -363,6 +368,11 @@ fn main() -> Result<()> {
     // La política y el modo CI necesitan la auditoría.
     if (a.politica && edicion::permite(edicion::POLITICA)) || (a.ci && edicion::permite(edicion::CI)) {
         op.auditar = true;
+    }
+    // El desempaquetado de bundles es de pago: si no hay edición, se avisa y se omite.
+    if op.desempaquetar && !edicion::permite(edicion::DESEMPAQUETAR) {
+        eprintln!("{}", edicion::bloqueado("--desempaquetar", edicion::DESEMPAQUETAR));
+        op.desempaquetar = false;
     }
 
     eprintln!("capas v{VERSION} — {} {AUTOR}  ·  {} {}\n", idioma::tr("by","por"), idioma::tr("edition","edición"), edicion::actual().nombre());
