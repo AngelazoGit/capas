@@ -123,6 +123,17 @@ fn pal() -> Paleta {
         _ => LIMPIO,
     }
 }
+
+/// Índice de máscara a partir de su nombre (CAPAS_TEMA): limpio/sereno/neutro/mando.
+fn tema_por_nombre(s: &str) -> Option<u8> {
+    match s.trim().to_lowercase().as_str() {
+        "limpio" | "clean" | "claro" | "light" => Some(3),
+        "sereno" | "serene" => Some(0),
+        "neutro" | "neutral" | "gris" | "gray" | "grey" => Some(2),
+        "mando" | "command" | "intenso" | "intense" => Some(1),
+        _ => None,
+    }
+}
 fn fondo() -> Color32 { pal().fondo }
 fn morado_oscuro() -> Color32 { pal().morado_oscuro }
 fn morado() -> Color32 { pal().morado }
@@ -295,7 +306,12 @@ pub fn lanzar(sis: Sistema, archivos: Vec<PathBuf>, salida: PathBuf, auto_inicia
         opciones,
         Box::new(move |cc| {
             configurar_estilo(&cc.egui_ctx);
+            // Máscara inicial elegible con la variable CAPAS_TEMA.
+            if let Some(t) = std::env::var("CAPAS_TEMA").ok().and_then(|s| tema_por_nombre(&s)) {
+                TEMA.store(t, Ordering::Relaxed);
+            }
             let mut app = App::new(sis, archivos, salida);
+            app.tema = TEMA.load(Ordering::Relaxed);
             app.auto_iniciar = auto_iniciar && !app.archivos.is_empty();
             Ok(Box::new(app))
         }),
