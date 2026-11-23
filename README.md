@@ -86,11 +86,17 @@ capas --help               # all options
 | DEX | — | `jadx` |
 | .pyc | — | `pycdc`, `decompyle3`, `uncompyle6` |
 | WebAssembly | — | `wasm2wat`, `wasm-decompile` |
-| audio/video/fonts/DB | OGG, WAV, MP3, FLAC, MP4, WebM, AVI, SQLite, TTF/OTF/WOFF… by content | — |
+| audio/video/fonts/DB | OGG, WAV, MP3, FLAC, AIFF, MIDI, MP4, WebM, AVI, FLV, HEIC/AVIF, SQLite, Access, HDF5, TTF/OTF/WOFF… by content | — |
+| game / 3D assets | Unity bundles, glTF, FBX, Blender, Godot packs, Valve VTF/VPK, KTX, Wwise/FMOD banks… by content | — |
 | text/scripts | detects embedded base64 payloads | — |
 | any binary | ASCII/UTF-16 strings, entropy, signature carving of embedded files | `file` |
 
-Whatever isn't recognized by content is collected in **`desconocidos.txt`**, grouped
+Classification isn't limited to the formats detected by content: it also maps **hundreds
+of extensions across every platform** — Windows, macOS, Linux, Android/iOS, game consoles —
+covering source in dozens of languages, archives and disk images, AI model files
+(GGUF, safetensors, ONNX, PyTorch…), game/engine resources, documents and more.
+
+Whatever still isn't recognized is collected in **`desconocidos.txt`**, grouped
 by magic bytes + extension, so detection can be extended for custom formats.
 
 ## Features

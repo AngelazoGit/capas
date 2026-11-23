@@ -262,7 +262,7 @@ impl Motor {
                 Ok(Vec::new())
             }
             Tipo::Texto => Ok(extraer::base64_embebido(d)),
-            Tipo::Imagen | Tipo::Audio | Tipo::Video | Tipo::Fuente | Tipo::BaseDatos => Ok(Vec::new()),
+            Tipo::Imagen | Tipo::Audio | Tipo::Video | Tipo::Fuente | Tipo::BaseDatos | Tipo::RecursoJuego => Ok(Vec::new()),
             Tipo::Desconocido => {
                 // Pista por extensión: mejor que "Binario desconocido" a secas.
                 if let Some(ext) = nombre.rsplit('.').next().filter(|e| !e.is_empty() && e.len() <= 8 && *e != nombre) {

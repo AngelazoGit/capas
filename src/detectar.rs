@@ -31,6 +31,7 @@ pub enum Tipo {
     Video,
     Fuente,
     BaseDatos,
+    RecursoJuego,
     Texto,
     Desconocido,
 }
@@ -63,6 +64,7 @@ impl Tipo {
             Tipo::Video => tr("Video","Vídeo"),
             Tipo::Fuente => tr("Font","Fuente tipográfica"),
             Tipo::BaseDatos => tr("Database","Base de datos"),
+            Tipo::RecursoJuego => tr("Game / 3D resource","Recurso de juego / 3D"),
             Tipo::Texto => tr("Text / script","Texto / script"),
             Tipo::Desconocido => tr("Unknown binary","Binario desconocido"),
         }
@@ -94,6 +96,7 @@ impl Tipo {
             Tipo::Video => "video",
             Tipo::Fuente => "font",
             Tipo::BaseDatos => "db",
+            Tipo::RecursoJuego => "res",
             Tipo::Texto => "txt",
             Tipo::Desconocido => "bin",
         }
@@ -207,22 +210,59 @@ pub fn detectar(d: &[u8]) -> Tipo {
             _ => {}
         }
     }
-    // Contenedor ISO-BMFF (mp4/mov/m4a/m4v): "ftyp" en el offset 4.
+    // Contenedor ISO-BMFF (mp4/mov/m4a/m4v/heic/avif): la "marca" en 8..12 decide.
     if d.len() >= 12 && &d[4..8] == b"ftyp" {
-        return if &d[8..11] == b"M4A" { Tipo::Audio } else { Tipo::Video };
+        let marca = &d[8..12];
+        if matches!(marca, b"avif" | b"avis" | b"heic" | b"heix" | b"heif" | b"hevc" | b"mif1" | b"msf1") {
+            return Tipo::Imagen;
+        }
+        if matches!(&d[8..11], b"M4A" | b"M4B") {
+            return Tipo::Audio;
+        }
+        return Tipo::Video;
     }
     // Audio sin contenedor.
     if d.starts_with(b"OggS") || d.starts_with(b"fLaC") || d.starts_with(b"ID3")
+        || d.starts_with(b"MThd")                       // MIDI
+        || d.starts_with(b".snd")                       // Sun/NeXT AU
+        || d.starts_with(b"MAC ")                       // Monkey's Audio (.ape)
+        || d.starts_with(b"wvpk")                       // WavPack
+        || d.starts_with(b"IMPM")                       // Impulse Tracker (.it)
+        || d.starts_with(b"Extended Module:")           // FastTracker (.xm)
+        || (d.len() >= 12 && &d[0..4] == b"FORM" && &d[8..12] == b"AIFF") // AIFF
         || (d.len() > 2 && d[0] == 0xFF && matches!(d[1], 0xFB | 0xF3 | 0xF2))
     {
         return Tipo::Audio;
     }
     // Vídeo Matroska / WebM (EBML).
-    if d.starts_with(&[0x1A, 0x45, 0xDF, 0xA3]) {
+    if d.starts_with(&[0x1A, 0x45, 0xDF, 0xA3])
+        || d.starts_with(b"FLV")                                     // Flash Video
+        || d.starts_with(&[0x30, 0x26, 0xB2, 0x75])                 // ASF / WMV / WMA
+        || d.starts_with(&[0x00, 0x00, 0x01, 0xBA])                 // MPEG Program Stream
+        || d.starts_with(&[0x00, 0x00, 0x01, 0xB3])                 // MPEG vídeo
+    {
         return Tipo::Video;
     }
-    // Bases de datos SQLite.
-    if d.starts_with(b"SQLite format 3\0") {
+    // Recursos de juego / 3D / motores (firmas inconfundibles).
+    if d.starts_with(b"UnityFS")                                     // Unity asset bundle
+        || d.starts_with(b"glTF")                                    // glTF binario (.glb)
+        || d.starts_with(b"BLENDER")                                 // Blender (.blend)
+        || d.starts_with(b"GDPC")                                    // Godot pack (.pck)
+        || d.starts_with(b"Kaydara FBX Binary")                      // FBX binario
+        || d.starts_with(b"VTF\0")                                   // Valve texture
+        || d.starts_with(&[0x34, 0x12, 0xAA, 0x55])                 // Valve VPK
+        || d.starts_with(&[0xAB, b'K', b'T', b'X'])                 // KTX / KTX2 textura
+        || d.starts_with(b"BKHD")                                    // Wwise soundbank
+        || d.starts_with(b"FSB5")                                    // FMOD soundbank
+    {
+        return Tipo::RecursoJuego;
+    }
+    // Bases de datos / formatos de datos.
+    if d.starts_with(b"SQLite format 3\0")
+        || (d.len() >= 19 && &d[4..19] == b"Standard Jet DB")       // Access (.mdb)
+        || (d.len() >= 19 && &d[4..19] == b"Standard ACE DB")       // Access (.accdb)
+        || d.starts_with(b"\x89HDF\r\n")                            // HDF5
+    {
         return Tipo::BaseDatos;
     }
     // Fuentes tipográficas.
@@ -235,6 +275,14 @@ pub fn detectar(d: &[u8]) -> Tipo {
         || d.starts_with(&[0xFF, 0xD8, 0xFF])
         || d.starts_with(b"GIF8")
         || d.starts_with(b"DDS ")
+        || d.starts_with(b"8BPS")                                     // Photoshop PSD
+        || d.starts_with(b"qoif")                                     // QOI
+        || d.starts_with(b"icns")                                     // Apple icon
+        || d.starts_with(b"#?RADIANCE")                               // Radiance HDR
+        || d.starts_with(&[0x76, 0x2F, 0x31, 0x01])                  // OpenEXR
+        || d.starts_with(&[0xFF, 0x0A])                              // JPEG XL (raw)
+        || d.starts_with(&[0x00, 0x00, 0x00, 0x0C, 0x4A, 0x58, 0x4C, 0x20]) // JPEG XL (ISO)
+        || d.starts_with(&[0x00, 0x00, 0x00, 0x0C, 0x6A, 0x50, 0x20, 0x20]) // JPEG 2000
         || d.starts_with(&[0x00, 0x00, 0x01, 0x00]) // ICO
         || d.starts_with(b"II*\x00") // TIFF LE
         || d.starts_with(b"MM\x00*") // TIFF BE
@@ -293,4 +341,30 @@ pub fn entropia(d: &[u8]) -> f64 {
             -p * p.log2()
         })
         .sum()
+}
+
+#[cfg(test)]
+mod pruebas {
+    use super::*;
+
+    #[test]
+    fn firmas_nuevas() {
+        // HEIC/AVIF ya no se confunden con vídeo (regresión del contenedor ftyp).
+        let mut heic = vec![0u8; 16];
+        heic[4..8].copy_from_slice(b"ftyp");
+        heic[8..12].copy_from_slice(b"heic");
+        assert_eq!(detectar(&heic), Tipo::Imagen);
+        let mut avif = heic.clone();
+        avif[8..12].copy_from_slice(b"avif");
+        assert_eq!(detectar(&avif), Tipo::Imagen);
+        // Un .mp4 de verdad sigue siendo vídeo.
+        let mut mp4 = heic.clone();
+        mp4[8..12].copy_from_slice(b"isom");
+        assert_eq!(detectar(&mp4), Tipo::Video);
+
+        assert_eq!(detectar(b"UnityFS\0\0\0\0"), Tipo::RecursoJuego);
+        assert_eq!(detectar(b"glTF\x02\x00\x00\x00"), Tipo::RecursoJuego);
+        assert_eq!(detectar(b"MThd\0\0\0\x06"), Tipo::Audio);
+        assert_eq!(detectar(b"8BPS\0\x01"), Tipo::Imagen);
+    }
 }

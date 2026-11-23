@@ -148,6 +148,7 @@ fn color_tipo(t: Tipo) -> Color32 {
     match t {
         Tipo::Elf | Tipo::Pe | Tipo::MachO => naranja(),
         Tipo::ClaseJava | Tipo::Dex | Tipo::Pyc | Tipo::Wasm => morado_claro(),
+        Tipo::RecursoJuego => morado_claro(),
         Tipo::Texto | Tipo::Imagen => texto(),
         Tipo::Desconocido => rojo(),
         _ => verde(),
@@ -206,6 +207,7 @@ fn codigo_tipo(tp: Tipo) -> &'static str {
         Tipo::Video => tr("VIDEO", "VÍDEO"),
         Tipo::Fuente => tr("FONT", "FUENTE"),
         Tipo::BaseDatos => tr("DATABASE", "BASE DATOS"),
+        Tipo::RecursoJuego => tr("GAME/3D", "JUEGO/3D"),
         Tipo::Texto => tr("TEXT", "TEXTO"),
         Tipo::Desconocido => tr("UNKNOWN", "DESCONOCIDO"),
     }

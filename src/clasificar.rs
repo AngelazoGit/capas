@@ -143,6 +143,7 @@ pub fn categoria(tipo: Tipo, nombre: &str) -> Categoria {
         Tipo::Audio => return Categoria::Audio,
         Tipo::Video => return Categoria::Video,
         Tipo::Fuente | Tipo::BaseDatos => return Categoria::Datos,
+        Tipo::RecursoJuego => return Categoria::RecursoJuego,
         Tipo::Pdf => return Categoria::Documento,
         Tipo::Zip | Tipo::Gzip | Tipo::Bzip2 | Tipo::Xz | Tipo::Lzma | Tipo::Zlib | Tipo::Tar
         | Tipo::SieteZ | Tipo::Rar | Tipo::Cab | Tipo::ArUnix => return Categoria::Comprimido,
@@ -173,49 +174,99 @@ fn extension(nombre: &str) -> String {
 fn por_extension(ext: &str) -> Option<Categoria> {
     use Categoria::*;
     let c = match ext {
-        // Imágenes
+        // ── Imágenes (incl. RAW de cámara y formatos modernos, todas las plataformas)
         "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "tif" | "tiff" | "svg" | "ico"
-        | "tga" | "psd" | "heic" | "avif" | "jfif" | "xcf" => Imagen,
-        // Imágenes/texturas típicas de juegos y 3D
-        "dds" | "ktx" | "ktx2" | "astc" | "pvr" | "basis" => RecursoJuego,
-        // Audio
+        | "tga" | "psd" | "heic" | "heif" | "avif" | "jfif" | "xcf" | "exr" | "hdr" | "qoi"
+        | "jp2" | "j2k" | "jpx" | "jpf" | "jxl" | "jxr" | "hdp" | "wdp" | "icns" | "cur"
+        | "cr2" | "cr3" | "nef" | "arw" | "dng" | "raf" | "orf" | "rw2" | "srw" | "pef"
+        | "sr2" | "raw" | "pbm" | "pgm" | "ppm" | "pnm" | "pcx" | "wbmp" | "apng" | "dib"
+        | "sgi" => Imagen,
+        // ── Audio (todas las plataformas; incluye trackers y sin pérdida)
         "mp3" | "wav" | "ogg" | "flac" | "opus" | "m4a" | "aac" | "wma" | "mid" | "midi"
-        | "aiff" | "oga" | "xm" | "mod" | "it" | "s3m" => Audio,
-        // Vídeo
+        | "aiff" | "oga" | "xm" | "mod" | "it" | "s3m" | "aif" | "aifc" | "au" | "snd"
+        | "ape" | "wv" | "mpc" | "tta" | "dsf" | "dff" | "caf" | "voc" | "spx" | "amr"
+        | "ac3" | "dts" | "w64" | "bwf" | "ra" | "8svx" | "mka" | "xmf" => Audio,
+        // ── Vídeo
         "mp4" | "mkv" | "webm" | "avi" | "mov" | "flv" | "wmv" | "m4v" | "mpg" | "mpeg"
-        | "ogv" | "3gp" => Video,
-        // Ejecutables / bibliotecas
-        "exe" | "dll" | "so" | "dylib" | "sys" | "o" | "bin" | "elf" | "ko"
-        | "msi" | "app" | "out" => Ejecutable,
-        // Bytecode / máquinas virtuales
-        "class" | "jar" | "dex" | "pyc" | "pyo" | "wasm" | "luac" | "nro" | "nso" => Bytecode,
-        // Documentos
+        | "ogv" | "3gp" | "m2ts" | "mts" | "vob" | "ogm" | "rm" | "rmvb" | "asf" | "divx"
+        | "f4v" | "mxf" | "y4m" | "yuv" | "m2v" | "3g2" | "h264" | "h265" | "hevc" => Video,
+        // ── Ejecutables / bibliotecas (Windows, Linux, macOS, consolas)
+        "exe" | "dll" | "so" | "dylib" | "sys" | "o" | "bin" | "elf" | "ko" | "msi" | "app"
+        | "out" | "axf" | "efi" | "scr" | "com" | "drv" | "vxd" | "386" | "lib" | "rlib"
+        | "prx" | "self" | "rpx" | "dol" | "xex" | "appimage" | "bundle" => Ejecutable,
+        // ── Bytecode / máquinas virtuales
+        "class" | "jar" | "dex" | "pyc" | "pyo" | "wasm" | "luac" | "nro" | "nso" | "pyd"
+        | "beam" | "cmo" | "cmx" | "hi" | "rbc" | "swf" => Bytecode,
+        // ── Documentos
         "doc" | "docx" | "xls" | "xlsx" | "ppt" | "pptx" | "odt" | "ods" | "odp" | "rtf"
-        | "epub" | "mobi" | "djvu" | "pages" | "pdf" => Documento,
-        // Código fuente / scripts
+        | "epub" | "mobi" | "djvu" | "pages" | "pdf" | "odg" | "odf" | "fodt" | "fods"
+        | "fodp" | "wpd" | "wps" | "pub" | "vsd" | "vsdx" | "one" | "tex" | "ps" | "eps"
+        | "xps" | "oxps" | "fb2" | "azw" | "azw3" | "cbz" | "cbr" | "cb7" | "chm" | "hlp"
+        | "numbers" | "docm" | "dotx" | "dotm" | "xlsm" | "xlsb" | "xltx" | "pptm" | "potx"
+        | "ppsx" => Documento,
+        // ── Código fuente / scripts (multiplataforma; muchos lenguajes)
         "c" | "h" | "cpp" | "cc" | "cxx" | "hpp" | "rs" | "go" | "py" | "js" | "mjs" | "ts"
-        | "tsx" | "jsx" | "java" | "kt" | "swift" | "rb" | "php" | "pl" | "lua" | "sh"
-        | "bash" | "zsh" | "ps1" | "bat" | "cmd" | "cs" | "vb" | "scala" | "clj" | "hs"
-        | "ml" | "r" | "sql" | "asm" | "s" | "html" | "htm" | "css" | "scss" | "vue"
-        | "glsl" | "vert" | "frag" | "hlsl" | "shader" | "cmake" | "gradle" | "dockerfile" => Codigo,
-        // Comprimidos / paquetes
+        | "tsx" | "jsx" | "java" | "kt" | "kts" | "swift" | "rb" | "php" | "pl" | "lua"
+        | "sh" | "bash" | "zsh" | "fish" | "nu" | "ps1" | "psm1" | "bat" | "cmd" | "vbs"
+        | "wsf" | "ahk" | "cs" | "vb" | "scala" | "clj" | "hs" | "ml" | "mli" | "r" | "sql"
+        | "asm" | "s" | "html" | "htm" | "css" | "scss" | "sass" | "less" | "styl" | "vue"
+        | "svelte" | "astro" | "coffee" | "pug" | "jade" | "ejs" | "hbs" | "twig" | "glsl"
+        | "vert" | "frag" | "hlsl" | "shader" | "gdshader" | "wgsl" | "metal" | "cl" | "cu"
+        | "cuh" | "cmake" | "gradle" | "dockerfile" | "inl" | "ipp" | "hh" | "hxx" | "m"
+        | "mm" | "d" | "nim" | "zig" | "cr" | "ex" | "exs" | "erl" | "elm" | "fs" | "fsx"
+        | "fsi" | "jl" | "dart" | "groovy" | "gvy" | "tcl" | "awk" | "sol" | "cairo" | "move"
+        | "v" | "sv" | "vhdl" | "thrift" | "capnp" | "graphql" | "gql" | "prisma" | "tf"
+        | "hcl" | "nix" | "dhall" | "jsonnet" | "bzl" | "mk" | "ninja" | "meson" | "vcxproj"
+        | "sln" | "csproj" | "pbxproj" | "xcconfig" | "podspec" | "gemspec" | "rake"
+        | "cabal" | "gd" | "gyp" | "cjs" | "cts" => Codigo,
+        // ── Comprimidos / paquetes / imágenes de disco (todas las plataformas)
         "zip" | "gz" | "tgz" | "bz2" | "tbz2" | "xz" | "txz" | "7z" | "rar" | "tar" | "lz"
         | "lzma" | "zst" | "cab" | "arj" | "deb" | "rpm" | "apk" | "ipa" | "whl" | "iso"
-        | "dmg" | "lha" => Comprimido,
-        // Recursos de juego / 3D / motores
-        "obj" | "fbx" | "gltf" | "glb" | "dae" | "3ds" | "blend" | "stl" | "ply" | "md5"
-        | "pak" | "pk3" | "pk4" | "vpk" | "wad" | "bsp" | "unity3d" | "assets" | "resource"
-        | "uasset" | "upk" | "umap" | "rpa" | "xnb" | "gma" | "nbt" | "mca" | "mcr"
-        | "schematic" | "blocky" | "vox" | "bdae" | "mdl" | "nif" | "esp" | "esm" | "ba2"
-        | "bsa" | "sav" | "dat" | "pck" | "love" | "gb" | "gba" | "nes" | "smc" | "sfc"
-        | "z64" | "nds" | "iso9660" => RecursoJuego,
-        // Datos / configuración / bases de datos
+        | "dmg" | "lha" | "lz4" | "lzo" | "lrz" | "br" | "z" | "taz" | "tlz" | "tzst"
+        | "cpio" | "cpgz" | "sit" | "sitx" | "hqx" | "sea" | "pax" | "shar" | "wim" | "swm"
+        | "esd" | "squashfs" | "sfs" | "zpaq" | "zoo" | "lzh" | "img" | "vhd" | "vhdx"
+        | "vmdk" | "vdi" | "qcow" | "qcow2" | "toast" | "mdf" | "nrg" | "xar" | "pkg" | "pet"
+        | "pup" | "snap" | "flatpak" | "appx" | "appxbundle" | "msix" | "msixbundle" | "crx"
+        | "xpi" | "vsix" | "nupkg" | "gem" | "egg" | "war" | "ear" | "jmod" | "aar" | "aab"
+        | "obb" | "xapk" | "apks" => Comprimido,
+        // ── Recursos de juego / 3D / motores / ROMs (genérico, sin marca)
+        "dds" | "ktx" | "ktx2" | "astc" | "pvr" | "basis" | "obj" | "fbx" | "gltf" | "glb"
+        | "dae" | "3ds" | "blend" | "stl" | "ply" | "md5" | "pak" | "pk3" | "pk4" | "vpk"
+        | "wad" | "bsp" | "unity3d" | "assets" | "resource" | "uasset" | "upk" | "umap"
+        | "rpa" | "xnb" | "gma" | "nbt" | "mca" | "mcr" | "schematic" | "blocky" | "vox"
+        | "bdae" | "mdl" | "nif" | "esp" | "esm" | "ba2" | "bsa" | "sav" | "dat" | "pck"
+        | "love" | "gb" | "gba" | "nes" | "smc" | "sfc" | "z64" | "nds" | "iso9660" | "usd"
+        | "usda" | "usdc" | "usdz" | "vrm" | "vmd" | "pmx" | "pmd" | "mmd" | "ms3d" | "smd"
+        | "vta" | "qc" | "vtx" | "vvd" | "phy" | "max" | "ma" | "mb" | "c4d" | "lwo" | "lws"
+        | "hip" | "spp" | "sbsar" | "sbs" | "ztl" | "zpr" | "tscn" | "tres" | "gdns"
+        | "prefab" | "anim" | "controller" | "meta" | "shadergraph" | "cginc" | "compute"
+        | "spv" | "spirv" | "vtf" | "vmt" | "wem" | "bnk" | "fsb" | "bank" | "xwb" | "xsb"
+        | "acb" | "awb" | "hca" | "at9" | "vag" | "brstm" | "bfstm" | "bcstm" | "nus3bank"
+        | "rpf" | "ydr" | "ytd" | "yft" | "ymap" | "ybn" | "big" | "vol" | "grp" | "rff"
+        | "art" | "kvx" | "voxel" | "qb" | "qbt" | "vxl" | "kv6" | "schem" | "litematic"
+        | "mcstructure" | "mcworld" | "mcpack" | "mcaddon" | "mctemplate" | "mcmeta"
+        | "region" | "datapack" | "cia" | "cci" | "nsp" | "xci" | "nca" | "wbfs" | "wia"
+        | "rvz" | "gcm" | "ciso" | "chd" | "cso" | "pbp" | "v64" | "n64" | "gg" | "sms"
+        | "pce" | "ngp" | "a26" | "a78" | "lnx" | "d64" | "adf" | "dsk" | "fds" | "gbc"
+        | "rom" | "gen" | "32x" | "umx" | "abc" => RecursoJuego,
+        // ── Datos / configuración / BBDD / certificados / modelos IA / fuentes
         "json" | "xml" | "yaml" | "yml" | "toml" | "ini" | "cfg" | "conf" | "csv" | "tsv"
-        | "db" | "sqlite" | "sqlite3" | "mdb" | "plist" | "proto" | "pb" | "msgpack"
-        | "bson" | "parquet" | "avro" | "pem" | "crt" | "cer" | "key" | "der" | "pfx"
-        | "p12" | "ttf" | "otf" | "woff" | "woff2" | "eot" => Datos,
-        // Texto
-        "txt" | "md" | "log" | "text" | "nfo" | "me" | "readme" | "rst" | "asc" => Texto,
+        | "db" | "sqlite" | "sqlite3" | "mdb" | "accdb" | "plist" | "proto" | "pb"
+        | "msgpack" | "bson" | "parquet" | "avro" | "orc" | "feather" | "arrow" | "pem"
+        | "crt" | "cer" | "key" | "der" | "pfx" | "p12" | "csr" | "p7b" | "p7c" | "p8"
+        | "jks" | "keystore" | "gpg" | "ovpn" | "kdbx" | "ttf" | "otf" | "woff" | "woff2"
+        | "eot" | "ttc" | "pfb" | "pfa" | "fon" | "fnt" | "bdf" | "pcf" | "dfont" | "sfd"
+        | "pfm" | "env" | "properties" | "editorconfig" | "lock" | "resx" | "har" | "etl"
+        | "evtx" | "reg" | "pcap" | "pcapng" | "cap" | "pdml" | "h5" | "hdf5" | "nc" | "cdf"
+        | "mat" | "npy" | "npz" | "pkl" | "pickle" | "joblib" | "gguf" | "ggml"
+        | "safetensors" | "onnx" | "pt" | "pth" | "ckpt" | "tflite" | "mlmodel"
+        | "caffemodel" | "ndjson" | "jsonl" | "geojson" | "topojson" | "ldb" | "sst"
+        | "realm" | "dbf" | "frm" | "myd" | "myi" | "ibd" | "wal" | "shm" => Datos,
+        // ── Texto llano / subtítulos / notas
+        "txt" | "md" | "log" | "text" | "nfo" | "me" | "readme" | "rst" | "asc" | "markdown"
+        | "mkd" | "mdown" | "textile" | "adoc" | "asciidoc" | "org" | "wiki" | "srt" | "vtt"
+        | "sub" | "ass" | "ssa" | "sbv" | "lrc" | "diff" | "patch" | "po" | "ics" | "vcf"
+        | "man" | "info" => Texto,
         _ => return None,
     };
     Some(c)
