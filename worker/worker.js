@@ -80,17 +80,17 @@ function edicionDesde(session) {
 }
 
 function emailHtml(token, edicion) {
-  return `<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto;color:#1a1b1f">
-    <h2 style="font-family:Georgia,serif">Your CAPAS ${edicion === 'studio' ? 'Studio' : 'Pro'} license</h2>
-    <p>Thanks for your purchase. Here is your license key:</p>
+  const ed = edicion === 'studio' ? 'Studio' : 'Pro';
+  return `<div style="font-family:system-ui,sans-serif;max-width:580px;margin:0 auto;color:#1a1b1f">
+    <h2 style="font-family:Georgia,serif">Your CAPAS ${ed} license · Tu licencia CAPAS ${ed}</h2>
+    <p><b>Thanks for your purchase!</b> Two quick steps:</p>
+    <p><b>1.</b> Download CAPAS (free): <a href="https://capas.dev">capas.dev</a> → <b>Download</b></p>
+    <p><b>2.</b> Activate with your license key:</p>
     <pre style="background:#f1f1f4;border:1px solid #e4e4ea;padding:12px;font-size:13px;white-space:pre-wrap;word-break:break-all">${token}</pre>
-    <p><b>How to activate (any one):</b></p>
-    <ul>
-      <li>Open CAPAS → <b>Parameters</b> → <b>Activate with key</b> → paste the key.</li>
-      <li>Or save it as a file named <code>capas.lic</code> next to <code>capas.exe</code>.</li>
-      <li>Or run: <code>capas.exe --licencia-clave &lt;key&gt;</code></li>
-    </ul>
-    <p style="color:#73767f;font-size:13px">It works offline — no account needed. Keep this email to re-activate on another machine.</p>
+    <p>In CAPAS open <b>Parameters</b> → <b>Activate with key</b> and paste it. (Or save it in a file named <code>capas.lic</code> next to <code>capas.exe</code>.)</p>
+    <p style="color:#73767f;font-size:13px">It works offline — no account needed. Keep this email to re-activate on another computer.</p>
+    <hr style="border:none;border-top:1px solid #e4e4ea;margin:18px 0">
+    <p style="color:#555"><b>Español:</b> ¡Gracias por tu compra! <b>1.</b> Descarga CAPAS (gratis) en <a href="https://capas.dev">capas.dev</a> → <b>Download</b>. <b>2.</b> Ábrelo → <b>Parámetros</b> → <b>Activar con clave</b> y pega la clave de arriba (o guárdala en un archivo <code>capas.lic</code> junto a <code>capas.exe</code>). Funciona sin conexión; guarda este email para reactivar en otro equipo.</p>
     <hr style="border:none;border-top:1px solid #e4e4ea">
     <p style="color:#73767f;font-size:12px">CAPAS · capas.dev</p>
   </div>`;
