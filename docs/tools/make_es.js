@@ -26,8 +26,11 @@ const OUT = path.join(OUT_DIR, 'index.html');
     document.documentElement.setAttribute('lang', 'es');
     document.querySelectorAll('[data-es]').forEach(e => { e.textContent = e.getAttribute('data-es'); });
     document.querySelectorAll('[data-es-html]').forEach(e => { e.innerHTML = e.getAttribute('data-es-html'); });
-    // rutas relativas suben un nivel desde /es/
-    const img = document.querySelector('.appshot img'); if (img) img.setAttribute('src', '../capas-app.png');
+    // rutas relativas suben un nivel desde /es/ (todas las imágenes y el favicon)
+    document.querySelectorAll('img').forEach((im) => {
+      const s = im.getAttribute('src');
+      if (s && !/^(https?:)?\/\//.test(s) && !s.startsWith('../')) im.setAttribute('src', '../' + s);
+    });
     const fav = document.querySelector('link[rel="icon"]'); if (fav) fav.setAttribute('href', '../favicon.svg');
     // head en español + canonical /es/
     document.title = 'CAPAS — Decompilador de archivos por capas';

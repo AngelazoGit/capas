@@ -263,6 +263,10 @@ footer a:hover{color:var(--ink)}
       <h2 data-es="Un archivo son capas. Las lee todas.">A file is layers. It reads all of them.</h2>
       <p data-es="Cada bloque pasa por los mismos cuatro pasos; los hijos se procesan en cuanto aparecen, en paralelo, deduplicados por SHA-256.">Each block runs the same four steps; children run the moment they appear, in parallel, deduplicated by SHA-256.</p>
     </div>
+    <figure class="appshot" style="max-width:640px;margin:0 0 1.8rem">
+      <div class="chrome"><span class="d"></span><span class="d"></span><span class="d"></span><span class="lbl mono" data-es="capas — árbol de capas (ejemplo)">capas — layer tree (example)</span></div>
+      <img src="capas_demo.gif" alt="Animation: CAPAS peeling a package open layer by layer with confidence levels and an audit verdict" loading="lazy" width="760" height="424">
+    </figure>
     <div class="pipe">
       <div class="pstep"><div class="n" data-es="01 — IDENTIFICAR">01 — IDENTIFY</div><h3 data-es="Por contenido">By content</h3><p data-es="Lee el formato por los bytes mágicos, nunca por el nombre del archivo.">Reads the format from the magic bytes, never from the file name.</p></div>
       <div class="pstep"><div class="n" data-es="02 — ANALIZAR">02 — ANALYZE</div><h3 data-es="Desármalo">Pull it apart</h3><p data-es="Cabeceras, símbolos, desensamblado, bytecode, cadenas y entropía.">Headers, symbols, disassembly, bytecode, strings and entropy.</p></div>
