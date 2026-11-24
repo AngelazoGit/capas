@@ -63,11 +63,20 @@ async function verificarStripe(secret, header, cuerpo) {
   try { return await subtle.verify('HMAC', key, hexToBytes(p.v1), enc(`${p.t}.${cuerpo}`)); } catch { return false; }
 }
 
+// Importe total en céntimos, robusto ante versiones antiguas de la API de Stripe
+// (amount_total moderno, display_items antiguo, o line_items si viene expandido).
+function importeDe(s) {
+  if (typeof s?.amount_total === 'number') return s.amount_total;
+  if (Array.isArray(s?.display_items)) return s.display_items.reduce((a, it) => a + (Number(it.amount) || 0) * (Number(it.quantity) || 1), 0);
+  if (Array.isArray(s?.line_items?.data)) return s.line_items.data.reduce((a, it) => a + (Number(it.amount_total) || 0), 0);
+  return 0;
+}
+
 function edicionDesde(session) {
-  // Preferimos metadata.edition del Payment Link; si no, por el importe (2900=Pro, 7900=Studio).
+  // Preferimos metadata.edition del Payment Link; si no, por el importe (>=50$ → Studio).
   const m = (session?.metadata?.edition || '').toLowerCase();
   if (m === 'studio' || m === 'pro') return m;
-  return Number(session?.amount_total) >= 5000 ? 'studio' : 'pro';
+  return importeDe(session) >= 5000 ? 'studio' : 'pro';
 }
 
 function emailHtml(token, edicion) {
