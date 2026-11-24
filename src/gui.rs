@@ -271,6 +271,8 @@ pub struct App {
     tema: u8,
     // Módulo de claves (interfaz).
     clave_entrada: String,
+    clave_lic: String,
+    lic_estado: Option<String>,
     usar_comunes: bool,
     diccionario: Option<PathBuf>,
     fuerza_bruta: bool,
@@ -346,6 +348,8 @@ impl App {
             auto_iniciar: false,
             tema: 3,
             clave_entrada: String::new(),
+            clave_lic: String::new(),
+            lic_estado: None,
             usar_comunes: false,
             diccionario: None,
             fuerza_bruta: false,
@@ -803,6 +807,29 @@ impl App {
                             ui.selectable_value(&mut idi, 1u8, "Español");
                         });
                     crate::idioma::set_es(idi == 1);
+
+                    ui.separator();
+                    let ed = crate::edicion::actual();
+                    ui.label(RichText::new(tfmt(tr("EDITION: CAPAS {}", "EDICIÓN: CAPAS {}"), &[ed.nombre().to_string()])).font(mono(10.0)).color(morado_claro()));
+                    if ed == crate::edicion::Edicion::Core {
+                        ui.label(RichText::new(tr("ACTIVATE WITH KEY (paste CAPAS-...):", "ACTIVAR CON CLAVE (pega CAPAS-...):")).font(mono(10.0)).color(morado_claro()));
+                        ui.horizontal(|ui| {
+                            ui.add(egui::TextEdit::singleline(&mut self.clave_lic).font(mono(11.0)).desired_width(240.0).hint_text("CAPAS-..."));
+                            if ui.add(boton(tr("ACTIVATE", "ACTIVAR"), verde())).clicked() {
+                                match crate::licencia::verificar_clave(self.clave_lic.trim()) {
+                                    Ok(e) => {
+                                        crate::edicion::set(e);
+                                        self.lic_estado = Some(tfmt(tr("Activated: CAPAS {}", "Activado: CAPAS {}"), &[e.nombre().to_string()]));
+                                    }
+                                    Err(m) => self.lic_estado = Some(tfmt(tr("Rejected: {}", "Rechazada: {}"), &[m])),
+                                }
+                            }
+                        });
+                    }
+                    if let Some(msg) = &self.lic_estado {
+                        let col = if crate::edicion::actual() == crate::edicion::Edicion::Core { rojo() } else { verde() };
+                        ui.label(RichText::new(msg).font(mono(10.0)).color(col));
+                    }
                 });
             });
 

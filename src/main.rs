@@ -227,6 +227,18 @@ struct Args {
     #[arg(long, value_name = "FILE")]
     licencia: Option<PathBuf>,
 
+    /// Activate with a pasted key (CAPAS-...); also CAPAS_CLAVE
+    #[arg(long, value_name = "KEY")]
+    licencia_clave: Option<String>,
+
+    /// [Vendor] Sign a BATCH of compact keys (--clave-privada, --edicion, --cantidad, --dias)
+    #[arg(long)]
+    firmar_lote: bool,
+
+    /// [Vendor] How many keys to sign with --firmar-lote
+    #[arg(long, default_value_t = 1)]
+    cantidad: u64,
+
     /// [Vendor] Generate an Ed25519 key pair in this folder and exit
     #[arg(long, value_name = "DIR")]
     generar_clave: Option<PathBuf>,
@@ -322,9 +334,29 @@ fn main() -> Result<()> {
         }
         return Ok(());
     }
+    // [Vendedor] Firmar un LOTE de claves compactas (una por línea a stdout).
+    if a.firmar_lote {
+        let priv_file = a.clave_privada.as_ref().ok_or_else(|| anyhow::anyhow!("falta --clave-privada"))?;
+        let priv_hex = std::fs::read_to_string(priv_file)?;
+        let ed = a.edicion.as_deref().unwrap_or("pro");
+        match licencia::firmar_lote(priv_hex.trim(), ed, a.cantidad, a.dias) {
+            Ok(claves) => {
+                for c in &claves {
+                    println!("{c}");
+                }
+                eprintln!("{}", idioma::tfmt(idioma::tr("{} key(s) signed (edition {}).", "{} clave(s) firmadas (edición {})."), &[claves.len().to_string(), ed.to_string()]));
+            }
+            Err(e) => {
+                eprintln!("firmar-lote: {e}");
+                std::process::exit(1);
+            }
+        }
+        return Ok(());
+    }
 
     edicion::resolver(a.edicion.as_deref());
     licencia::aplicar(a.licencia.clone());
+    licencia::aplicar_clave(a.licencia_clave.clone());
     let sis = Sistema::detectar();
 
     // [Studio] API local de solo lectura sobre el índice.
