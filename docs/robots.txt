@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://angelazogit.github.io/capas/sitemap.xml
