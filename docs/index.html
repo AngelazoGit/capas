@@ -404,7 +404,7 @@ footer a:hover{color:var(--ink)}
   if(lb)lb.addEventListener("click",function(){ lang=lang==="es"?"en":"es"; try{localStorage.setItem(LK,lang);}catch(e){} applyLang(lang); });
 
   // Buy links — replace with your Lemon Squeezy / Polar product URLs.
-  var BUY={pro:"https://github.com/AngelazoGit/capas",studio:"https://github.com/AngelazoGit/capas"};
+  var BUY={pro:"https://buy.stripe.com/00w9AT8CqgKldPi6sJd3i00",studio:"https://buy.stripe.com/28EaEX6uifGh7qUcR7d3i01"};
   document.querySelectorAll("[data-buy]").forEach(function(a){var u=BUY[a.getAttribute("data-buy")];if(u)a.setAttribute("href",u);});
 }());
 </script>
