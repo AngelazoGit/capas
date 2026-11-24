@@ -20,7 +20,7 @@ use crate::idioma::{tfmt, tr};
 /// vender, ejecuta `capas --generar-clave <dir>`, pega aquí el valor PUBLICA_HEX
 /// que imprime y recompila. Guarda la clave privada en secreto (nunca al repo):
 /// con ella firmas las licencias de tus clientes con `capas --firmar-licencia`.
-const PUBLICA_HEX: &str = "0000000000000000000000000000000000000000000000000000000000000000";
+const PUBLICA_HEX: &str = "8f979be75c8838cdb9e0047c1c6ccc255a5e50c3ccb47524df7bab98db2f0a91";
 
 #[derive(Serialize, Deserialize)]
 pub struct Licencia {
