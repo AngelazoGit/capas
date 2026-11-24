@@ -52,18 +52,22 @@ async function firmarClave(privHex, edicion, dias) {
   return 'CAPAS-' + b64url(payload);
 }
 
-async function verificarWebhook(secret, firmaHex, cuerpo) {
-  if (!firmaHex) return false;
+// Verifica la firma de un webhook de Stripe (cabecera Stripe-Signature: t=..,v1=..).
+async function verificarStripe(secret, header, cuerpo) {
+  if (!header) return false;
+  const p = {};
+  for (const kv of header.split(',')) { const i = kv.indexOf('='); if (i > 0) p[kv.slice(0, i).trim()] = kv.slice(i + 1).trim(); }
+  if (!p.t || !p.v1) return false;
+  if (Math.abs(Date.now() / 1000 - Number(p.t)) > 300) return false; // tolerancia 5 min
   const key = await subtle.importKey('raw', enc(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
-  try { return await subtle.verify('HMAC', key, hexToBytes(firmaHex), enc(cuerpo)); } catch { return false; }
+  try { return await subtle.verify('HMAC', key, hexToBytes(p.v1), enc(`${p.t}.${cuerpo}`)); } catch { return false; }
 }
 
-function edicionDesde(item, env) {
-  const vid = String(item?.variant_id ?? '');
-  if (env.STUDIO_VARIANT_ID && vid === String(env.STUDIO_VARIANT_ID)) return 'studio';
-  if (env.PRO_VARIANT_ID && vid === String(env.PRO_VARIANT_ID)) return 'pro';
-  const nombre = `${item?.variant_name ?? ''} ${item?.product_name ?? ''}`.toLowerCase();
-  return nombre.includes('studio') ? 'studio' : 'pro';
+function edicionDesde(session) {
+  // Preferimos metadata.edition del Payment Link; si no, por el importe (2900=Pro, 7900=Studio).
+  const m = (session?.metadata?.edition || '').toLowerCase();
+  if (m === 'studio' || m === 'pro') return m;
+  return Number(session?.amount_total) >= 5000 ? 'studio' : 'pro';
 }
 
 function emailHtml(token, edicion) {
@@ -112,26 +116,26 @@ export default {
     if (req.method !== 'POST') return new Response('method not allowed', { status: 405 });
 
     const raw = await req.text();
-    if (!(await verificarWebhook(env.LS_WEBHOOK_SECRET, req.headers.get('X-Signature'), raw))) {
+    const secreto = env.STRIPE_WEBHOOK_SECRET || env.LS_WEBHOOK_SECRET;
+    if (!(await verificarStripe(secreto, req.headers.get('Stripe-Signature'), raw))) {
       return new Response('bad signature', { status: 401 });
     }
 
     let body;
     try { body = JSON.parse(raw); } catch { return new Response('bad json', { status: 400 }); }
 
-    const evento = body?.meta?.event_name;
-    if (evento !== 'order_created') return new Response('ignored', { status: 200 });
+    if (body?.type !== 'checkout.session.completed') return new Response('ignored', { status: 200 });
 
-    const attr = body?.data?.attributes || {};
-    const orderId = String(body?.data?.id ?? attr.identifier ?? '');
-    const email = attr.user_email;
-    const item = attr.first_order_item || {};
+    const session = body?.data?.object || {};
+    const orderId = String(session.id ?? '');
+    const email = session.customer_details?.email || session.customer_email;
     if (!orderId || !email) return new Response('missing order/email', { status: 200 });
+    if (session.payment_status && session.payment_status !== 'paid') return new Response('unpaid', { status: 200 });
 
     const clave = `order:${orderId}`;
     let rec = await env.CAPAS_KEYS.get(clave, { type: 'json' });
     if (!rec) {
-      const edicion = edicionDesde(item, env);
+      const edicion = edicionDesde(session);
       const token = await firmarClave(env.CAPAS_PRIVATE_KEY, edicion, 0);
       rec = { token, edicion, email, ts: Date.now() };
       await env.CAPAS_KEYS.put(clave, JSON.stringify(rec));

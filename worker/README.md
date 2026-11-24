@@ -1,53 +1,43 @@
-# CAPAS — Worker de entrega automática de licencias
+# CAPAS — Worker de entrega automática de licencias (Stripe)
 
-Firma una clave única `CAPAS-...` por venta y la envía por email al comprador,
-al instante, sin que tú toques nada. Validado: la firma Ed25519 en WebCrypto es
-byte-compatible con la verificación del binario.
+Firma una clave única `CAPAS-...` por venta y la envía por email al comprador al
+instante. La firma Ed25519 (WebCrypto) es byte-compatible con la verificación del
+binario. Pensado para **Stripe** (Checkout / Payment Links / Managed Payments).
 
-Flujo:  Lemon Squeezy (venta) → webhook → este Worker (firma + email con Resend) → comprador.
+Flujo:  Stripe (venta) → webhook `checkout.session.completed` → este Worker (firma + email con Resend) → comprador.
 
-## Piezas y secretos
+## Piezas
 - **KV binding** `CAPAS_KEYS` (guarda la clave por pedido; idempotente).
-- **Secretos** (cifrados): 
-  - `CAPAS_PRIVATE_KEY` = tu clave privada (contenido de `capas_private.key`, 64 hex).
-    Debe ser la pareja de la pública incrustada en el .exe (`8f979b...`).
-  - `LS_WEBHOOK_SECRET` = el secreto de firma del webhook de Lemon Squeezy.
-  - `RESEND_API_KEY` = API key de Resend (para enviar el email).
-  - `ADMIN_SECRET` (opcional) = cualquier cadena aleatoria, para `/lookup`.
-- **Variables** (opcionales): `FROM_EMAIL` (por defecto `CAPAS <keys@capas.dev>`),
-  `STUDIO_VARIANT_ID`, `PRO_VARIANT_ID` (si prefieres mapear por ID en vez de por nombre).
+- **Secretos** (cifrados):
+  - `CAPAS_PRIVATE_KEY` = tu clave privada Ed25519 (64 hex). Pareja de la pública del .exe.
+  - `STRIPE_WEBHOOK_SECRET` = el "Signing secret" (`whsec_...`) que te da Stripe al crear el webhook.
+    (El Worker también acepta el valor en `LS_WEBHOOK_SECRET` por compatibilidad, así puedes
+    reutilizar ese mismo secreto cambiándole el valor al `whsec_...`.)
+  - `RESEND_API_KEY` = API key de Resend.
+  - `ADMIN_SECRET` (opcional) = para el endpoint de reenvío `/lookup`.
+- **Variables** (opcionales): `FROM_EMAIL` (por defecto `CAPAS <keys@capas.dev>`).
 
-## Paso 1 — Resend (envío de email)
-1. Crea cuenta en resend.com.
-2. **Add Domain** → `capas.dev`. Resend te da unos registros DNS (TXT/DKIM/MX).
-   Añádelos en Cloudflare → DNS de `capas.dev` (te los paso yo si quieres) → Verify.
-3. **API Keys → Create** → copia la clave (es `RESEND_API_KEY`).
+## Edición Pro vs Studio
+El Worker la decide así:
+1. Si el Payment Link lleva **metadata `edition` = `pro` o `studio`** → usa eso (recomendado).
+2. Si no, por el **importe**: `amount_total` ≥ 5000 (50 $) → Studio; si no → Pro.
 
-## Paso 2 — Cloudflare Worker
-1. **Workers & Pages → Create → Workers → Create Worker**. Nómbralo `capas-license` → Deploy.
-2. **Edit code**: borra el ejemplo, pega `worker.js` de esta carpeta → **Deploy**.
-3. Crea un KV: **Storage & Databases → KV → Create namespace** → `capas-keys`.
-4. En el Worker: **Settings → Bindings → Add → KV namespace**:
-   variable `CAPAS_KEYS` → namespace `capas-keys`.
-5. En el Worker: **Settings → Variables and Secrets** → añade como **Secret (Encrypt)**:
-   `CAPAS_PRIVATE_KEY`, `LS_WEBHOOK_SECRET`, `RESEND_API_KEY` (y `ADMIN_SECRET` si quieres).
-6. Copia la **URL del Worker** (`https://capas-license.<tu-subdominio>.workers.dev`).
-   (Opcional: en Settings → Domains & Routes, ponle `license.capas.dev`.)
+Al crear los Payment Links en Stripe, añade metadata `edition=pro` / `edition=studio`
+para que sea exacto aunque cambies precios.
 
-## Paso 3 — Webhook en Lemon Squeezy
-1. **Settings → Webhooks → Add webhook**.
-2. **Callback URL** = la URL del Worker.
-3. **Signing secret** = inventa una cadena aleatoria y pon ESA MISMA en el secreto
-   `LS_WEBHOOK_SECRET` del Worker.
-4. **Events**: marca **order_created**. Guarda.
-5. En los productos Pro/Studio: NO hace falta subir archivo; el Worker entrega la clave.
-
-## Paso 4 — Probar
-En modo test de Lemon Squeezy, haz una compra de prueba. En segundos debería
-llegar el email con la clave. Pégala en CAPAS → Parámetros → Activar con clave.
+## Despliegue (resumen)
+1. **Cloudflare Worker** `capas-license`: pega `worker.js`, crea KV `capas-keys` y
+   enlázalo como `CAPAS_KEYS`. Añade los secretos de arriba. Deploy.
+2. **Stripe → Developers → Webhooks → Add endpoint**:
+   - URL = la del Worker (`https://capas-license.<sub>.workers.dev`).
+   - Evento = **`checkout.session.completed`**.
+   - Copia el **Signing secret** (`whsec_...`) → ponlo en el secreto `STRIPE_WEBHOOK_SECRET`
+     del Worker (o reutiliza `LS_WEBHOOK_SECRET` con ese valor).
+3. **Stripe → Products**: crea CAPAS Pro (29 $) y CAPAS Studio (79 $), y un **Payment Link**
+   por producto, con metadata `edition=pro` / `edition=studio`. Esos enlaces son los botones de la web.
+4. **Probar**: compra de prueba en modo test → llega el email con la clave → se activa en CAPAS.
 
 ## Reenviar una clave (soporte)
-Si un cliente pierde el email: `GET /lookup?order=<ID>` con cabecera
-`Authorization: Bearer <ADMIN_SECRET>` devuelve la clave guardada.
+`GET /lookup?order=<session_id>` con cabecera `Authorization: Bearer <ADMIN_SECRET>`.
 
 > La clave privada vive SOLO como secreto del Worker; nunca en el repo ni en el chat.
