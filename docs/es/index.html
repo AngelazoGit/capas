@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="es"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CAPAS — Decompilador de archivos por capas</title>
+<meta name="description" content="Abre cualquier archivo y lee todas sus capas. CAPAS identifica por contenido, decompila, extrae cada capa y audita packs y mods — sin conexión, y nunca ejecuta lo que analiza. Núcleo gratis; Pro desempaqueta bundles de Unity y Godot.">
+<link rel="canonical" href="https://angelazogit.github.io/capas/es/">
+<meta name="theme-color" content="#2f8f52">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="CAPAS">
+<meta property="og:title" content="CAPAS — decompilador de archivos por capas">
+<meta property="og:description" content="Mira lo que hay de verdad dentro de cualquier archivo. Gratis, sin conexión, y nunca ejecuta lo que analiza.">
+<meta property="og:url" content="https://angelazogit.github.io/capas/es/">
+<meta property="og:image" content="https://angelazogit.github.io/capas/capas-app.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="CAPAS — decompilador de archivos por capas">
+<meta name="twitter:description" content="Abre cualquier archivo y lee todas sus capas. Sin conexión, núcleo gratis.">
+<meta name="twitter:image" content="https://angelazogit.github.io/capas/capas-app.png">
+<link rel="alternate" hreflang="en" href="https://angelazogit.github.io/capas/">
+<link rel="alternate" hreflang="es" href="https://angelazogit.github.io/capas/es/">
+<link rel="alternate" hreflang="x-default" href="https://angelazogit.github.io/capas/">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"CAPAS","applicationCategory":"DeveloperApplication","operatingSystem":"Windows, Linux, macOS","description":"Layered file decompiler and analyzer. Identifies files by content, decompiles them, extracts each layer, classifies with confidence levels and audits asset packs and mods.","author":{"@type":"Person","name":"@angelazo"},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"url":"https://angelazogit.github.io/capas/"}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;family=IBM+Plex+Sans:wght@400;500&amp;display=swap">
+<style>html,body{margin:0;padding:0}img{max-width:100%;height:auto}</style>
+<style>
+/* Mirrors the app's "Clean/Limpio" mask: white framed panels with numbered
+   badges, a slab-serif voice for titles, monospace for data, one green accent
+   with amber reserved for the mark and alerts. Square HUD edges. Light tokens
+   on :root are the exact app palette; dark is a neutral mirror. */
+:root{
+  --bg:#f5f5f7; --panel:#ffffff; --inset:#f1f1f4; --well:#eeeef1;
+  --border:#e4e4ea; --border-2:#bfbfc8;
+  --ink:#1a1b1f; --slate:#44474f; --faint:#73767f;
+  --green:#2f8f52; --green-ink:#1f6e3c; --green-wash:#d9ebdf;
+  --amber:#b07116; --amber-wash:#f1e2c7;
+  --red:#c23b2e; --blue:#2f5fae;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#131419; --panel:#1a1c22; --inset:#1f222a; --well:#23262f;
+  --border:#2a2d35; --border-2:#3a3e48;
+  --ink:#ececf0; --slate:#aeb2bb; --faint:#777c86;
+  --green:#6fc98a; --green-ink:#8ad89f; --green-wash:#1e2b23;
+  --amber:#dca45f; --amber-wash:#2a2318;
+  --red:#e08a7d; --blue:#7ea6e6;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#131419; --panel:#1a1c22; --inset:#1f222a; --well:#23262f;
+  --border:#2a2d35; --border-2:#3a3e48;
+  --ink:#ececf0; --slate:#aeb2bb; --faint:#777c86;
+  --green:#6fc98a; --green-ink:#8ad89f; --green-wash:#1e2b23;
+  --amber:#dca45f; --amber-wash:#2a2318;
+  --red:#e08a7d; --blue:#7ea6e6;
+  color-scheme:dark;
+}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.6}
+h1,h2,h3,.slab{font-family:"Zilla Slab","IBM Plex Sans",Georgia,serif;margin:0;line-height:1.1}
+p{margin:0}
+a{color:inherit}
+.mono{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace}
+.wrap{width:100%;max-width:1180px;margin-inline:auto;padding-left:max(22px,env(safe-area-inset-left,0px));padding-right:max(22px,env(safe-area-inset-right,0px))}
+
+.panel{background:var(--panel);border:1px solid var(--border);min-width:0}
+.phead{display:flex;align-items:center;gap:.55rem;padding:.55rem .7rem;border-bottom:1px solid var(--border)}
+.badge{font-family:"IBM Plex Mono",monospace;font-size:.66rem;font-weight:600;letter-spacing:.04em;background:var(--green);color:#fff;padding:.12rem .34rem}
+.badge.am{background:var(--amber)}
+.phead h3,.phead .t{font-family:"Zilla Slab",serif;font-weight:700;text-transform:uppercase;font-size:.9rem;letter-spacing:.02em;color:var(--ink)}
+.phead .rule{flex:1;height:1px;background:var(--border)}
+.kick{font-family:"IBM Plex Mono",monospace;font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;color:var(--green-ink)}
+
+header.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--border-2)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:21;background:var(--bg)}
+.bar .wrap{display:flex;align-items:center;gap:.85rem;padding-block:.5rem}
+.wordmark{display:flex;align-items:center;gap:.5rem}
+.wordmark svg{width:26px;height:26px;flex:none}
+.wordmark .nm{font-family:"Zilla Slab",serif;font-weight:700;font-size:1.5rem;letter-spacing:.04em;color:var(--amber);line-height:1}
+.wordmark .st{font-family:"IBM Plex Mono",monospace;font-size:.6rem;color:var(--green-ink);letter-spacing:.06em;display:none}
+@media(min-width:760px){.wordmark .st{display:block}}
+.bar nav{margin-left:auto;display:flex;gap:.9rem;align-items:center}
+.bar nav a.nl{font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--slate);text-decoration:none;letter-spacing:.03em}
+.bar nav a.nl:hover{color:var(--ink)}
+.nl{display:none}
+@media(min-width:880px){.nl{display:inline}}
+.tbtn{background:none;border:1px solid var(--border-2);color:var(--slate);height:30px;padding:0 .5rem;min-width:30px;cursor:pointer;font-family:"IBM Plex Mono",monospace;font-size:.72rem;display:inline-flex;align-items:center;justify-content:center;gap:.15rem}
+.tbtn:hover{color:var(--ink);border-color:var(--green)}
+.lang span{color:var(--faint)}
+.lang span.on{color:var(--green-ink);font-weight:600}
+
+.btn{display:inline-flex;align-items:center;gap:.4rem;font-family:"IBM Plex Mono",monospace;font-weight:600;font-size:.82rem;letter-spacing:.03em;text-transform:uppercase;padding:.55rem .9rem;text-decoration:none;border:1px solid var(--green);cursor:pointer;background:transparent;color:var(--green-ink)}
+.btn:hover{background:var(--green-wash)}
+.btn-pri{background:var(--green);color:#fff;border-color:var(--green)}
+.btn-pri:hover{background:var(--green-ink);color:#fff}
+.btn-am{border-color:var(--border-2);color:var(--slate)}
+.btn-am:hover{background:var(--inset);color:var(--ink)}
+.btn-sm{padding:.4rem .7rem;font-size:.74rem}
+
+.hero{padding-block:clamp(2.2rem,4.5vw,3.4rem)}
+.hero .wrap{display:grid;gap:2.2rem;align-items:center}
+@media(min-width:940px){.hero .wrap{grid-template-columns:.92fr 1.08fr}}
+.hero h1{font-family:"Zilla Slab",serif;font-weight:700;font-size:clamp(2rem,4.6vw,3.1rem);letter-spacing:-.01em;text-wrap:balance}
+.hero .sub{color:var(--slate);font-size:1.04rem;margin-top:1rem;max-width:42ch}
+.cta{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:1.4rem}
+.status{margin-top:1.3rem;display:flex;flex-wrap:wrap;gap:.45rem;font-family:"IBM Plex Mono",monospace;font-size:.7rem}
+.status span{border:1px solid var(--border);padding:.2rem .5rem;color:var(--slate);background:var(--panel)}
+.status span b{color:var(--green-ink);font-weight:600}
+
+/* App screenshot in a window frame */
+.appshot{margin:0;border:1px solid var(--border-2);background:var(--panel);box-shadow:0 1px 0 var(--border),0 16px 40px rgba(20,20,30,.1)}
+.appshot .chrome{display:flex;align-items:center;gap:.4rem;padding:.5rem .65rem;border-bottom:1px solid var(--border);background:var(--inset)}
+.appshot .chrome .d{width:9px;height:9px;border-radius:50%;background:var(--border-2)}
+.appshot .chrome .lbl{margin-left:.5rem;font-size:.68rem;color:var(--faint)}
+.appshot img{display:block;width:100%;height:auto}
+.appcap{margin-top:.6rem;font-family:"IBM Plex Mono",monospace;font-size:.68rem;color:var(--faint);text-align:right}
+
+section{padding-block:clamp(2.2rem,4vw,3.4rem)}
+.band{background:var(--inset);border-block:1px solid var(--border)}
+.lead{margin-bottom:1.8rem;max-width:56ch}
+.lead h2{font-family:"Zilla Slab",serif;font-weight:700;font-size:clamp(1.5rem,3vw,2.1rem);margin-top:.5rem}
+.lead p{color:var(--slate);margin-top:.5rem}
+
+.grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(252px,1fr))}
+.fp .body{padding:.9rem .9rem 1rem}
+.fp .body p{color:var(--slate);font-size:.9rem;margin-top:.35rem}
+.fp .ti{font-family:"Zilla Slab",serif;font-weight:600;font-size:1rem;text-transform:uppercase;letter-spacing:.01em;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.pro{font-family:"IBM Plex Mono",monospace;font-size:.58rem;letter-spacing:.1em;text-transform:uppercase;color:var(--amber);border:1px solid var(--amber);padding:.04rem .3rem}
+
+.pipe{display:grid;grid-template-columns:1fr;border:1px solid var(--border);background:var(--panel)}
+@media(min-width:760px){.pipe{grid-template-columns:repeat(4,1fr)}}
+.pstep{padding:1.1rem 1rem;border-bottom:1px solid var(--border)}
+@media(min-width:760px){.pstep{border-bottom:none;border-right:1px solid var(--border)}.pstep:last-child{border-right:none}}
+.pstep .n{font-family:"IBM Plex Mono",monospace;font-size:.68rem;color:var(--green-ink);font-weight:600;letter-spacing:.06em}
+.pstep h3{font-family:"Zilla Slab",serif;font-weight:700;text-transform:uppercase;font-size:.95rem;margin-top:.45rem}
+.pstep p{color:var(--slate);font-size:.86rem;margin-top:.3rem}
+
+.who{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(238px,1fr))}
+.who .body{padding:.9rem}
+.who .body p{color:var(--slate);font-size:.9rem;margin-top:.5rem}
+
+.price{display:grid;grid-template-columns:1fr;border:1px solid var(--border-2);background:var(--panel)}
+@media(min-width:820px){.price{grid-template-columns:repeat(3,1fr)}}
+.pt{padding:1.4rem 1.2rem;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:.9rem}
+@media(min-width:820px){.pt{border-bottom:none;border-right:1px solid var(--border)}.pt:last-child{border-right:none}}
+.pt.mark{box-shadow:inset 0 3px 0 var(--green)}
+.pt .pn{display:flex;align-items:baseline;justify-content:space-between;gap:.5rem}
+.pt .pn .nm{font-family:"IBM Plex Mono",monospace;font-weight:600;letter-spacing:.06em;text-transform:uppercase;font-size:.82rem}
+.pt .pn .best{font-family:"IBM Plex Mono",monospace;font-size:.6rem;color:var(--green-ink);letter-spacing:.06em;text-transform:uppercase}
+.pt .cost{font-family:"Zilla Slab",serif;font-weight:700;font-size:1.9rem;display:flex;align-items:baseline;gap:.3rem}
+.pt .cost small{font-family:"IBM Plex Mono",monospace;font-size:.68rem;font-weight:400;color:var(--faint)}
+.pt .who2{font-size:.82rem;color:var(--faint);margin-top:-.35rem}
+.pt ul{list-style:none;margin:0;padding:0;display:grid;gap:.45rem}
+.pt li{font-family:"IBM Plex Mono",monospace;font-size:.8rem;color:var(--slate);display:grid;grid-template-columns:auto 1fr;gap:.45rem}
+.pt li .ck{color:var(--green)}
+.pt .btn{margin-top:auto;justify-content:center}
+.pnote{margin-top:1rem;font-family:"IBM Plex Mono",monospace;font-size:.76rem;color:var(--slate)}
+.pnote b{color:var(--amber)}
+
+.faq{display:grid;gap:.5rem;max-width:760px}
+details{border:1px solid var(--border);background:var(--panel)}
+summary{cursor:pointer;font-family:"Zilla Slab",serif;font-weight:600;padding:.8rem .9rem;list-style:none;display:flex;justify-content:space-between;gap:1rem;font-size:.98rem}
+summary::-webkit-details-marker{display:none}
+summary::after{content:"+";color:var(--green);font-family:"IBM Plex Mono",monospace}
+details[open] summary::after{content:"\2212"}
+details div{padding:0 .9rem .85rem;color:var(--slate);font-size:.89rem}
+
+.log{background:var(--panel);border:1px solid var(--border);font-family:"IBM Plex Mono",monospace}
+.log .lh{display:flex;align-items:center;gap:.5rem;padding:.5rem .7rem;border-bottom:1px solid var(--border)}
+.log .lh .gt{color:var(--green);font-weight:600}
+.log .lh .t{font-family:"Zilla Slab",serif;font-weight:700;text-transform:uppercase;font-size:.85rem;letter-spacing:.02em}
+.log .lines{padding:.8rem .7rem;font-size:.78rem;color:var(--slate);display:grid;gap:.3rem}
+.log .lines b{color:var(--green-ink)}
+.log .cta{display:flex;flex-wrap:wrap;gap:.6rem;padding:0 .7rem .9rem}
+
+footer{border-top:1px solid var(--border);padding-block:1.6rem;color:var(--faint);font-size:.8rem;font-family:"IBM Plex Mono",monospace}
+footer .wrap{display:flex;flex-wrap:wrap;gap:1rem;justify-content:space-between}
+footer a{color:var(--slate);text-decoration:none}
+footer a:hover{color:var(--ink)}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+</style>
+
+</head><body><header class="bar">
+  <div class="wrap">
+    <span class="wordmark">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,3 28,10 28,22 16,29 4,22 4,10" fill="none" stroke="var(--amber)" stroke-width="2"></polygon><polygon points="16,9 23,13 23,19 16,23 9,19 9,13" fill="none" stroke="var(--green)" stroke-width="2"></polygon><circle cx="16" cy="16" r="2.4" fill="var(--green)"></circle></svg>
+      <span>
+        <span class="nm">CAPAS</span>
+        <span class="st" data-es="SISTEMA DE DESCOMPOSICIÓN POR CAPAS · OPERADOR @angelazo" data-en="LAYERED DECOMPOSITION SYSTEM · OPERATOR @angelazo">SISTEMA DE DESCOMPOSICIÓN POR CAPAS · OPERADOR @angelazo</span>
+      </span>
+    </span>
+    <nav>
+      <a class="nl" href="#caps" data-es="CAPACIDADES" data-en="CAPABILITIES">CAPACIDADES</a>
+      <a class="nl" href="#pipe" data-es="PROCESO" data-en="PIPELINE">PROCESO</a>
+      <a class="nl" href="#pricing" data-es="EDICIONES" data-en="EDITIONS">EDICIONES</a>
+      <a class="nl" href="https://github.com/AngelazoGit/capas" data-es="CÓDIGO" data-en="SOURCE">CÓDIGO</a>
+      <button class="tbtn lang" id="langBtn" title="English / Español"><span data-l="en" class="on">EN</span>/<span data-l="es">ES</span></button>
+      <button class="tbtn" id="themeBtn" aria-label="Toggle theme" title="Light / Dark">◐</button>
+      <a class="btn btn-pri btn-sm" href="https://github.com/AngelazoGit/capas" data-es="Descargar" data-en="Download">Descargar</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <span class="kick" data-es="// sistema de descomposición de archivos por capas" data-en="// layered decomposition system for files">// sistema de descomposición de archivos por capas</span>
+      <h1 data-es="Abre cualquier archivo y lee todas sus capas." data-en="Open any file and read every layer.">Abre cualquier archivo y lee todas sus capas.</h1>
+      <p class="sub" data-es="CAPAS identifica un archivo por sus bytes, lo decompila, extrae la siguiente capa y repite — hasta que no queda nada sin explicar. Funciona en tu equipo y nunca ejecuta lo que lee." data-en="CAPAS identifies a file by its bytes, decompiles it, extracts the next layer and repeats — until nothing is left unexplained. It runs on your machine and never executes what it reads.">CAPAS identifica un archivo por sus bytes, lo decompila, extrae la siguiente capa y repite — hasta que no queda nada sin explicar. Funciona en tu equipo y nunca ejecuta lo que lee.</p>
+      <div class="cta">
+        <a class="btn btn-pri" href="https://github.com/AngelazoGit/capas" data-es="↓ Descargar gratis" data-en="↓ Download free">↓ Descargar gratis</a>
+        <a class="btn btn-am" href="#pricing" data-es="Ediciones" data-en="Editions">Ediciones</a>
+      </div>
+      <div class="status">
+        <span data-es-html="&lt;b&gt;FORMATOS&lt;/b&gt; cientos" data-en-html="&lt;b&gt;FORMATS&lt;/b&gt; hundreds"><b>FORMATOS</b> cientos</span>
+        <span data-es-html="&lt;b&gt;SO&lt;/b&gt; win · linux · macos" data-en-html="&lt;b&gt;OS&lt;/b&gt; win · linux · macos"><b>SO</b> win · linux · macos</span>
+        <span data-es-html="&lt;b&gt;BINARIO&lt;/b&gt; portable" data-en-html="&lt;b&gt;BINARY&lt;/b&gt; portable"><b>BINARIO</b> portable</span>
+        <span data-es-html="&lt;b&gt;RED&lt;/b&gt; sin conexión" data-en-html="&lt;b&gt;NET&lt;/b&gt; offline"><b>RED</b> sin conexión</span>
+      </div>
+    </div>
+
+    <div>
+      <figure class="appshot">
+        <div class="chrome"><span class="d"></span><span class="d"></span><span class="d"></span><span class="lbl mono" data-es="capas — máscara limpio · análisis completado" data-en="capas — clean mask · analysis complete">capas — máscara limpio · análisis completado</span></div>
+        <img src="../capas-app.png" alt="CAPAS interface in the Clean mask with a completed analysis" loading="lazy" width="1440" height="900">
+      </figure>
+      <div class="appcap" data-es="interfaz real · máscara limpio (clara)" data-en="actual interface · clean mask (light)">interfaz real · máscara limpio (clara)</div>
+    </div>
+  </div>
+</section>
+
+<section id="caps" class="band">
+  <div class="wrap">
+    <div class="lead">
+      <span class="kick" data-es="// capacidades" data-en="// capabilities">// capacidades</span>
+      <h2 data-es="Lo que hace con cada bloque." data-en="What it does on every block.">Lo que hace con cada bloque.</h2>
+    </div>
+    <div class="grid">
+      <div class="panel fp"><div class="phead"><span class="badge">01</span><span class="t" data-es="Extracción" data-en="Extraction">Extracción</span><span class="rule"></span></div><div class="body"><div class="ti" data-es="Capas recursivas" data-en="Recursive layers">Capas recursivas</div><p data-es="zip, gzip, bzip2, xz, lzma, zstd, lz4, tar, ar/.deb, 7z/rar/cab, flujos PDF — abiertos en paralelo en todos los núcleos." data-en="zip, gzip, bzip2, xz, lzma, zstd, lz4, tar, ar/.deb, 7z/rar/cab, PDF streams — peeled in parallel across every core.">zip, gzip, bzip2, xz, lzma, zstd, lz4, tar, ar/.deb, 7z/rar/cab, flujos PDF — abiertos en paralelo en todos los núcleos.</p></div></div>
+      <div class="panel fp"><div class="phead"><span class="badge">02</span><span class="t" data-es="Detección" data-en="Detection">Detección</span><span class="rule"></span></div><div class="body"><div class="ti" data-es="Por contenido" data-en="By content">Por contenido</div><p data-es="Cientos de formatos leídos por sus bytes — Windows, macOS, Linux, Android/iOS, consolas — no adivinados por la extensión." data-en="Hundreds of formats read from their bytes — Windows, macOS, Linux, Android/iOS, consoles — not guessed from the extension.">Cientos de formatos leídos por sus bytes — Windows, macOS, Linux, Android/iOS, consolas — no adivinados por la extensión.</p></div></div>
+      <div class="panel fp"><div class="phead"><span class="badge">03</span><span class="t" data-es="Decompilar" data-en="Decompile">Decompilar</span><span class="rule"></span></div><div class="body"><div class="ti" data-es="Binarios y bytecode" data-en="Binaries &amp; bytecode">Binarios y bytecode</div><p data-es="Cabeceras ELF/PE/Mach-O, símbolos y desensamblado x86/x64; Java, DEX, .pyc, WASM con javap, jadx, CFR, pycdc, wabt." data-en="ELF/PE/Mach-O headers, symbols and x86/x64 disassembly; Java, DEX, .pyc, WASM via javap, jadx, CFR, pycdc, wabt.">Cabeceras ELF/PE/Mach-O, símbolos y desensamblado x86/x64; Java, DEX, .pyc, WASM con javap, jadx, CFR, pycdc, wabt.</p></div></div>
+      <div class="panel fp"><div class="phead"><span class="badge">04</span><span class="t" data-es="Confianza" data-en="Confidence">Confianza</span><span class="rule"></span></div><div class="body"><div class="ti" data-es="Con evidencia" data-en="With evidence">Con evidencia</div><p data-es="Cada archivo se marca confirmado, compatible, probable o desconocido — con el motivo: una firma, una referencia de manifiesto, o nada." data-en="Every file is marked confirmed, compatible, probable or unknown — with the reason: a signature, a manifest reference, or nothing.">Cada archivo se marca confirmado, compatible, probable o desconocido — con el motivo: una firma, una referencia de manifiesto, o nada.</p></div></div>
+      <div class="panel fp"><div class="phead"><span class="badge">05</span><span class="t" data-es="Índice" data-en="Index">Índice</span><span class="rule"></span></div><div class="body"><div class="ti" data-es="Relaciones y SQLite" data-en="Relations &amp; SQLite">Relaciones y SQLite</div><p data-es="Enlaza archivos que van juntos y escribe un índice consultable por SHA-256, para comparar versiones y contar duplicados una sola vez." data-en="Links files that belong together and writes a queryable index keyed by SHA-256, so versions diff cleanly and duplicates count once.">Enlaza archivos que van juntos y escribe un índice consultable por SHA-256, para comparar versiones y contar duplicados una sola vez.</p></div></div>
+      <div class="panel fp"><div class="phead"><span class="badge">06</span><span class="t" data-es="Auditoría" data-en="Audit">Auditoría</span><span class="rule"></span></div><div class="body"><div class="ti" data-es="Packs y mods" data-en="Packs &amp; mods">Packs y mods</div><p data-es="Los asset packs y mods reciben un veredicto APROBADO / CUARENTENA / RECHAZADO por rutas de escape, validez del manifiesto y código nativo." data-en="Asset packs and mods get an APPROVED / QUARANTINE / REJECTED verdict from escape paths, manifest validity and native code.">Los asset packs y mods reciben un veredicto APROBADO / CUARENTENA / RECHAZADO por rutas de escape, validez del manifiesto y código nativo.</p></div></div>
+      <div class="panel fp"><div class="phead"><span class="badge am">07</span><span class="t" data-es="Desempaquetar" data-en="Unpack">Desempaquetar</span><span class="rule"></span></div><div class="body"><div class="ti" data-es-html="Bundles de motor &lt;span class=&quot;pro&quot;&gt;Pro&lt;/span&gt;" data-en-html="Engine bundles &lt;span class=&quot;pro&quot;&gt;Pro&lt;/span&gt;">Bundles de motor <span class="pro">Pro</span></div><p data-es="Abre bundles de Unity (UnityFS, LZ4/LZ4HC) y Godot (.pck) y reinyecta sus archivos en el proceso." data-en="Opens Unity (UnityFS, LZ4/LZ4HC) and Godot (.pck) bundles and sends their inner files back through the pipeline.">Abre bundles de Unity (UnityFS, LZ4/LZ4HC) y Godot (.pck) y reinyecta sus archivos en el proceso.</p></div></div>
+      <div class="panel fp"><div class="phead"><span class="badge">08</span><span class="t" data-es="Claves" data-en="Keys">Claves</span><span class="rule"></span></div><div class="body"><div class="ti" data-es="ZIP protegidos" data-en="Protected ZIPs">ZIP protegidos</div><p data-es="Abre archivos ZipCrypto y AES que tengas derecho a abrir, con tope de intentos, así sigue abriendo capas. No rompe cifrado fuerte." data-en="Opens ZipCrypto and AES archives you're entitled to open, with an attempt cap, so it keeps peeling. It does not break strong crypto.">Abre archivos ZipCrypto y AES que tengas derecho a abrir, con tope de intentos, así sigue abriendo capas. No rompe cifrado fuerte.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="pipe">
+  <div class="wrap">
+    <div class="lead">
+      <span class="kick" data-es="// proceso" data-en="// pipeline">// proceso</span>
+      <h2 data-es="Un archivo son capas. Las lee todas." data-en="A file is layers. It reads all of them.">Un archivo son capas. Las lee todas.</h2>
+      <p data-es="Cada bloque pasa por los mismos cuatro pasos; los hijos se procesan en cuanto aparecen, en paralelo, deduplicados por SHA-256." data-en="Each block runs the same four steps; children run the moment they appear, in parallel, deduplicated by SHA-256.">Cada bloque pasa por los mismos cuatro pasos; los hijos se procesan en cuanto aparecen, en paralelo, deduplicados por SHA-256.</p>
+    </div>
+    <div class="pipe">
+      <div class="pstep"><div class="n" data-es="01 — IDENTIFICAR" data-en="01 — IDENTIFY">01 — IDENTIFICAR</div><h3 data-es="Por contenido" data-en="By content">Por contenido</h3><p data-es="Lee el formato por los bytes mágicos, nunca por el nombre del archivo." data-en="Reads the format from the magic bytes, never from the file name.">Lee el formato por los bytes mágicos, nunca por el nombre del archivo.</p></div>
+      <div class="pstep"><div class="n" data-es="02 — ANALIZAR" data-en="02 — ANALYZE">02 — ANALIZAR</div><h3 data-es="Desármalo" data-en="Pull it apart">Desármalo</h3><p data-es="Cabeceras, símbolos, desensamblado, bytecode, cadenas y entropía." data-en="Headers, symbols, disassembly, bytecode, strings and entropy.">Cabeceras, símbolos, desensamblado, bytecode, cadenas y entropía.</p></div>
+      <div class="pstep"><div class="n" data-es="03 — EXTRAER" data-en="03 — EXTRACT">03 — EXTRAER</div><h3 data-es="Siguiente capa" data-en="Next layer">Siguiente capa</h3><p data-es="Descomprime, abre el contenedor, talla archivos incrustados por firma." data-en="Decompress, open the container, carve embedded files by signature.">Descomprime, abre el contenedor, talla archivos incrustados por firma.</p></div>
+      <div class="pstep"><div class="n" data-es="04 — REPETIR" data-en="04 — REPEAT">04 — REPETIR</div><h3 data-es="Hasta el final" data-en="Until it stops">Hasta el final</h3><p data-es="Cada hijo vuelve al paso uno hasta que no quedan capas." data-en="Every child goes back to step one until no layers remain.">Cada hijo vuelve al paso uno hasta que no quedan capas.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="who" class="band">
+  <div class="wrap">
+    <div class="lead">
+      <span class="kick" data-es="// hecho para" data-en="// built for">// hecho para</span>
+      <h2 data-es="Para quien carga archivos de otros." data-en="People who load other people's files.">Para quien carga archivos de otros.</h2>
+    </div>
+    <div class="who">
+      <div class="panel"><div class="phead"><span class="badge">A</span><span class="t" data-es="Admins de servidor" data-en="Server admins">Admins de servidor</span><span class="rule"></span></div><div class="body"><p data-es="Audita cada asset pack y mod antes de que el servidor lo cargue, y manda los sospechosos a cuarentena automáticamente." data-en="Audit every asset pack and mod before the server loads it, and route the sketchy ones to quarantine automatically.">Audita cada asset pack y mod antes de que el servidor lo cargue, y manda los sospechosos a cuarentena automáticamente.</p></div></div>
+      <div class="panel"><div class="phead"><span class="badge">B</span><span class="t">Modders</span><span class="rule"></span></div><div class="body"><p data-es="Desempaqueta bundles de Unity y Godot, ve exactamente qué hay dentro, y agrupa o reconstruye recursos para que vuelvan a cargar." data-en="Unpack Unity and Godot bundles, see exactly what's inside, and group or rebuild resources so they load again.">Desempaqueta bundles de Unity y Godot, ve exactamente qué hay dentro, y agrupa o reconstruye recursos para que vuelvan a cargar.</p></div></div>
+      <div class="panel"><div class="phead"><span class="badge">C</span><span class="t" data-es="Reversing y CTF" data-en="Reversing &amp; CTF">Reversing y CTF</span><span class="rule"></span></div><div class="body"><p data-es="Triaje rápido de un binario desconocido: capas, cadenas, entropía, desensamblado y un veredicto — sin conexión, sin ejecutar nada." data-en="Triage an unknown binary fast: layers, strings, entropy, disassembly and a verdict — all offline, nothing executed.">Triaje rápido de un binario desconocido: capas, cadenas, entropía, desensamblado y un veredicto — sin conexión, sin ejecutar nada.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="wrap">
+    <div class="lead">
+      <span class="kick" data-es="// ediciones" data-en="// editions">// ediciones</span>
+      <h2 data-es="Gratis para entender cualquier archivo." data-en="Free to understand any file.">Gratis para entender cualquier archivo.</h2>
+      <p data-es="Todo el motor de análisis es gratis. Pro y Studio añaden el desempaquetado de bundles y la automatización — pago único, un año de actualizaciones, activado con una licencia firmada sin conexión." data-en="The whole analysis engine is free. Pro and Studio add bundle unpacking and automation — one-time purchase, a year of updates, activated by a signed offline license.">Todo el motor de análisis es gratis. Pro y Studio añaden el desempaquetado de bundles y la automatización — pago único, un año de actualizaciones, activado con una licencia firmada sin conexión.</p>
+    </div>
+    <div class="price">
+      <div class="pt">
+        <div class="pn"><span class="nm">Core</span></div>
+        <div class="cost" data-es="Gratis" data-en="Free">Gratis</div>
+        <div class="who2" data-es="Completo por sí solo" data-en="Complete on its own">Completo por sí solo</div>
+        <ul>
+          <li><span class="ck">+</span><span data-es="Extracción, incl. zstd y lz4" data-en="Extraction, incl. zstd &amp; lz4">Extracción, incl. zstd y lz4</span></li>
+          <li><span class="ck">+</span><span data-es="Detección de cientos de formatos" data-en="Detection of hundreds of formats">Detección de cientos de formatos</span></li>
+          <li><span class="ck">+</span><span data-es="Confianza, relaciones, índice SQLite" data-en="Confidence, relations, SQLite index">Confianza, relaciones, índice SQLite</span></li>
+          <li><span class="ck">+</span><span data-es="Auditoría, módulo de claves, informes" data-en="Audit, password module, reports">Auditoría, módulo de claves, informes</span></li>
+        </ul>
+        <a class="btn btn-am" href="https://github.com/AngelazoGit/capas" data-es="Descargar" data-en="Download">Descargar</a>
+      </div>
+      <div class="pt mark">
+        <div class="pn"><span class="nm">Pro</span><span class="best" data-es="recomendado" data-en="recommended">recomendado</span></div>
+        <div class="cost">$29 <small data-es="único" data-en="once">único</small></div>
+        <div class="who2" data-es="Modders e ingenieros inversos" data-en="Modders &amp; reverse engineers">Modders e ingenieros inversos</div>
+        <ul>
+          <li><span class="ck">+</span><span data-es="Todo lo de Core" data-en="Everything in Core">Todo lo de Core</span></li>
+          <li><span class="ck">+</span><span data-es="Desempaqueta bundles Unity y Godot" data-en="Unpack Unity &amp; Godot bundles">Desempaqueta bundles Unity y Godot</span></li>
+          <li><span class="ck">+</span><span data-es="Veredictos de política operativa" data-en="Operational policy verdicts">Veredictos de política operativa</span></li>
+          <li><span class="ck">+</span><span data-es="Comparación de versiones" data-en="Version comparison">Comparación de versiones</span></li>
+        </ul>
+        <a class="btn btn-pri" href="https://github.com/AngelazoGit/capas" data-buy="pro" data-es="Comprar Pro" data-en="Get Pro">Comprar Pro</a>
+      </div>
+      <div class="pt">
+        <div class="pn"><span class="nm">Studio</span></div>
+        <div class="cost">$79 <small data-es="único" data-en="once">único</small></div>
+        <div class="who2" data-es="Servidores, equipos y CI" data-en="Servers, teams &amp; CI">Servidores, equipos y CI</div>
+        <ul>
+          <li><span class="ck">+</span><span data-es="Todo lo de Pro" data-en="Everything in Pro">Todo lo de Pro</span></li>
+          <li><span class="ck">+</span><span data-es="Códigos de salida CI/CD" data-en="CI/CD exit codes">Códigos de salida CI/CD</span></li>
+          <li><span class="ck">+</span><span data-es="API REST local de solo lectura" data-en="Local read-only REST API">API REST local de solo lectura</span></li>
+          <li><span class="ck">+</span><span data-es="Licencia para 3 equipos" data-en="Licensed for 3 machines">Licencia para 3 equipos</span></li>
+        </ul>
+        <a class="btn btn-am" href="https://github.com/AngelazoGit/capas" data-buy="studio" data-es="Comprar Studio" data-en="Get Studio">Comprar Studio</a>
+      </div>
+    </div>
+    <p class="pnote" data-es-html="&lt;b&gt;// lanzamiento&lt;/b&gt; — 40% de descuento en Pro y Studio durante dos semanas. Sin cuenta, sin servidor: un archivo de licencia firmado va junto al binario y se verifica sin conexión." data-en-html="&lt;b&gt;// launch&lt;/b&gt; — 40% off Pro and Studio for two weeks. No account, no server: a signed license file sits next to the binary and verifies offline."><b>// lanzamiento</b> — 40% de descuento en Pro y Studio durante dos semanas. Sin cuenta, sin servidor: un archivo de licencia firmado va junto al binario y se verifica sin conexión.</p>
+  </div>
+</section>
+
+<section id="faq">
+  <div class="wrap">
+    <div class="lead"><span class="kick" data-es="// faq" data-en="// faq">// faq</span><h2 data-es="Respuestas claras." data-en="Straight answers.">Respuestas claras.</h2></div>
+    <div class="faq">
+      <details open=""><summary data-es="¿Ejecuta los archivos?" data-en="Does it run the files?">¿Ejecuta los archivos?</summary><div data-es="No. CAPAS lee y extrae para inspeccionar; nunca ejecuta lo que le das, y las herramientas externas corren con timeout. Todo se queda en tu equipo." data-en="No. CAPAS reads and extracts to inspect; it never executes what you give it, and external tools run with a timeout. Everything stays on your machine.">No. CAPAS lee y extrae para inspeccionar; nunca ejecuta lo que le das, y las herramientas externas corren con timeout. Todo se queda en tu equipo.</div></details>
+      <details><summary data-es="¿En qué funciona?" data-en="What does it run on?">¿En qué funciona?</summary><div data-es="Un único .exe portable de Windows, sin instalación. También compila en Linux y macOS. Inglés y español, cuatro temas, interfaz y consola." data-en="A single portable Windows .exe, no install. It also builds on Linux and macOS. English and Spanish, four themes, GUI and console.">Un único .exe portable de Windows, sin instalación. También compila en Linux y macOS. Inglés y español, cuatro temas, interfaz y consola.</div></details>
+      <details><summary data-es="¿Qué es gratis?" data-en="What's free?">¿Qué es gratis?</summary><div data-es="Todo el motor de análisis: extracción, detección, clasificación, confianza, relaciones, el índice SQLite, auditoría de paquetes, el módulo de claves y todos los informes." data-en="The whole analysis engine: extraction, detection, classification, confidence, relations, the SQLite index, package audit, the password module and every report.">Todo el motor de análisis: extracción, detección, clasificación, confianza, relaciones, el índice SQLite, auditoría de paquetes, el módulo de claves y todos los informes.</div></details>
+      <details><summary data-es="¿Cómo funciona la licencia?" data-en="How does a license work?">¿Cómo funciona la licencia?</summary><div data-es="Un archivo firmado que dejas junto al binario, verificado sin conexión con Ed25519 — sin cuenta, sin servidor. La edición que compraste sigue funcionando; las actualizaciones van incluidas un año." data-en="A signed file you drop next to the binary, verified offline with Ed25519 — no account, no server. The edition you bought keeps working; updates are included for a year.">Un archivo firmado que dejas junto al binario, verificado sin conexión con Ed25519 — sin cuenta, sin servidor. La edición que compraste sigue funcionando; las actualizaciones van incluidas un año.</div></details>
+      <details><summary data-es="¿Puedo usarlo en un servidor de juego?" data-en="Can I use it on a game server?">¿Puedo usarlo en un servidor de juego?</summary><div data-es="Sí. Studio tiene licencia para uso en servidor y varios equipos, con códigos de salida CI y una API local para filtrar subidas antes de que carguen." data-en="Yes. Studio is licensed for server use and several machines, with CI exit codes and a local API to gate uploads before they load.">Sí. Studio tiene licencia para uso en servidor y varios equipos, con códigos de salida CI y una API local para filtrar subidas antes de que carguen.</div></details>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="log">
+      <div class="lh"><span class="gt">&gt;</span><span class="t" data-es="Registro de operaciones" data-en="Operations log">Registro de operaciones</span></div>
+      <div class="lines">
+        <span data-es="[ 0.00] CAPAS v0.1 LISTO · OPERADOR @angelazo" data-en="[ 0.00] CAPAS v0.1 READY · OPERATOR @angelazo">[ 0.00] CAPAS v0.1 LISTO · OPERADOR @angelazo</span>
+        <span data-es-html="[ 0.00] MOTOR gratis · &lt;b&gt;cientos de formatos&lt;/b&gt; · sin conexión" data-en-html="[ 0.00] ENGINE free · &lt;b&gt;hundreds of formats&lt;/b&gt; · offline">[ 0.00] MOTOR gratis · <b>cientos de formatos</b> · sin conexión</span>
+        <span data-es="[ 0.00] ESPERANDO ARCHIVOS — descarga para empezar." data-en="[ 0.00] WAITING FOR FILES — download to begin.">[ 0.00] ESPERANDO ARCHIVOS — descarga para empezar.</span>
+      </div>
+      <div class="cta">
+        <a class="btn btn-pri" href="https://github.com/AngelazoGit/capas" data-es="↓ Descargar CAPAS" data-en="↓ Download CAPAS">↓ Descargar CAPAS</a>
+        <a class="btn btn-am" href="#pricing" data-es="Ediciones" data-en="Editions">Ediciones</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span data-es-html="CAPAS — por &lt;a href=&quot;https://github.com/AngelazoGit&quot;&gt;@angelazo&lt;/a&gt; · núcleo MIT" data-en-html="CAPAS — by &lt;a href=&quot;https://github.com/AngelazoGit&quot;&gt;@angelazo&lt;/a&gt; · MIT core">CAPAS — por <a href="https://github.com/AngelazoGit">@angelazo</a> · núcleo MIT</span>
+    <span><a href="https://github.com/AngelazoGit/capas">github.com/AngelazoGit/capas</a></span>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  // Theme
+  var TK="capas-theme", tb=document.getElementById("themeBtn");
+  try{var ts=localStorage.getItem(TK); if(ts)root.setAttribute("data-theme",ts);}catch(e){}
+  function tcur(){ return root.getAttribute("data-theme") || ((window.matchMedia&&window.matchMedia("(prefers-color-scheme:dark)").matches)?"dark":"light"); }
+  if(tb)tb.addEventListener("click",function(){var n=tcur()==="dark"?"light":"dark";root.setAttribute("data-theme",n);try{localStorage.setItem(TK,n);}catch(e){}});
+
+  // Language
+  var LK="capas-lang", lb=document.getElementById("langBtn");
+  function applyLang(lang){
+    document.querySelectorAll("[data-es]").forEach(function(el){
+      if(el.dataset.en===undefined) el.dataset.en=el.textContent;
+      el.textContent = lang==="es" ? el.dataset.es : el.dataset.en;
+    });
+    document.querySelectorAll("[data-es-html]").forEach(function(el){
+      if(el.dataset.enHtml===undefined) el.dataset.enHtml=el.innerHTML;
+      el.innerHTML = lang==="es" ? el.dataset.esHtml : el.dataset.enHtml;
+    });
+    if(lb)lb.querySelectorAll("span").forEach(function(s){ if(s.dataset.l) s.classList.toggle("on", s.dataset.l===lang); });
+    try{root.setAttribute("lang",lang);}catch(e){}
+  }
+  var lang="es"; try{var ls=localStorage.getItem(LK); if(ls)lang=ls;}catch(e){}
+  applyLang(lang);
+  if(lb)lb.addEventListener("click",function(){ lang=lang==="es"?"en":"es"; try{localStorage.setItem(LK,lang);}catch(e){} applyLang(lang); });
+
+  // Buy links — replace with your Lemon Squeezy / Polar product URLs.
+  var BUY={pro:"https://github.com/AngelazoGit/capas",studio:"https://github.com/AngelazoGit/capas"};
+  document.querySelectorAll("[data-buy]").forEach(function(a){var u=BUY[a.getAttribute("data-buy")];if(u)a.setAttribute("href",u);});
+}());
+</script>
+
+
+
+</body></html>
