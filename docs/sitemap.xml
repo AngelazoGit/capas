@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
-  <url><loc>https://angelazogit.github.io/capas/</loc><lastmod>2026-11-24</lastmod><changefreq>weekly</changefreq><priority>1.0</priority>
-    <xhtml:link rel="alternate" hreflang="en" href="https://angelazogit.github.io/capas/"/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://angelazogit.github.io/capas/es/"/>
+  <url><loc>https://capas.dev/</loc><lastmod>2026-11-24</lastmod><changefreq>weekly</changefreq><priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://capas.dev/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://capas.dev/es/"/>
   </url>
-  <url><loc>https://angelazogit.github.io/capas/es/</loc><lastmod>2026-11-24</lastmod><changefreq>weekly</changefreq><priority>0.9</priority>
-    <xhtml:link rel="alternate" hreflang="en" href="https://angelazogit.github.io/capas/"/>
-    <xhtml:link rel="alternate" hreflang="es" href="https://angelazogit.github.io/capas/es/"/>
+  <url><loc>https://capas.dev/es/</loc><lastmod>2026-11-24</lastmod><changefreq>weekly</changefreq><priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://capas.dev/"/>
+    <xhtml:link rel="alternate" hreflang="es" href="https://capas.dev/es/"/>
   </url>
 </urlset>
