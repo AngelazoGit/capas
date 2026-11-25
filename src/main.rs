@@ -6,6 +6,10 @@
 //!
 //! Sin argumentos abre la interfaz gráfica; con archivos funciona en consola.
 
+// En Windows se compila como app de GUI (sin ventana de consola negra al abrir
+// la interfaz). Para el modo CLI se reutiliza la consola del proceso padre.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod analisis;
 mod api;
 mod auditar;
@@ -291,7 +295,23 @@ fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
     op
 }
 
+/// En Windows (subsistema GUI) reutiliza la consola del proceso padre si se
+/// lanzó desde una, para que el modo CLI siga mostrando su salida.
+#[cfg(windows)]
+fn adjuntar_consola() {
+    unsafe extern "system" {
+        fn AttachConsole(dw_process_id: u32) -> i32;
+    }
+    const ATTACH_PARENT_PROCESS: u32 = 0xFFFF_FFFF;
+    unsafe {
+        let _ = AttachConsole(ATTACH_PARENT_PROCESS);
+    }
+}
+#[cfg(not(windows))]
+fn adjuntar_consola() {}
+
 fn main() -> Result<()> {
+    adjuntar_consola();
     let a = Args::parse();
     match a.idioma.as_deref() {
         Some(l) => idioma::set_es(l.eq_ignore_ascii_case("es")),
