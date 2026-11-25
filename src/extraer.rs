@@ -664,7 +664,7 @@ struct FmtIso {
     usuario: usize,
 }
 
-pub fn formato_iso(d: &[u8]) -> Option<FmtIso> {
+fn formato_iso(d: &[u8]) -> Option<FmtIso> {
     if d.len() >= 0x8006 && &d[0x8001..0x8006] == b"CD001" {
         return Some(FmtIso { sector: 2048, usuario: 0 });
     }
@@ -677,11 +677,6 @@ pub fn formato_iso(d: &[u8]) -> Option<FmtIso> {
         return Some(FmtIso { sector: 2352, usuario: 24 });
     }
     None
-}
-
-/// ¿La imagen tiene un volumen ISO 9660 (cocido o crudo)? Para la detección.
-pub fn es_iso(d: &[u8]) -> bool {
-    formato_iso(d).is_some()
 }
 
 /// Lee `len` bytes "lógicos" (áreas de usuario de 2048 B por sector) desde el LBA.
@@ -847,10 +842,64 @@ mod pruebas_iso {
     #[test]
     fn lee_bin_crudo_2352() {
         let crudo = a_2352(&mini_iso(b"RAW CD TRACK"));
-        assert!(super::es_iso(&crudo), "debe detectarse como ISO crudo");
         let hijos = iso9660(&crudo, 1 << 20).unwrap();
         assert_eq!(hijos.len(), 1);
         assert_eq!(hijos[0].nombre, "FILE.TXT");
         assert_eq!(hijos[0].datos, b"RAW CD TRACK");
+    }
+}
+
+/// Si entre los ficheros de un disco hay SYSTEM.CNF, deduce la plataforma
+/// (PS1/PS2) y el ejecutable de arranque. Devuelve un texto de evidencia.
+pub fn plataforma_disco(hijos: &[Hijo]) -> Option<String> {
+    let cnf = hijos.iter().find(|h| {
+        let n = h.nombre.rsplit(['/', '\\']).next().unwrap_or(&h.nombre).to_ascii_uppercase();
+        n == "SYSTEM.CNF"
+    })?;
+    let texto = String::from_utf8_lossy(&cnf.datos);
+    let mut boot = None;
+    let mut plataforma = None;
+    for linea in texto.lines() {
+        let l = linea.trim();
+        let up = l.to_ascii_uppercase();
+        if up.starts_with("BOOT2") {
+            plataforma = Some("PlayStation 2");
+            boot = valor_arranque(l);
+        } else if up.starts_with("BOOT") && up.contains('=') {
+            plataforma = plataforma.or(Some("PlayStation 1"));
+            if boot.is_none() {
+                boot = valor_arranque(l);
+            }
+        }
+    }
+    let plataforma = plataforma?;
+    Some(match boot {
+        Some(b) => tfmt(tr("platform: {} · boot: {}", "plataforma: {} · arranque: {}"), &[plataforma.to_string(), b]),
+        None => tfmt(tr("platform: {}", "plataforma: {}"), &[plataforma.to_string()]),
+    })
+}
+
+/// Extrae el nombre del ejecutable de una línea `BOOT2 = cdrom0:\SLUS_123.45;1`.
+fn valor_arranque(linea: &str) -> Option<String> {
+    let v = linea.split('=').nth(1)?.trim();
+    let v = v.rsplit([':', '\\', '/']).next().unwrap_or(v);
+    let v = v.split(';').next().unwrap_or(v).trim();
+    (!v.is_empty()).then(|| v.to_string())
+}
+
+#[cfg(test)]
+mod pruebas_disco {
+    use super::{plataforma_disco, Hijo};
+    #[test]
+    fn detecta_ps2_desde_system_cnf() {
+        let hijos = vec![Hijo { nombre: "SYSTEM.CNF".into(), datos: b"BOOT2 = cdrom0:\\SLUS_200.02;1\nVER = 1.00\n".to_vec() }];
+        let info = plataforma_disco(&hijos).unwrap();
+        assert!(info.contains("PlayStation 2"));
+        assert!(info.contains("SLUS_200.02"));
+    }
+    #[test]
+    fn sin_system_cnf_no_hay_plataforma() {
+        let hijos = vec![Hijo { nombre: "readme.txt".into(), datos: b"hola".to_vec() }];
+        assert!(plataforma_disco(&hijos).is_none());
     }
 }
