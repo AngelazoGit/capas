@@ -25,7 +25,7 @@ understand a file.
 - 🎮 **Engine bundle unpacking** (Unity, Godot) — *Pro*
 - 🖥️ **GUI + console**, portable Windows `.exe`, **English/Spanish**, five masks
 - 🧭 **Product UI**: sidebar (Home · Analysis · Explorer · Compare · Formats · Tools · Settings), stat cards, a three-pane analysis (layer tree · contents table · block details) and recent analyses
-- 🤖 **MCP bridge** (`capas --mcp`): let a local or cloud AI (Claude Desktop, Ollama, OpenAI clients) use CAPAS's analysis as tools — CAPAS stays offline. See [MCP.md](MCP.md)
+- 🤖 **MCP bridge** (`capas --mcp`): let a local or cloud AI (Claude Desktop, Ollama, OpenAI clients) use CAPAS's analysis as tools — CAPAS stays offline — *Studio*. See [MCP.md](MCP.md)
 
 Take files (or folders) apart **layer by layer** and decompile them using your
 computer's resources: every CPU core, a memory budget tuned to the free RAM, and
@@ -187,7 +187,7 @@ feature's required edition is a one-line constant, so the tiering is easy to adj
 |---|---|
 | **Core** — free | The full analyser: extraction (zip/gzip/bzip2/xz/lzma/zstd/lz4/tar/7z/rar…), content detection of 729 formats, classification, **confidence levels**, **family relations**, **SQLite index**, all reports, **package audit**, **password module**, **plugin/active-code report**, and the **watch/locate** cache tools. |
 | **Pro** | **`--desempaquetar`** (unpack Unity/Godot engine bundles), **`--politica`** (operational policy ALLOW/WARN/REVIEW/BLOCK → `politica.md`), **`--comparar base.db`** (version diff between two indexes → `comparacion.md`). |
-| **Studio** | Everything in Pro, plus **`--ci`** (CI/CD: machine line on stdout + exit code 0/1/2/3 from the policy) and **`--api <port>`** (local read-only REST over the index: `/`, `/files`, `/relations`, `/findings`, `/runs`). |
+| **Studio** | Everything in Pro, plus **`--ci`** (CI/CD: machine line on stdout + exit code 0/1/2/3 from the policy) **`--api <port>`** (local read-only REST over the index) and **`--mcp`** (MCP bridge for AI: Claude Desktop, Ollama, OpenAI clients — see [MCP.md](MCP.md)). |
 
 ```bash
 capas bundle.unity3d --desempaquetar --edicion pro -s out   # unpack a Unity bundle

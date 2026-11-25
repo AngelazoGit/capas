@@ -1,0 +1,19 @@
+CAPAS — desmonta y decompila archivos capa a capa
+CAPAS — take any file apart, layer by layer
+
+USO RÁPIDO / QUICK START
+  - Doble clic en capas.exe para abrir la interfaz.
+    Double-click capas.exe to open the interface.
+  - Desde consola / from a console:   capas archivo.zip
+  - Idioma / language:                capas --idioma es   (o en Ajustes / in Settings)
+  - Servidor MCP para IA (Studio):    capas --mcp          (ver MCP.md)
+
+AVISOS / NOTES
+  - Windows SmartScreen puede avisar porque el .exe no está firmado:
+    pulsa "Más información" -> "Ejecutar de todas formas".
+    SmartScreen may warn (unsigned): "More info" -> "Run anyway".
+  - 100% local: no necesita cuenta ni conexión. / Fully local, no account, no network.
+  - Portable: copia la carpeta y listo; no instala nada. / Portable, no install.
+
+Licencia MIT (ver LICENSE). / MIT license (see LICENSE).
+Web: https://capas.dev

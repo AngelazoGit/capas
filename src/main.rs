@@ -384,8 +384,12 @@ fn main() -> Result<()> {
     licencia::aplicar_clave(a.licencia_clave.clone());
     let sis = Sistema::detectar();
 
-    // Puente MCP por stdio: expone el análisis local como tools para una IA.
+    // [Studio] Puente MCP por stdio: expone el análisis local como tools para una IA.
     if a.mcp {
+        if !edicion::permite(edicion::MCP) {
+            eprintln!("{}", edicion::bloqueado("--mcp", edicion::MCP));
+            std::process::exit(7);
+        }
         return mcp::servir(sis, Herramientas::detectar(a.sin_externas));
     }
 

@@ -12,6 +12,9 @@ que el modelo sea local.
 
 ---
 
+> **Edición:** el puente MCP es una función de **CAPAS Studio** (requiere una
+> licencia Studio activada). / The MCP bridge is a **CAPAS Studio** feature.
+
 ## Arrancarlo / Run it
 
 ```bash

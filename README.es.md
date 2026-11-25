@@ -27,7 +27,7 @@ equipo/automatización, pero nunca te chocas con un muro solo por querer entende
 - 🎮 **Desempaquetado de bundles** de motor (Unity, Godot) — *Pro*
 - 🖥️ **Interfaz gráfica + consola**, `.exe` portable de Windows, **inglés/español**, cinco máscaras
 - 🧭 **Interfaz de producto**: barra lateral (Inicio · Análisis · Explorador · Comparar · Formatos · Herramientas · Ajustes), tarjetas de estado, análisis en tres paneles (árbol de capas · tabla de contenido · ficha del bloque) y análisis recientes
-- 🤖 **Puente MCP** (`capas --mcp`): deja que una IA local o en la nube (Claude Desktop, Ollama, clientes con OpenAI) use el análisis de CAPAS como herramientas — CAPAS sigue sin conexión. Ver [MCP.md](MCP.md)
+- 🤖 **Puente MCP** (`capas --mcp`): deja que una IA local o en la nube (Claude Desktop, Ollama, clientes con OpenAI) use el análisis de CAPAS como herramientas — CAPAS sigue sin conexión — *Studio*. Ver [MCP.md](MCP.md)
 
 Desmonta y decompila archivos **capa a capa** usando los recursos del ordenador:
 todos los núcleos de la CPU, un límite de memoria ajustado a la RAM libre y las
@@ -378,7 +378,7 @@ una línea, así que mover una función de plan es trivial.
 |---|---|
 | **Core** — gratis | El analizador completo: extracción (zip/gzip/bzip2/xz/lzma/zstd/lz4/tar/7z/rar…), detección por contenido de 729 formatos, clasificación, **niveles de confianza**, **relaciones de familia**, **índice SQLite**, todos los informes, **auditoría de paquetes**, **módulo de claves**, **informe de plugins/código activo** y las herramientas de **vigilancia/localización** de caché. |
 | **Pro** | **`--desempaquetar`** (abre bundles de motor Unity/Godot), **`--politica`** (política operativa PERMITIR/ADVERTIR/REVISAR/BLOQUEAR → `politica.md`), **`--comparar base.db`** (diff entre dos índices → `comparacion.md`). |
-| **Studio** | Todo lo de Pro, más **`--ci`** (CI/CD: línea de máquina en stdout + código de salida 0/1/2/3) y **`--api <puerto>`** (REST local de solo lectura sobre el índice). |
+| **Studio** | Todo lo de Pro, más **`--ci`** (CI/CD: línea de máquina en stdout + código de salida 0/1/2/3) **`--api <puerto>`** (REST local de solo lectura) y **`--mcp`** (puente MCP para IA: Claude Desktop, Ollama, clientes con OpenAI — ver [MCP.md](MCP.md)). |
 
 ```bash
 capas bundle.unity3d --desempaquetar --edicion pro -s salida   # abre un bundle de Unity

@@ -1,0 +1,60 @@
+name: release
+
+# Publica una Release de Windows portable al subir una etiqueta vX.Y.Z.
+# También arranca a mano desde Actions -> Run workflow (indicando la versión).
+# La auto-actualización de la app consulta releases/latest, así que cada release
+# con make_latest hace que "Buscar actualizaciones" funcione.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión (p. ej. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+
+permissions:
+  contents: write
+
+env:
+  VERSION: ${{ inputs.version || github.ref_name }}
+
+jobs:
+  windows-portable:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Test
+        run: cargo test --release
+      - name: Build
+        run: cargo build --release
+      - name: Package
+        shell: pwsh
+        run: |
+          $stage = "capas-$env:VERSION-windows-x64"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item target/release/capas.exe $stage/
+          Copy-Item LEEME.txt $stage/
+          Copy-Item LICENSE   $stage/LICENSE.txt
+          Copy-Item MCP.md    $stage/ -ErrorAction SilentlyContinue
+          $zip = "$stage.zip"
+          Compress-Archive -Path "$stage/*" -DestinationPath $zip -Force
+          $sha = (Get-FileHash $zip -Algorithm SHA256).Hash
+          "ZIP=$zip"        | Out-File -FilePath $env:GITHUB_ENV -Append
+          "SHA256=$sha"     | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          name: CAPAS ${{ env.VERSION }}
+          make_latest: true
+          files: ${{ env.ZIP }}
+          body: |
+            CAPAS ${{ env.VERSION }} — portable Windows build.
+
+            - Doble clic en `capas.exe` (no instala nada). SmartScreen: "Más información" → "Ejecutar de todas formas".
+            - 100% local, sin cuenta ni conexión. GUI + consola, inglés/español.
+
+            SHA-256 (zip): `${{ env.SHA256 }}`
