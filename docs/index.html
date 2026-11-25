@@ -13,16 +13,20 @@
 <meta property="og:description" content="See what's really inside any file. Free, offline, and it never runs what it inspects.">
 <meta property="og:url" content="https://capas.dev/">
 <meta property="og:image" content="https://capas.dev/capas-app.png">
+<meta property="og:image:width" content="1440">
+<meta property="og:image:height" content="900">
+<meta property="og:image:alt" content="CAPAS interface: layer tree, contents table and block details">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="CAPAS — layered file decompiler">
 <meta name="twitter:description" content="Open any file and read every layer. Offline, free core.">
 <meta name="twitter:image" content="https://capas.dev/capas-app.png">
+<meta name="twitter:image:alt" content="CAPAS analysis interface">
 <link rel="alternate" hreflang="en" href="https://capas.dev/">
 <link rel="alternate" hreflang="es" href="https://capas.dev/es/">
 <link rel="alternate" hreflang="x-default" href="https://capas.dev/">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <script type="application/ld+json">
-{"@context":"https://schema.org","@type":"SoftwareApplication","name":"CAPAS","applicationCategory":"DeveloperApplication","operatingSystem":"Windows, Linux, macOS","description":"Layered file decompiler and analyzer. Identifies files by content, decompiles them, extracts each layer, classifies with confidence levels and audits asset packs and mods.","author":{"@type":"Person","name":"@angelazo"},"offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"url":"https://capas.dev/"}
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"CAPAS","applicationCategory":"DeveloperApplication","operatingSystem":"Windows, Linux, macOS","softwareVersion":"0.1.0","description":"Layered file decompiler and analyzer. Identifies 729 file formats by content (not extension), decompiles them, extracts each layer, classifies with confidence levels and audits asset packs and mods. Offline, and it never runs what it inspects.","featureList":["Layer-by-layer extraction and decompilation","Content-based detection of 729 formats in 11 categories","Confidence levels with evidence","SQLite index and version comparison","Package audit (approve / quarantine / reject)","Engine bundle unpacking (Unity, Godot)","Offline, never executes inspected files"],"screenshot":"https://capas.dev/capas-app.png","downloadUrl":"https://github.com/AngelazoGit/capas/raw/main/dist/capas.exe","author":{"@type":"Person","name":"@angelazo"},"offers":{"@type":"AggregateOffer","lowPrice":"0","highPrice":"79","priceCurrency":"USD","offerCount":3},"url":"https://capas.dev/"}
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -217,6 +221,10 @@ summary{font-family:"Inter",sans-serif;font-weight:700}
 .tbtn:hover{border-color:var(--green)}
 </style>
 
+
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Does it run the files?","acceptedAnswer":{"@type":"Answer","text":"No. CAPAS reads and extracts to inspect; it never executes what you give it, and external tools run with a timeout. Everything stays on your machine."}},{"@type":"Question","name":"What does it run on?","acceptedAnswer":{"@type":"Answer","text":"A single portable Windows .exe, no install. It also builds on Linux and macOS. English and Spanish, five masks, GUI and console."}},{"@type":"Question","name":"What's free?","acceptedAnswer":{"@type":"Answer","text":"The whole analysis engine: extraction, detection, classification, confidence, relations, the SQLite index, package audit, the password module and every report."}},{"@type":"Question","name":"How does a license work?","acceptedAnswer":{"@type":"Answer","text":"A signed file you drop next to the binary, verified offline with Ed25519 — no account, no server. The edition you bought keeps working; updates are included for a year."}},{"@type":"Question","name":"Can I use it on a game server?","acceptedAnswer":{"@type":"Answer","text":"Yes. Studio is licensed for server use and several machines, with CI exit codes and a local API to gate uploads before they load."}}]}
+</script>
 <header class="bar">
   <div class="wrap">
     <span class="wordmark">
@@ -408,7 +416,7 @@ summary{font-family:"Inter",sans-serif;font-weight:700}
     <div class="lead"><span class="kick" data-es="// faq">// faq</span><h2 data-es="Respuestas claras.">Straight answers.</h2></div>
     <div class="faq">
       <details open><summary data-es="¿Ejecuta los archivos?">Does it run the files?</summary><div data-es="No. CAPAS lee y extrae para inspeccionar; nunca ejecuta lo que le das, y las herramientas externas corren con timeout. Todo se queda en tu equipo.">No. CAPAS reads and extracts to inspect; it never executes what you give it, and external tools run with a timeout. Everything stays on your machine.</div></details>
-      <details><summary data-es="¿En qué funciona?">What does it run on?</summary><div data-es="Un único .exe portable de Windows, sin instalación. También compila en Linux y macOS. Inglés y español, cuatro temas, interfaz y consola.">A single portable Windows .exe, no install. It also builds on Linux and macOS. English and Spanish, four themes, GUI and console.</div></details>
+      <details><summary data-es="¿En qué funciona?">What does it run on?</summary><div data-es="Un único .exe portable de Windows, sin instalación. También compila en Linux y macOS. Inglés y español, cinco máscaras, interfaz y consola.">A single portable Windows .exe, no install. It also builds on Linux and macOS. English and Spanish, five masks, GUI and console.</div></details>
       <details><summary data-es="¿Qué es gratis?">What's free?</summary><div data-es="Todo el motor de análisis: extracción, detección, clasificación, confianza, relaciones, el índice SQLite, auditoría de paquetes, el módulo de claves y todos los informes.">The whole analysis engine: extraction, detection, classification, confidence, relations, the SQLite index, package audit, the password module and every report.</div></details>
       <details><summary data-es="¿Cómo funciona la licencia?">How does a license work?</summary><div data-es="Un archivo firmado que dejas junto al binario, verificado sin conexión con Ed25519 — sin cuenta, sin servidor. La edición que compraste sigue funcionando; las actualizaciones van incluidas un año.">A signed file you drop next to the binary, verified offline with Ed25519 — no account, no server. The edition you bought keeps working; updates are included for a year.</div></details>
       <details><summary data-es="¿Puedo usarlo en un servidor de juego?">Can I use it on a game server?</summary><div data-es="Sí. Studio tiene licencia para uso en servidor y varios equipos, con códigos de salida CI y una API local para filtrar subidas antes de que carguen.">Yes. Studio is licensed for server use and several machines, with CI exit codes and a local API to gate uploads before they load.</div></details>
