@@ -305,6 +305,8 @@ pub struct App {
     cmp_a: Option<PathBuf>,
     cmp_b: Option<PathBuf>,
     cmp_resultado: Option<(Vec<String>, Vec<String>, usize)>,
+    // Barra de búsqueda del análisis.
+    buscar: String,
     // Módulo de claves (interfaz).
     clave_entrada: String,
     clave_lic: String,
@@ -433,6 +435,7 @@ impl App {
             cmp_a: None,
             cmp_b: None,
             cmp_resultado: None,
+            buscar: String::new(),
             clave_entrada: String::new(),
             clave_lic: String::new(),
             lic_estado: None,
@@ -1243,15 +1246,21 @@ impl App {
         ui.painter().line_segment([Pos2::new(r.left() - 22.0, r.bottom()), Pos2::new(r.right() + 22.0, r.bottom())], Stroke::new(1.0, morado()));
     }
 
-    // Vista de análisis: entrada · tarjetas · tres paneles.
+    // Vista de análisis: identidad · tarjetas · búsqueda · tres paneles.
     fn vista_analisis(&mut self, ui: &mut Ui) {
         if self.archivos.is_empty() && self.arbol.is_empty() && !self.analizando() {
             self.zona_carga(ui);
             return;
         }
-        self.barra_entrada(ui);
+        if self.arbol.is_empty() {
+            self.barra_entrada(ui);
+        } else {
+            self.identidad_ui(ui);
+        }
         self.tarjetas_ui(ui);
-        ui.add_space(12.0);
+        ui.add_space(10.0);
+        self.barra_busqueda_ui(ui);
+        ui.add_space(10.0);
 
         egui::Panel::left("p_arbol")
             .resizable(true)
@@ -1268,6 +1277,85 @@ impl App {
         egui::CentralPanel::default()
             .frame(card_frame())
             .show_inside(ui, |ui| self.panel_lista(ui));
+    }
+
+    // Bloque de identidad del archivo analizado (icono + nombre + breadcrumb tipado).
+    fn identidad_ui(&mut self, ui: &mut Ui) {
+        let (nombre, desc, tipo) = match self.arbol.first() {
+            Some(n) => (n.nombre.clone(), n.descripcion.clone(), n.tipo),
+            None => return,
+        };
+        ui.horizontal(|ui| {
+            let (badge, _) = ui.allocate_exact_size(Vec2::splat(46.0), Sense::hover());
+            let p = ui.painter().clone();
+            p.rect_filled(badge, CornerRadius::same(10), morado());
+            dibujar_icono(&p, badge.center(), 13.0, icono_tipo(tipo), acento());
+            ui.add_space(6.0);
+            ui.vertical(|ui| {
+                ui.add_space(2.0);
+                ui.label(RichText::new(&nombre).font(titulo(21.0)).color(texto()));
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 6.0;
+                    ui.label(RichText::new(if desc.is_empty() { tr("File", "Archivo").to_string() } else { desc }).font(FontId::proportional(11.5)).color(morado_claro()));
+                    ui.label(RichText::new("›").font(FontId::proportional(11.5)).color(morado_medio()));
+                    ui.label(RichText::new(tr("Analysis", "Análisis")).font(FontId::proportional(11.5)).color(morado_claro()));
+                    ui.label(RichText::new("›").font(FontId::proportional(11.5)).color(morado_medio()));
+                    ui.label(RichText::new(acortar(&nombre, 28)).font(FontId::proportional(11.5)).color(morado_claro()));
+                });
+            });
+            // Acciones de cola a la derecha.
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let libre = !self.analizando();
+                if ui.add_enabled(libre, boton_sec(tr("Output", "Salida"))).on_hover_text(self.salida.display().to_string()).clicked() {
+                    if let Some(d) = rfd::FileDialog::new().pick_folder() {
+                        self.salida = d;
+                    }
+                }
+                if ui.add_enabled(libre, boton_sec(tr("+ Files", "+ Archivos"))).clicked() {
+                    self.elegir_archivos();
+                }
+            });
+        });
+        ui.add_space(12.0);
+    }
+
+    // Barra de búsqueda + filtros + vista.
+    fn barra_busqueda_ui(&mut self, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            // Campo de búsqueda con icono.
+            let alto = 34.0;
+            let ancho = (ui.available_width() - 230.0).max(220.0);
+            let (rect, _) = ui.allocate_exact_size(Vec2::new(ancho, alto), Sense::hover());
+            let p = ui.painter().clone();
+            p.rect_filled(rect, CornerRadius::same(8), hondo());
+            p.rect_stroke(rect, CornerRadius::same(8), Stroke::new(1.0, morado()), StrokeKind::Inside);
+            dibujar_icono(&p, rect.left_center() + Vec2::new(16.0, 0.0), 7.0, "lupa", morado_claro());
+            let mut child = ui.new_child(egui::UiBuilder::new().max_rect(Rect::from_min_max(rect.left_top() + Vec2::new(30.0, 0.0), rect.right_bottom())).layout(Layout::left_to_right(Align::Center)));
+            child.visuals_mut().extreme_bg_color = Color32::TRANSPARENT;
+            child.visuals_mut().widgets.inactive.bg_stroke = Stroke::NONE;
+            child.visuals_mut().widgets.hovered.bg_stroke = Stroke::NONE;
+            child.visuals_mut().widgets.active.bg_stroke = Stroke::NONE;
+            child.add(egui::TextEdit::singleline(&mut self.buscar).font(FontId::proportional(13.0)).desired_width(ancho - 44.0).hint_text(tr("Search files, formats or paths…", "Buscar archivos, formatos o rutas…")));
+
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                // Conmutador lista/cuadrícula (decorativo por ahora, lista activa).
+                let (tg, _) = ui.allocate_exact_size(Vec2::new(64.0, alto), Sense::hover());
+                let p = ui.painter().clone();
+                p.rect_filled(tg, CornerRadius::same(8), morado());
+                p.rect_filled(Rect::from_min_size(tg.left_top(), Vec2::new(32.0, alto)), CornerRadius::same(8), acento().gamma_multiply(0.30));
+                for i in 0..3 {
+                    p.line_segment([Pos2::new(tg.left() + 10.0, tg.top() + 11.0 + i as f32 * 6.0), Pos2::new(tg.left() + 22.0, tg.top() + 11.0 + i as f32 * 6.0)], Stroke::new(1.6, acento()));
+                }
+                dibujar_icono(&p, Pos2::new(tg.left() + 48.0, tg.center().y), 6.0, "capas", morado_claro());
+                // Filtros.
+                ui.menu_button(tr("  Filters  ", "  Filtros  "), |ui| {
+                    if ui.checkbox(&mut self.solo_pendientes, tr("Only pending", "Solo pendientes")).changed() {}
+                    if ui.button(tr("Clear search", "Limpiar búsqueda")).clicked() {
+                        self.buscar.clear();
+                    }
+                });
+            });
+        });
     }
 
     fn zona_carga(&mut self, ui: &mut Ui) {
@@ -1395,38 +1483,82 @@ impl App {
     }
 
     fn panel_lista(&mut self, ui: &mut Ui) {
-        encabezado_panel(ui, tr("CONTENTS", "CONTENIDO"));
-        let Some(sel) = self.seleccion.clone() else {
-            vacio(ui, tr("Select a block to inspect its contents", "Selecciona un bloque para ver su contenido"));
-            return;
+        // Breadcrumb del contenedor seleccionado.
+        let sel = self.seleccion.clone();
+        let ruta_txt = sel
+            .as_ref()
+            .and_then(|s| buscar_nodo(&self.arbol, s).map(|n| n.nombre.clone()))
+            .unwrap_or_else(|| self.arbol.first().map(|n| n.nombre.clone()).unwrap_or_default());
+        ui.horizontal(|ui| {
+            dibujar_icono(&ui.painter().clone(), ui.cursor().left_center() + Vec2::new(7.0, 9.0), 7.0, "carpeta", acento());
+            ui.add_space(18.0);
+            ui.label(RichText::new(tr("CONTENTS", "CONTENIDO")).font(titulo(12.5)).color(morado_claro()));
+            ui.label(RichText::new(format!("· {}", acortar(&ruta_txt, 22))).font(FontId::proportional(11.5)).color(morado_medio()));
+        });
+        ui.add_space(4.0);
+        let y = ui.cursor().top();
+        ui.painter().line_segment([Pos2::new(ui.max_rect().left(), y), Pos2::new(ui.max_rect().right(), y)], Stroke::new(1.0, morado()));
+        ui.add_space(6.0);
+
+        // Nodo cuyos hijos se muestran (la selección, o la raíz).
+        let base = sel.clone().filter(|s| buscar_nodo(&self.arbol, s).map(|n| !n.hijos.is_empty()).unwrap_or(false));
+        let (origen, nodo) = match &base {
+            Some(s) => (s.clone(), buscar_nodo(&self.arbol, s).cloned()),
+            None => (vec![], None),
         };
-        let Some(n) = buscar_nodo(&self.arbol, &sel) else { return };
-        let n = n.clone();
+        let hijos: Vec<(Vec<usize>, Nodo)> = match &nodo {
+            Some(n) => n.hijos.iter().enumerate().map(|(i, h)| { let mut r = origen.clone(); r.push(i); (r, h.clone()) }).collect(),
+            None => self.arbol.iter().enumerate().map(|(i, h)| (vec![i], h.clone())).collect(),
+        };
+        let q = self.buscar.trim().to_lowercase();
+        let filtradas: Vec<_> = hijos.into_iter().filter(|(_, h)| {
+            (!self.solo_pendientes || h.incompleto) && (q.is_empty() || h.nombre.to_lowercase().contains(&q) || codigo_tipo(h.tipo).to_lowercase().contains(&q))
+        }).collect();
+
+        // Cabecera de columnas.
+        let w = ui.available_width();
+        let (cx_tipo, cx_tam, cx_est) = (w * 0.50, w * 0.66, w * 0.80);
+        ui.horizontal(|ui| {
+            let (hr, _) = ui.allocate_exact_size(Vec2::new(w, 18.0), Sense::hover());
+            let p = ui.painter().clone();
+            let fid = FontId::proportional(10.5);
+            p.text(Pos2::new(hr.left() + 8.0, hr.center().y), Align2::LEFT_CENTER, tr("Name", "Nombre"), fid.clone(), morado_medio());
+            p.text(Pos2::new(hr.left() + cx_tipo, hr.center().y), Align2::LEFT_CENTER, tr("Type", "Tipo"), fid.clone(), morado_medio());
+            p.text(Pos2::new(hr.left() + cx_tam, hr.center().y), Align2::LEFT_CENTER, tr("Size", "Tamaño"), fid.clone(), morado_medio());
+            p.text(Pos2::new(hr.left() + cx_est, hr.center().y), Align2::LEFT_CENTER, tr("Status", "Estado"), fid, morado_medio());
+        });
+        ui.add_space(2.0);
+
+        if filtradas.is_empty() {
+            vacio(ui, if self.buscar.is_empty() { tr("No items here", "Sin elementos aquí") } else { tr("No matches", "Sin coincidencias") });
+            return;
+        }
         let mut nueva = None;
-        egui::ScrollArea::vertical().id_salt("lista").auto_shrink([false, false]).show(ui, |ui| {
-            if n.hijos.is_empty() {
-                if n.resultados.is_empty() && n.notas.is_empty() {
-                    vacio(ui, tr("Leaf block — no children", "Bloque hoja — sin hijos"));
+        egui::ScrollArea::vertical().id_salt("tabla").auto_shrink([false, false]).show(ui, |ui| {
+            for (ruta, h) in &filtradas {
+                let elegido = self.seleccion.as_ref() == Some(ruta);
+                let (row, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 30.0), Sense::click());
+                let p = ui.painter().clone();
+                if elegido {
+                    p.rect_filled(row, CornerRadius::same(6), acento().gamma_multiply(0.22));
+                    p.rect_filled(Rect::from_min_size(row.left_top(), Vec2::new(2.5, row.height())), CornerRadius::same(2), acento());
+                } else if resp.hovered() {
+                    p.rect_filled(row, CornerRadius::same(6), morado().gamma_multiply(0.55));
                 }
-                for r in &n.resultados {
-                    ui.label(RichText::new(format!("▸ {}", r.rsplit('/').next().unwrap_or(r))).font(mono(12.0)).color(acento()));
-                }
-                for nt in &n.notas {
-                    ui.label(RichText::new(format!("· {nt}")).font(mono(11.0)).color(morado_claro()));
-                }
-            } else {
-                for (i, h) in n.hijos.iter().enumerate() {
-                    let mut ruta = sel.clone();
-                    ruta.push(i);
-                    let elegido = self.seleccion.as_ref() == Some(&ruta);
-                    let marca = if h.incompleto { "⚠ " } else { "" };
-                    let txt = RichText::new(format!("{marca}[{}] {} · {}", codigo_tipo(h.tipo), h.nombre, humano(h.tamano)))
-                        .font(mono(12.0))
-                        .color(if elegido { fondo() } else { color_tipo(h.tipo) })
-                        .background_color(if elegido { color_tipo(h.tipo) } else { Color32::TRANSPARENT });
-                    if ui.add(egui::Label::new(txt).sense(Sense::click())).clicked() {
-                        nueva = Some(ruta);
-                    }
+                dibujar_icono(&p, Pos2::new(row.left() + 16.0, row.center().y), 7.0, icono_tipo(h.tipo), if elegido { acento() } else { color_tipo(h.tipo) });
+                let fid = FontId::proportional(12.5);
+                p.text(Pos2::new(row.left() + 30.0, row.center().y), Align2::LEFT_CENTER, acortar(&h.nombre, 28), fid.clone(), texto());
+                p.text(Pos2::new(row.left() + cx_tipo, row.center().y), Align2::LEFT_CENTER, codigo_tipo(h.tipo), FontId::monospace(11.0), morado_claro());
+                p.text(Pos2::new(row.left() + cx_tam, row.center().y), Align2::LEFT_CENTER, humano(h.tamano), FontId::monospace(11.0), morado_claro());
+                // Chip de estado.
+                let (et, ec) = estado_etiqueta(h.confianza, h.incompleto);
+                let g = p.layout_no_wrap(et.to_string(), FontId::proportional(10.5), ec);
+                let chip_rect = Rect::from_min_size(Pos2::new(row.left() + cx_est, row.center().y - 9.0), Vec2::new(g.size().x + 20.0, 18.0));
+                p.rect_filled(chip_rect, CornerRadius::same(9), ec.gamma_multiply(0.18));
+                p.circle_filled(Pos2::new(chip_rect.left() + 9.0, chip_rect.center().y), 2.6, ec);
+                p.galley(Pos2::new(chip_rect.left() + 15.0, chip_rect.center().y - g.size().y / 2.0), g, ec);
+                if resp.clicked() {
+                    nueva = Some(ruta.clone());
                 }
             }
         });
@@ -1444,7 +1576,7 @@ impl App {
         let Some(n) = buscar_nodo(&self.arbol, &sel) else { return };
         let n = n.clone();
         let mut abrir = None;
-        let alto = (ui.available_height() - 56.0).max(140.0);
+        let alto = (ui.available_height() - 132.0).max(140.0);
         egui::ScrollArea::vertical().id_salt("detalle").max_height(alto).auto_shrink([false, false]).show(ui, |ui| {
             ui.label(RichText::new(&n.nombre).font(titulo(18.0)).color(color_tipo(n.tipo)));
             ui.horizontal(|ui| {
@@ -1507,23 +1639,35 @@ impl App {
         let sep = ui.cursor().top();
         ui.painter().line_segment([Pos2::new(ui.max_rect().left(), sep), Pos2::new(ui.max_rect().right(), sep)], Stroke::new(1.0, morado()));
         ui.add_space(8.0);
+        let ancho = ui.available_width();
         ui.horizontal(|ui| {
-            if ui.add(boton_pri(tr("▶ Extract", "▶ Extraer"), acento())).clicked() {
+            if ui.add(boton_pri(tr("▶ Extract", "▶ Extraer"), acento()).min_size(Vec2::new(ancho * 0.56, 36.0))).clicked() {
                 if let Some(raiz) = self.raiz.clone() {
                     abrir_en_sistema(&raiz.join("extraidos"));
                 } else if let Some(r) = n.resultados.first() {
                     self.abrir_resultado(r);
                 }
             }
-            if ui
-                .add(boton_sec(tr("Ask an AI", "Preguntar a una IA")))
-                .on_hover_text(tr("Copies a local prompt to the clipboard — no connection.", "Copia un prompt local al portapapeles — sin conexión."))
-                .clicked()
-            {
-                let ahora = ui.input(|i| i.time);
-                ui.ctx().copy_text(prompt_ia(&n));
-                self.log(ahora, tr("AI prompt copied to clipboard (offline).", "Prompt para IA copiado al portapapeles (sin conexión).").into(), acento());
+            if n.tipo == Tipo::Texto || !n.resultados.is_empty() {
+                if ui.add(boton_sec(tr("Preview", "Vista previa"))).clicked() {
+                    if let Some(r) = n.resultados.first() {
+                        self.abrir_resultado(r);
+                    }
+                }
             }
+        });
+        ui.add_space(6.0);
+        if ui
+            .add(boton_sec(tr("Ask an AI", "Preguntar a una IA")).min_size(Vec2::new(ui.available_width(), 34.0)))
+            .on_hover_text(tr("Copies a local prompt to the clipboard — no connection.", "Copia un prompt local al portapapeles — sin conexión."))
+            .clicked()
+        {
+            let ahora = ui.input(|i| i.time);
+            ui.ctx().copy_text(prompt_ia(&n));
+            self.log(ahora, tr("AI prompt copied to clipboard (offline).", "Prompt para IA copiado al portapapeles (sin conexión).").into(), acento());
+        }
+        ui.vertical_centered(|ui| {
+            ui.label(RichText::new(tr("Optional · disabled", "Opcional · desactivada")).font(FontId::proportional(10.5)).color(morado_medio()));
         });
     }
 
@@ -2414,6 +2558,19 @@ fn pastilla(ui: &mut Ui, icono: &str, txt: &str, fg: Color32, bg: Color32) {
     p.rect_filled(resp.rect, CornerRadius::same(12), bg);
     dibujar_icono(&p, resp.rect.left_center() + Vec2::new(14.0, 0.0), 6.0, icono, fg);
     p.galley(Pos2::new(resp.rect.left() + 25.0, resp.rect.center().y - g.size().y / 2.0), g, fg);
+}
+
+/// Etiqueta y color del estado de un bloque para la columna "Estado".
+fn estado_etiqueta(c: Confianza, incompleto: bool) -> (&'static str, Color32) {
+    if incompleto {
+        (tr("Warning", "Con avisos"), naranja())
+    } else {
+        match c {
+            Confianza::Confirmado | Confianza::Compatible => (tr("Identified", "Identificado"), verde()),
+            Confianza::Probable => (tr("Probable", "Probable"), morado_claro()),
+            Confianza::Desconocido => (tr("Unknown", "Desconocido"), rojo()),
+        }
+    }
 }
 
 /// Icono representativo de un tipo de bloque.
