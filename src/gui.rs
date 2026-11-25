@@ -117,22 +117,22 @@ const LIMPIO: Paleta = Paleta {
     rejilla_bg: Color32::from_rgb(0xee, 0xee, 0xf1),
 };
 
-// Serio: oscuro de producto, acento morado del concepto; el verde queda para "éxito".
+// Serio: oscuro de producto, acento índigo; verde = éxito, ámbar = aviso.
 const SERIO: Paleta = Paleta {
-    fondo: Color32::from_rgb(0x15, 0x17, 0x1e),
-    morado_oscuro: Color32::from_rgb(0x1e, 0x20, 0x29),
-    morado: Color32::from_rgb(0x27, 0x2a, 0x35),
-    morado_medio: Color32::from_rgb(0x3a, 0x3e, 0x4c),
-    morado_claro: Color32::from_rgb(0xa6, 0xad, 0xbd),
-    verde: Color32::from_rgb(0x3e, 0xcf, 0x8e),
-    acento: Color32::from_rgb(0x7b, 0x61, 0xff),
-    verde_oscuro: Color32::from_rgb(0x1f, 0x3a, 0x2d),
-    naranja: Color32::from_rgb(0xe0, 0xa6, 0x5a),
-    naranja_oscuro: Color32::from_rgb(0x3f, 0x33, 0x1c),
-    rojo: Color32::from_rgb(0xe0, 0x6c, 0x75),
-    texto: Color32::from_rgb(0xe8, 0xea, 0xf1),
-    hondo: Color32::from_rgb(0x10, 0x12, 0x18),
-    rejilla_bg: Color32::from_rgb(0x1a, 0x1c, 0x24),
+    fondo: Color32::from_rgb(0x0f, 0x11, 0x17),
+    morado_oscuro: Color32::from_rgb(0x19, 0x1c, 0x26),
+    morado: Color32::from_rgb(0x26, 0x2a, 0x37),
+    morado_medio: Color32::from_rgb(0x35, 0x3b, 0x4d),
+    morado_claro: Color32::from_rgb(0x9a, 0xa3, 0xb7),
+    verde: Color32::from_rgb(0x35, 0xd4, 0x9a),
+    acento: Color32::from_rgb(0x6d, 0x5c, 0xf5),
+    verde_oscuro: Color32::from_rgb(0x16, 0x35, 0x2a),
+    naranja: Color32::from_rgb(0xf0, 0xb8, 0x4e),
+    naranja_oscuro: Color32::from_rgb(0x3a, 0x2f, 0x17),
+    rojo: Color32::from_rgb(0xef, 0x5f, 0x6b),
+    texto: Color32::from_rgb(0xe9, 0xeb, 0xf2),
+    hondo: Color32::from_rgb(0x0b, 0x0d, 0x12),
+    rejilla_bg: Color32::from_rgb(0x15, 0x17, 0x1f),
 };
 
 // 0 = Sereno, 1 = Mando, 2 = Neutro, 3 = Limpio, 4 = Serio (por defecto).
@@ -301,6 +301,10 @@ pub struct App {
     // Rediseño "Serio": vista activa de la barra lateral y filtro de bloques.
     vista: Vista,
     solo_pendientes: bool,
+    // Comparar (Pro): dos carpetas de salida y su diff.
+    cmp_a: Option<PathBuf>,
+    cmp_b: Option<PathBuf>,
+    cmp_resultado: Option<(Vec<String>, Vec<String>, usize)>,
     // Módulo de claves (interfaz).
     clave_entrada: String,
     clave_lic: String,
@@ -320,8 +324,35 @@ pub struct App {
 /// Vistas de la barra lateral del rediseño "Serio".
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Vista {
+    Inicio,
     Analisis,
-    Configuracion,
+    Explorador,
+    Comparar,
+    Herramientas,
+    Ajustes,
+}
+
+impl Vista {
+    fn etiqueta(self) -> &'static str {
+        match self {
+            Vista::Inicio => tr("Home", "Inicio"),
+            Vista::Analisis => tr("Analysis", "Análisis"),
+            Vista::Explorador => tr("Explorer", "Explorador"),
+            Vista::Comparar => tr("Compare", "Comparar"),
+            Vista::Herramientas => tr("Tools", "Herramientas"),
+            Vista::Ajustes => tr("Settings", "Ajustes"),
+        }
+    }
+    fn icono(self) -> &'static str {
+        match self {
+            Vista::Inicio => "home",
+            Vista::Analisis => "lupa",
+            Vista::Explorador => "carpeta",
+            Vista::Comparar => "comparar",
+            Vista::Herramientas => "llave",
+            Vista::Ajustes => "engranaje",
+        }
+    }
 }
 
 const ALFABETOS: &[(&str, &str)] = &[
@@ -353,9 +384,16 @@ pub fn lanzar(sis: Sistema, archivos: Vec<PathBuf>, salida: PathBuf, auto_inicia
             }
             let mut app = App::new(sis, archivos, salida);
             app.tema = TEMA.load(Ordering::Relaxed);
-            // Vista inicial elegible (pruebas/capturas): CAPAS_VISTA=config.
-            if matches!(std::env::var("CAPAS_VISTA").ok().as_deref(), Some("config") | Some("configuracion") | Some("settings")) {
-                app.vista = Vista::Configuracion;
+            // Vista inicial elegible (pruebas/capturas): CAPAS_VISTA=<nombre>.
+            if let Ok(v) = std::env::var("CAPAS_VISTA") {
+                app.vista = match v.trim().to_lowercase().as_str() {
+                    "inicio" | "home" => Vista::Inicio,
+                    "explorador" | "explorer" => Vista::Explorador,
+                    "comparar" | "compare" => Vista::Comparar,
+                    "herramientas" | "tools" | "config" => Vista::Herramientas,
+                    "ajustes" | "settings" => Vista::Ajustes,
+                    _ => Vista::Analisis,
+                };
             }
             app.auto_iniciar = auto_iniciar && !app.archivos.is_empty();
             Ok(Box::new(app))
@@ -392,6 +430,9 @@ impl App {
             tema: 4,
             vista: Vista::Analisis,
             solo_pendientes: false,
+            cmp_a: None,
+            cmp_b: None,
+            cmp_resultado: None,
             clave_entrada: String::new(),
             clave_lic: String::new(),
             lic_estado: None,
@@ -667,12 +708,16 @@ impl eframe::App for App {
             .frame(marco_cab)
             .show(ui, |ui| self.encabezado_ui(ui, &ctx, ahora));
         egui::Panel::bottom("estado")
-            .exact_size(30.0)
-            .frame(egui::Frame::new().fill(morado_oscuro()).inner_margin(Margin::symmetric(16, 5)))
+            .exact_size(36.0)
+            .frame(egui::Frame::new().fill(morado_oscuro()).inner_margin(Margin::symmetric(16, 6)))
             .show(ui, |ui| self.barra_estado_ui(ui));
         egui::CentralPanel::default().frame(marco_cuerpo).show(ui, |ui| match self.vista {
+            Vista::Inicio => self.vista_inicio(ui),
             Vista::Analisis => self.vista_analisis(ui),
-            Vista::Configuracion => self.vista_config(ui, ahora),
+            Vista::Explorador => self.vista_explorador(ui),
+            Vista::Comparar => self.vista_comparar(ui),
+            Vista::Herramientas => self.recursos_ui(ui, ahora),
+            Vista::Ajustes => self.vista_ajustes(ui),
         });
 
         // Resaltado al arrastrar archivos encima.
@@ -832,53 +877,8 @@ impl App {
                         ui.add_enabled(false, egui::Checkbox::new(&mut false, tr("UNPACK ENGINE BUNDLES (Unity/Godot) · PRO", "DESEMPAQUETAR BUNDLES DE MOTOR (Unity/Godot) · PRO")))
                             .on_disabled_hover_text(tr("Available in CAPAS Pro.", "Disponible en CAPAS Pro."));
                     }
-                    ui.separator();
-                    let mut tema = self.tema;
-                    egui::ComboBox::from_id_salt("tema")
-                        .selected_text(match tema { 0 => tr("THEME: SERENE", "TEMA: SERENO"), 1 => tr("THEME: COMMAND", "TEMA: MANDO"), 2 => tr("THEME: NEUTRAL", "TEMA: NEUTRO"), 3 => tr("THEME: CLEAN", "TEMA: LIMPIO"), _ => tr("THEME: SERIOUS", "TEMA: SERIO") })
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut tema, 4u8, tr("SERIOUS (dark, product)", "SERIO (oscuro, producto)"));
-                            ui.selectable_value(&mut tema, 3u8, tr("CLEAN (light, business)", "LIMPIO (claro, business)"));
-                            ui.selectable_value(&mut tema, 0u8, tr("SERENE (soft dark)", "SERENO (oscuro suave)"));
-                            ui.selectable_value(&mut tema, 2u8, tr("NEUTRAL (grayscale)", "NEUTRO (grises)"));
-                            ui.selectable_value(&mut tema, 1u8, tr("COMMAND (intense)", "MANDO (intenso)"));
-                        });
-                    if tema != self.tema {
-                        self.tema = tema;
-                        TEMA.store(tema, Ordering::Relaxed);
-                        aplicar_visuals(&ui.ctx().clone());
-                    }
-                    let mut idi = if crate::idioma::es() { 1u8 } else { 0u8 };
-                    egui::ComboBox::from_id_salt("idioma")
-                        .selected_text(if idi == 0 { "LANGUAGE: ENGLISH" } else { "IDIOMA: ESPAÑOL" })
-                        .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut idi, 0u8, "English");
-                            ui.selectable_value(&mut idi, 1u8, "Español");
-                        });
-                    crate::idioma::set_es(idi == 1);
-
-                    ui.separator();
-                    let ed = crate::edicion::actual();
-                    ui.label(RichText::new(tfmt(tr("EDITION: CAPAS {}", "EDICIÓN: CAPAS {}"), &[ed.nombre().to_string()])).font(mono(10.0)).color(morado_claro()));
-                    if ed == crate::edicion::Edicion::Core {
-                        ui.label(RichText::new(tr("ACTIVATE WITH KEY (paste CAPAS-...):", "ACTIVAR CON CLAVE (pega CAPAS-...):")).font(mono(10.0)).color(morado_claro()));
-                        ui.horizontal(|ui| {
-                            ui.add(egui::TextEdit::singleline(&mut self.clave_lic).font(mono(11.0)).desired_width(240.0).hint_text("CAPAS-..."));
-                            if ui.add(boton(tr("ACTIVATE", "ACTIVAR"), acento())).clicked() {
-                                match crate::licencia::verificar_clave(self.clave_lic.trim()) {
-                                    Ok(e) => {
-                                        crate::edicion::set(e);
-                                        self.lic_estado = Some(tfmt(tr("Activated: CAPAS {}", "Activado: CAPAS {}"), &[e.nombre().to_string()]));
-                                    }
-                                    Err(m) => self.lic_estado = Some(tfmt(tr("Rejected: {}", "Rechazada: {}"), &[m])),
-                                }
-                            }
-                        });
-                    }
-                    if let Some(msg) = &self.lic_estado {
-                        let col = if crate::edicion::actual() == crate::edicion::Edicion::Core { rojo() } else { verde() };
-                        ui.label(RichText::new(msg).font(mono(10.0)).color(col));
-                    }
+                    ui.add_space(2.0);
+                    ui.label(RichText::new(tr("Appearance, language and license are in Settings.", "La apariencia, el idioma y la licencia están en Ajustes.")).font(FontId::proportional(10.5)).color(morado_medio()));
                 });
             });
 
@@ -1139,23 +1139,22 @@ impl App {
     // ═══════════════════════ Rediseño "Serio" ═══════════════════════
     // Barra lateral de navegación.
     fn nav_ui(&mut self, ui: &mut Ui) {
-        // Marca: logo de capas + wordmark.
-        let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 50.0), Sense::hover());
+        // Marca: logo índigo + wordmark claro + descriptor.
+        let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 46.0), Sense::hover());
         let p = ui.painter().clone();
-        marca_capas(&p, Pos2::new(rect.left() + 17.0, rect.center().y + 2.0), 14.0, naranja());
-        p.text(Pos2::new(rect.left() + 44.0, rect.center().y), Align2::LEFT_CENTER, "CAPAS", titulo(27.0), naranja());
-        ui.add_space(1.0);
-        ui.label(RichText::new(tr("LAYERED DECOMPOSITION", "DESCOMPOSICIÓN POR CAPAS")).font(mono(8.5)).color(morado_claro()));
-        ui.add_space(16.0);
+        marca_capas(&p, Pos2::new(rect.left() + 16.0, rect.center().y + 1.0), 13.0, acento());
+        p.text(Pos2::new(rect.left() + 42.0, rect.center().y), Align2::LEFT_CENTER, "CAPAS", titulo(25.0), texto());
+        ui.add_space(2.0);
+        ui.label(RichText::new(tr("Universal file exploration\nand reverse engineering", "Exploración y retroingeniería\nde archivos universales")).font(FontId::proportional(10.5)).color(morado_claro()));
+        ui.add_space(14.0);
         let yd = ui.cursor().top();
         ui.painter().line_segment([Pos2::new(ui.max_rect().left(), yd), Pos2::new(ui.max_rect().right(), yd)], Stroke::new(1.0, morado()));
-        ui.add_space(16.0);
+        ui.add_space(12.0);
 
-        if nav_item(ui, "◆", tr("Analysis", "Análisis"), self.vista == Vista::Analisis) {
-            self.vista = Vista::Analisis;
-        }
-        if nav_item(ui, "⚙", tr("Settings", "Configuración"), self.vista == Vista::Configuracion) {
-            self.vista = Vista::Configuracion;
+        for v in [Vista::Inicio, Vista::Analisis, Vista::Explorador, Vista::Comparar, Vista::Herramientas, Vista::Ajustes] {
+            if nav_item(ui, v.icono(), v.etiqueta(), self.vista == v) {
+                self.vista = v;
+            }
         }
 
         ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
@@ -1167,28 +1166,44 @@ impl App {
                 crate::edicion::Edicion::Studio => (tr("STUDIO edition", "edición STUDIO"), acento()),
             };
             if ed == crate::edicion::Edicion::Core
-                && ui.add(egui::Label::new(RichText::new(tr("› activate with a key", "› activar con una clave")).font(mono(10.0)).color(morado_medio())).sense(Sense::click())).clicked()
+                && ui.add(egui::Label::new(RichText::new(tr("› activate with a key", "› activar con una clave")).font(FontId::proportional(10.5)).color(morado_medio())).sense(Sense::click())).clicked()
             {
-                self.vista = Vista::Configuracion;
+                self.vista = Vista::Ajustes;
             }
             ui.horizontal(|ui| {
                 let (rid, _) = ui.allocate_exact_size(Vec2::splat(9.0), Sense::hover());
                 ui.painter().circle_filled(rid.center(), 3.5, ec);
-                ui.label(RichText::new(et).font(mono(11.0)).strong().color(ec));
+                ui.label(RichText::new(et).font(FontId::proportional(11.5)).color(ec));
             });
         });
     }
 
-    // Cabecera: breadcrumb, título y acción principal.
+    // Cabecera: estado, título, pastilla de IA y acción principal.
     fn encabezado_ui(&mut self, ui: &mut Ui, ctx: &egui::Context, ahora: f64) {
         ui.horizontal_centered(|ui| {
+            // Insignia de estado (check verde al terminar, punto al trabajar).
+            let (badge, _) = ui.allocate_exact_size(Vec2::splat(30.0), Sense::hover());
+            let p = ui.painter().clone();
+            match self.fase {
+                Fase::Terminado => {
+                    p.circle_filled(badge.center(), 13.0, verde());
+                    let c = badge.center();
+                    p.add(egui::Shape::line(vec![c + Vec2::new(-5.0, 0.0), c + Vec2::new(-1.5, 3.6), c + Vec2::new(5.0, -4.2)], Stroke::new(2.4, Color32::from_rgb(0x0b, 0x2a, 0x1e))));
+                }
+                Fase::Analizando { .. } => {
+                    let pulso = ((ahora * 3.0).sin() * 0.5 + 0.5) as f32;
+                    p.circle_filled(badge.center(), 7.0 + 3.0 * pulso, acento().gamma_multiply(0.5));
+                    p.circle_filled(badge.center(), 5.0, acento());
+                }
+                Fase::Espera => {
+                    p.circle_stroke(badge.center(), 11.0, Stroke::new(2.0, morado_medio()));
+                }
+            }
+            ui.add_space(4.0);
             ui.vertical(|ui| {
                 ui.add_space(13.0);
-                let via = match self.vista {
-                    Vista::Analisis => tr("Analysis", "Análisis"),
-                    Vista::Configuracion => tr("Settings", "Configuración"),
-                };
-                ui.label(RichText::new(format!("CAPAS   ›   {via}")).font(mono(11.0)).color(morado_claro()));
+                let via = self.vista.etiqueta();
+                ui.label(RichText::new(format!("CAPAS   ›   {via}")).font(FontId::proportional(11.0)).color(morado_claro()));
                 let t = match self.fase {
                     Fase::Analizando { .. } => tr("Decomposing…", "Descomponiendo…"),
                     Fase::Terminado => tr("Analysis complete", "Análisis completado"),
@@ -1196,6 +1211,8 @@ impl App {
                 };
                 ui.label(RichText::new(t).font(titulo(22.0)).color(texto()));
             });
+            ui.add_space(14.0);
+            pastilla(ui, "ia", tr("AI disconnected", "IA desconectada"), morado_claro(), morado());
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let es = crate::idioma::es();
                 if ui.add(boton_sec(if es { "ES" } else { "EN" })).on_hover_text(tr("Switch language", "Cambiar idioma")).clicked() {
@@ -1211,7 +1228,7 @@ impl App {
                     }
                 } else {
                     let listo = !self.archivos.is_empty();
-                    if ui.add_enabled(listo, boton_pri(tr("▶ Analyze", "▶ Analizar"), naranja())).clicked() {
+                    if ui.add_enabled(listo, boton_pri(tr("▶ Analyze", "▶ Analizar"), acento())).clicked() {
                         self.iniciar(ctx, ahora);
                     }
                     if let Some(r) = self.raiz.clone() {
@@ -1266,13 +1283,13 @@ impl App {
                     ui.add_space(26.0);
                     ui.label(RichText::new(tr("Drop files or folders here", "Arrastra archivos o carpetas aquí")).font(titulo(24.0)).color(texto()));
                     ui.add_space(6.0);
-                    ui.label(RichText::new(tr("Everything is analyzed locally. Nothing leaves your machine.", "Todo se analiza en local. Nada sale de tu equipo.")).font(mono(12.0)).color(morado_claro()));
+                    ui.label(RichText::new(tr("Everything is analyzed locally. Nothing leaves your machine.", "Todo se analiza en local. Nada sale de tu equipo.")).font(FontId::proportional(12.5)).color(morado_claro()));
                     ui.add_space(22.0);
                 });
                 ui.horizontal(|ui| {
                     let w = ui.available_width();
                     ui.add_space(((w - 330.0) / 2.0).max(0.0));
-                    if ui.add(boton_pri(tr("Choose files", "Elegir archivos"), naranja())).clicked() {
+                    if ui.add(boton_pri(tr("Choose files", "Elegir archivos"), acento())).clicked() {
                         self.elegir_archivos();
                     }
                     if ui.add(boton_sec(tr("Choose folder", "Elegir carpeta"))).clicked() {
@@ -1491,7 +1508,7 @@ impl App {
         ui.painter().line_segment([Pos2::new(ui.max_rect().left(), sep), Pos2::new(ui.max_rect().right(), sep)], Stroke::new(1.0, morado()));
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            if ui.add(boton_pri(tr("▶ Extract", "▶ Extraer"), naranja())).clicked() {
+            if ui.add(boton_pri(tr("▶ Extract", "▶ Extraer"), acento())).clicked() {
                 if let Some(raiz) = self.raiz.clone() {
                     abrir_en_sistema(&raiz.join("extraidos"));
                 } else if let Some(r) = n.resultados.first() {
@@ -1510,8 +1527,196 @@ impl App {
         });
     }
 
-    fn vista_config(&mut self, ui: &mut Ui, ahora: f64) {
-        self.recursos_ui(ui, ahora);
+    // ── Inicio ───────────────────────────────────────────────────────────
+    fn vista_inicio(&mut self, ui: &mut Ui) {
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            ui.add_space(30.0);
+            ui.vertical_centered(|ui| {
+                let (r, _) = ui.allocate_exact_size(Vec2::new(340.0, 72.0), Sense::hover());
+                let p = ui.painter().clone();
+                marca_capas(&p, Pos2::new(r.left() + 26.0, r.center().y), 22.0, acento());
+                p.text(Pos2::new(r.left() + 64.0, r.center().y), Align2::LEFT_CENTER, "CAPAS", titulo(44.0), texto());
+            });
+            ui.vertical_centered(|ui| {
+                ui.label(RichText::new(tr("Explore and reverse-engineer any file, layer by layer — fully local.", "Explora y haz ingeniería inversa de cualquier archivo, capa a capa — 100% local.")).font(FontId::proportional(14.5)).color(morado_claro()));
+            });
+            ui.add_space(22.0);
+            self.zona_carga(ui);
+            ui.add_space(16.0);
+            ui.columns(3, |c| {
+                tarjeta_info(&mut c[0], "capas", tr("Layered decomposition", "Descomposición por capas"), tr("Unpacks archives, disk images, binaries and engine bundles recursively.", "Desempaqueta archivos, imágenes de disco, binarios y bundles de motor de forma recursiva."));
+                tarjeta_info(&mut c[1], "lupa", tr("Identifies everything", "Lo identifica todo"), tr("200+ formats from every platform, each with a confidence level.", "200+ formatos de todas las plataformas, cada uno con su nivel de confianza."));
+                tarjeta_info(&mut c[2], "monitor", tr("Fully local", "100% local"), tr("Nothing leaves your machine. No account, no connection required.", "Nada sale de tu equipo. Sin cuenta ni conexión."));
+            });
+            if !self.arbol.is_empty() {
+                ui.add_space(14.0);
+                egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, morado())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(14)).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.horizontal(|ui| {
+                        let (bloques, pend) = resumen_arbol(&self.arbol);
+                        ui.label(RichText::new(tr("Last analysis", "Último análisis")).font(titulo(14.0)).color(texto()));
+                        ui.label(RichText::new(tfmt(tr("· {} blocks · {} layers · {} pending", "· {} bloques · {} capas · {} pendientes"), &[bloques.to_string(), self.por_capa.len().to_string(), pend.to_string()])).font(FontId::proportional(12.5)).color(morado_claro()));
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            if ui.add(boton_pri(tr("View analysis", "Ver análisis"), acento())).clicked() {
+                                self.vista = Vista::Analisis;
+                            }
+                        });
+                    });
+                });
+            }
+        });
+    }
+
+    // ── Explorador ───────────────────────────────────────────────────────
+    fn vista_explorador(&mut self, ui: &mut Ui) {
+        titulo_vista(ui, "carpeta", tr("Explorer", "Explorador"), tr("Browse the extracted output on disk.", "Navega por la salida extraída en disco."));
+        let Some(raiz) = self.raiz.clone() else {
+            panel_vacio(ui, "carpeta", tr("Nothing to explore yet", "Nada que explorar aún"), tr("Run an analysis and its extracted files will appear here.", "Analiza algo y los archivos extraídos aparecerán aquí."));
+            return;
+        };
+        let destino = { let e = raiz.join("extraidos"); if e.is_dir() { e } else { raiz.clone() } };
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(acortar(&destino.display().to_string(), 70)).font(mono(11.0)).color(morado_claro()));
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui.add(boton_sec(tr("Open in system", "Abrir en el sistema"))).clicked() {
+                    abrir_en_sistema(&destino);
+                }
+            });
+        });
+        ui.add_space(8.0);
+        egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, morado())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(12)).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                arbol_disco(ui, &destino, 0);
+            });
+        });
+    }
+
+    // ── Comparar ─────────────────────────────────────────────────────────
+    fn vista_comparar(&mut self, ui: &mut Ui) {
+        titulo_vista(ui, "comparar", tr("Compare", "Comparar"), tr("Diff two analyses to see what changed between versions.", "Compara dos análisis para ver qué cambió entre versiones."));
+        if !crate::edicion::permite(crate::edicion::COMPARAR) {
+            tarjeta_pro(ui, tr("Compare is a CAPAS Pro feature.", "Comparar es una función de CAPAS Pro."), &mut self.vista);
+            return;
+        }
+        ui.label(RichText::new(tr("Pick two output folders (each containing informe.json).", "Elige dos carpetas de salida (cada una con su informe.json).")).font(FontId::proportional(12.5)).color(morado_claro()));
+        ui.add_space(8.0);
+        let mut lanzar = false;
+        ui.horizontal(|ui| {
+            if ui.add(boton_sec(tr("Folder A…", "Carpeta A…"))).clicked() {
+                if let Some(d) = rfd::FileDialog::new().pick_folder() { self.cmp_a = Some(d); }
+            }
+            ui.label(RichText::new(self.cmp_a.as_ref().map(|p| acortar(&p.display().to_string(), 30)).unwrap_or_else(|| "—".into())).font(mono(10.5)).color(morado_claro()));
+        });
+        ui.horizontal(|ui| {
+            if ui.add(boton_sec(tr("Folder B…", "Carpeta B…"))).clicked() {
+                if let Some(d) = rfd::FileDialog::new().pick_folder() { self.cmp_b = Some(d); }
+            }
+            ui.label(RichText::new(self.cmp_b.as_ref().map(|p| acortar(&p.display().to_string(), 30)).unwrap_or_else(|| "—".into())).font(mono(10.5)).color(morado_claro()));
+        });
+        ui.add_space(8.0);
+        if ui.add_enabled(self.cmp_a.is_some() && self.cmp_b.is_some(), boton_pri(tr("▶ Compare", "▶ Comparar"), acento())).clicked() {
+            lanzar = true;
+        }
+        if lanzar {
+            if let (Some(a), Some(b)) = (self.cmp_a.clone(), self.cmp_b.clone()) {
+                self.cmp_resultado = Some(comparar_salidas(&a, &b));
+            }
+        }
+        if let Some((nuevos, quitados, comunes)) = &self.cmp_resultado {
+            ui.add_space(12.0);
+            egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, morado())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(14)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    chip(ui, &tfmt(tr("+{} added", "+{} nuevos"), &[nuevos.len().to_string()]), verde());
+                    chip(ui, &tfmt(tr("-{} removed", "-{} quitados"), &[quitados.len().to_string()]), rojo());
+                    chip(ui, &tfmt(tr("{} shared", "{} comunes"), &[comunes.to_string()]), morado_claro());
+                });
+                ui.add_space(8.0);
+                egui::ScrollArea::vertical().max_height(360.0).auto_shrink([false, false]).show(ui, |ui| {
+                    for n in nuevos {
+                        ui.label(RichText::new(format!("+ {n}")).font(mono(11.0)).color(verde()));
+                    }
+                    for q in quitados {
+                        ui.label(RichText::new(format!("- {q}")).font(mono(11.0)).color(rojo()));
+                    }
+                });
+            });
+        }
+    }
+
+    // ── Ajustes ──────────────────────────────────────────────────────────
+    fn vista_ajustes(&mut self, ui: &mut Ui) {
+        titulo_vista(ui, "engranaje", tr("Settings", "Ajustes"), tr("Appearance, language and license.", "Apariencia, idioma y licencia."));
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            ui.set_max_width(680.0);
+            // Apariencia (máscaras).
+            tarjeta_ajuste(ui, tr("Appearance", "Apariencia"), |ui| {
+                ui.label(RichText::new(tr("Mask", "Máscara")).font(FontId::proportional(12.0)).color(morado_claro()));
+                ui.add_space(4.0);
+                let temas = [(4u8, tr("Serious", "Serio")), (3, tr("Clean", "Limpio")), (0, tr("Serene", "Sereno")), (2, tr("Neutral", "Neutro")), (1, tr("Command", "Mando"))];
+                ui.horizontal_wrapped(|ui| {
+                    for (idx, nombre) in temas {
+                        let activo = self.tema == idx;
+                        let b = egui::Button::new(RichText::new(nombre).font(FontId::proportional(12.5)).color(if activo { Color32::from_rgb(0xf6, 0xf7, 0xfb) } else { morado_claro() }))
+                            .fill(if activo { acento() } else { morado() })
+                            .corner_radius(CornerRadius::same(7))
+                            .min_size(Vec2::new(0.0, 32.0));
+                        if ui.add(b).clicked() {
+                            self.tema = idx;
+                            TEMA.store(idx, Ordering::Relaxed);
+                            aplicar_visuals(&ui.ctx().clone());
+                        }
+                    }
+                });
+                ui.add_space(10.0);
+                ui.label(RichText::new(tr("Language", "Idioma")).font(FontId::proportional(12.0)).color(morado_claro()));
+                ui.add_space(4.0);
+                ui.horizontal(|ui| {
+                    let es = crate::idioma::es();
+                    for (lab, val) in [("English", false), ("Español", true)] {
+                        let activo = es == val;
+                        let b = egui::Button::new(RichText::new(lab).font(FontId::proportional(12.5)).color(if activo { Color32::from_rgb(0xf6, 0xf7, 0xfb) } else { morado_claro() }))
+                            .fill(if activo { acento() } else { morado() })
+                            .corner_radius(CornerRadius::same(7))
+                            .min_size(Vec2::new(0.0, 32.0));
+                        if ui.add(b).clicked() {
+                            crate::idioma::set_es(val);
+                        }
+                    }
+                });
+            });
+            ui.add_space(12.0);
+            // Licencia / edición.
+            tarjeta_ajuste(ui, tr("License", "Licencia"), |ui| {
+                let ed = crate::edicion::actual();
+                ui.horizontal(|ui| {
+                    let (rid, _) = ui.allocate_exact_size(Vec2::splat(9.0), Sense::hover());
+                    ui.painter().circle_filled(rid.center(), 3.5, if ed == crate::edicion::Edicion::Core { morado_claro() } else { acento() });
+                    ui.label(RichText::new(tfmt(tr("Current edition: CAPAS {}", "Edición actual: CAPAS {}"), &[ed.nombre().to_string()])).font(FontId::proportional(13.0)).color(texto()));
+                });
+                if ed == crate::edicion::Edicion::Core {
+                    ui.add_space(6.0);
+                    ui.label(RichText::new(tr("Activate with your key (paste CAPAS-…):", "Activa con tu clave (pega CAPAS-…):")).font(FontId::proportional(12.0)).color(morado_claro()));
+                    ui.horizontal(|ui| {
+                        ui.add(egui::TextEdit::singleline(&mut self.clave_lic).font(mono(11.5)).desired_width(280.0).hint_text("CAPAS-..."));
+                        if ui.add(boton_pri(tr("Activate", "Activar"), acento())).clicked() {
+                            match crate::licencia::verificar_clave(self.clave_lic.trim()) {
+                                Ok(e) => {
+                                    crate::edicion::set(e);
+                                    self.lic_estado = Some(tfmt(tr("Activated: CAPAS {}", "Activado: CAPAS {}"), &[e.nombre().to_string()]));
+                                }
+                                Err(m) => self.lic_estado = Some(tfmt(tr("Rejected: {}", "Rechazada: {}"), &[m])),
+                            }
+                        }
+                    });
+                }
+                if let Some(msg) = &self.lic_estado {
+                    let col = if crate::edicion::actual() == crate::edicion::Edicion::Core { rojo() } else { verde() };
+                    ui.label(RichText::new(msg).font(FontId::proportional(11.5)).color(col));
+                }
+            });
+        });
     }
 
     fn visor_ui(&mut self, ui: &mut Ui) {
@@ -1718,25 +1923,35 @@ impl App {
             Stroke::new(1.0, morado()),
         );
         ui.horizontal_centered(|ui| {
-            ui.spacing_mut().item_spacing.x = 10.0;
-            // Izquierda: producto + edición.
-            ui.label(RichText::new(format!("CAPAS v{VERSION}")).font(mono(11.0)).color(morado_claro()));
-            ui.label(RichText::new("·").font(mono(11.0)).color(morado_medio()));
-            let ed = crate::edicion::actual();
-            let (et, ec) = match ed {
-                crate::edicion::Edicion::Core => (tr("CORE", "CORE"), morado_claro()),
-                crate::edicion::Edicion::Pro => (tr("PRO", "PRO"), acento()),
-                crate::edicion::Edicion::Studio => (tr("STUDIO", "STUDIO"), acento()),
-            };
-            ui.label(RichText::new(et).font(mono(11.0)).strong().color(ec));
+            ui.spacing_mut().item_spacing.x = 8.0;
+            // Izquierda: garantía de privacidad (monitor + local/offline).
+            dibujar_icono(&ui.painter().clone(), ui.cursor().left_center() + Vec2::new(8.0, 0.0), 7.0, "monitor", morado_claro());
+            ui.add_space(18.0);
+            let (rid, _) = ui.allocate_exact_size(Vec2::splat(9.0), egui::Sense::hover());
+            ui.painter().circle_filled(rid.center(), 4.0, verde());
+            ui.label(RichText::new(tr("Local analysis · Offline", "Análisis local · Sin conexión")).font(FontId::proportional(11.5)).color(morado_claro()));
 
-            // Derecha: garantía de privacidad (señal de confianza clave).
+            // Centro/resumen del análisis actual.
+            if !self.arbol.is_empty() {
+                let (bloques, pend) = resumen_arbol(&self.arbol);
+                let avisos: usize = self.audit.iter().map(|(_, _, h)| h.len()).sum();
+                let nombre = self.arbol.first().map(|n| n.nombre.clone()).unwrap_or_default();
+                ui.label(RichText::new("·").font(FontId::proportional(11.5)).color(morado_medio()));
+                ui.label(RichText::new(tfmt(tr("{} · {} files · {} layers · {} warnings · {} pending", "{} · {} archivos · {} capas · {} avisos · {} pendientes"), &[acortar(&nombre, 24), bloques.to_string(), self.por_capa.len().to_string(), avisos.to_string(), pend.to_string()])).font(FontId::proportional(11.5)).color(morado_medio()));
+            }
+
+            // Derecha: Ver informe.
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.spacing_mut().item_spacing.x = 7.0;
-                ui.label(RichText::new(tr("LOCAL ANALYSIS · OFFLINE", "ANÁLISIS LOCAL · SIN CONEXIÓN")).font(mono(11.0)).color(morado_claro()));
-                // Punto verde = estado seguro (sin red). El verde se reserva a "éxito/seguro".
-                let (rid, _) = ui.allocate_exact_size(Vec2::splat(9.0), egui::Sense::hover());
-                ui.painter().circle_filled(rid.center(), 4.0, verde());
+                if self.raiz.is_some() {
+                    let b = egui::Button::new(RichText::new(tr("View report", "Ver informe")).font(FontId::proportional(11.5)).color(texto()))
+                        .fill(morado())
+                        .stroke(Stroke::new(1.0, morado_medio()))
+                        .corner_radius(CornerRadius::same(6))
+                        .min_size(Vec2::new(0.0, 22.0));
+                    if ui.add(b).clicked() {
+                        self.abrir_resultado("informe.md");
+                    }
+                }
             });
         });
     }
@@ -1811,18 +2026,21 @@ fn arbol_nodo(ui: &mut Ui, n: &Nodo, ruta: Vec<usize>, sel: &Option<Vec<usize>>,
 // ── Piezas del rediseño "Serio" ─────────────────────────────────────────
 /// Elemento de la barra lateral; devuelve true al hacer clic.
 fn nav_item(ui: &mut Ui, icono: &str, etiqueta: &str, activo: bool) -> bool {
-    let alto = 40.0;
+    let alto = 42.0;
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), alto), Sense::click());
     let p = ui.painter().clone();
     if activo {
-        p.rect_filled(rect, CornerRadius::same(8), acento().gamma_multiply(0.18));
+        p.rect_filled(rect, CornerRadius::same(9), acento().gamma_multiply(0.20));
         p.rect_filled(Rect::from_min_size(rect.left_top(), Vec2::new(3.0, alto)), CornerRadius::same(2), acento());
     } else if resp.hovered() {
-        p.rect_filled(rect, CornerRadius::same(8), morado().gamma_multiply(0.7));
+        p.rect_filled(rect, CornerRadius::same(9), morado().gamma_multiply(0.6));
     }
-    let col = if activo { texto() } else { morado_claro() };
-    p.text(rect.left_center() + Vec2::new(16.0, 0.0), Align2::LEFT_CENTER, format!("{icono}   {etiqueta}"), titulo(15.0), col);
-    ui.add_space(6.0);
+    let icol = if activo { acento() } else { morado_claro() };
+    let tcol = if activo { texto() } else { morado_claro() };
+    dibujar_icono(&p, Pos2::new(rect.left() + 22.0, rect.center().y), 8.0, icono, icol);
+    let fuente = if activo { titulo(14.5) } else { FontId::proportional(14.5) };
+    p.text(Pos2::new(rect.left() + 42.0, rect.center().y), Align2::LEFT_CENTER, etiqueta, fuente, tcol);
+    ui.add_space(5.0);
     resp.clicked()
 }
 
@@ -1844,12 +2062,121 @@ fn marca_capas(p: &egui::Painter, centro: Pos2, escala: f32, base: Color32) {
     }
 }
 
-/// Botón principal (relleno, esquinas suaves).
+/// Iconos vectoriales de línea (navegación, tarjetas, filas…). `s` = semitamaño.
+fn dibujar_icono(p: &egui::Painter, c: Pos2, s: f32, kind: &str, col: Color32) {
+    let st = Stroke::new((s * 0.17).max(1.4), col);
+    let poli = |pts: Vec<Pos2>| p.add(egui::Shape::line(pts, st));
+    let ln = |a: Pos2, b: Pos2| p.line_segment([a, b], st);
+    let caja = |min: Pos2, max: Pos2| p.rect_stroke(Rect::from_min_max(min, max), CornerRadius::same((s * 0.22).max(1.0) as u8), st, StrokeKind::Middle);
+    let g = |x: f32, y: f32| Pos2::new(c.x + x * s, c.y + y * s);
+    match kind {
+        "home" => {
+            poli(vec![g(-1.0, -0.1), g(0.0, -1.0), g(1.0, -0.1)]);
+            poli(vec![g(-0.72, -0.12), g(-0.72, 0.82), g(0.72, 0.82), g(0.72, -0.12)]);
+        }
+        "lupa" => {
+            p.circle_stroke(g(-0.18, -0.18), s * 0.6, st);
+            ln(g(0.28, 0.28), g(0.85, 0.85));
+        }
+        "carpeta" | "folder" => {
+            poli(vec![g(-0.85, 0.62), g(-0.85, -0.42), g(-0.18, -0.42), g(0.0, -0.2), g(0.85, -0.2), g(0.85, 0.62), g(-0.85, 0.62)]);
+        }
+        "comparar" => {
+            caja(g(-0.9, -0.72), g(-0.18, 0.72));
+            caja(g(0.18, -0.72), g(0.9, 0.72));
+        }
+        "llave" => {
+            for (row, kx) in [(-0.55f32, -0.25f32), (0.0, 0.35), (0.55, -0.1)] {
+                ln(g(-0.85, row), g(0.85, row));
+                p.circle_filled(g(kx, row), s * 0.2, morado_oscuro());
+                p.circle_stroke(g(kx, row), s * 0.2, st);
+            }
+        }
+        "engranaje" => {
+            p.circle_stroke(c, s * 0.42, st);
+            for i in 0..8 {
+                let d = Vec2::angled(i as f32 * std::f32::consts::TAU / 8.0);
+                ln(c + d * (s * 0.55), c + d * (s * 0.92));
+            }
+        }
+        "capas" => {
+            for dy in [-0.5f32, 0.1, 0.7] {
+                let y = c.y + dy * s;
+                poli(vec![Pos2::new(c.x, y - s * 0.34), Pos2::new(c.x + s * 0.9, y), Pos2::new(c.x, y + s * 0.34), Pos2::new(c.x - s * 0.9, y), Pos2::new(c.x, y - s * 0.34)]);
+            }
+        }
+        "aviso" => {
+            poli(vec![g(0.0, -0.8), g(0.85, 0.65), g(-0.85, 0.65), g(0.0, -0.8)]);
+            ln(g(0.0, -0.12), g(0.0, 0.28));
+            p.circle_filled(g(0.0, 0.5), s * 0.1, col);
+        }
+        "pendiente" => {
+            caja(g(-0.7, -0.72), g(0.7, 0.82));
+            p.rect_filled(Rect::from_center_size(g(0.0, -0.72), Vec2::new(s * 0.6, s * 0.3)), CornerRadius::same(2), col);
+            poli(vec![g(-0.32, 0.12), g(-0.05, 0.4), g(0.42, -0.2)]);
+        }
+        "archivo" => {
+            poli(vec![g(-0.6, -0.82), g(0.25, -0.82), g(0.6, -0.46), g(0.6, 0.82), g(-0.6, 0.82), g(-0.6, -0.82)]);
+            poli(vec![g(0.25, -0.82), g(0.25, -0.46), g(0.6, -0.46)]);
+        }
+        "imagen" => {
+            caja(g(-0.82, -0.66), g(0.82, 0.66));
+            p.circle_filled(g(-0.32, -0.26), s * 0.14, col);
+            poli(vec![g(-0.82, 0.5), g(-0.1, -0.1), g(0.3, 0.26), g(0.82, -0.2)]);
+        }
+        "disco" => {
+            p.circle_stroke(c, s * 0.88, st);
+            p.circle_stroke(c, s * 0.22, st);
+        }
+        "informe" => {
+            poli(vec![g(-0.6, -0.82), g(0.25, -0.82), g(0.6, -0.46), g(0.6, 0.82), g(-0.6, 0.82), g(-0.6, -0.82)]);
+            for yy in [-0.3f32, 0.05, 0.4] {
+                ln(g(-0.35, yy), g(0.38, yy));
+            }
+        }
+        "monitor" => {
+            caja(g(-0.9, -0.7), g(0.9, 0.45));
+            ln(g(-0.35, 0.82), g(0.35, 0.82));
+            ln(g(0.0, 0.45), g(0.0, 0.82));
+        }
+        "pin" => {
+            p.circle_stroke(g(0.0, -0.3), s * 0.42, st);
+            ln(g(0.0, 0.12), g(0.0, 0.85));
+        }
+        "ia" => {
+            caja(g(-0.72, -0.52), g(0.72, 0.62));
+            p.circle_filled(g(-0.3, 0.05), s * 0.12, col);
+            p.circle_filled(g(0.3, 0.05), s * 0.12, col);
+            ln(g(0.0, -0.52), g(0.0, -0.82));
+            p.circle_filled(g(0.0, -0.86), s * 0.12, col);
+        }
+        "ojo" => {
+            poli(vec![g(-0.85, 0.0), g(0.0, -0.55), g(0.85, 0.0), g(0.0, 0.55), g(-0.85, 0.0)]);
+            p.circle_filled(c, s * 0.22, col);
+        }
+        "extraer" => {
+            ln(g(0.0, -0.75), g(0.0, 0.3));
+            poli(vec![g(-0.35, -0.05), g(0.0, 0.35), g(0.35, -0.05)]);
+            ln(g(-0.7, 0.7), g(0.7, 0.7));
+        }
+        "check" => {
+            p.circle_stroke(c, s * 0.9, st);
+            poli(vec![g(-0.4, 0.0), g(-0.1, 0.32), g(0.42, -0.3)]);
+        }
+        _ => {
+            p.circle_stroke(c, s * 0.7, st);
+        }
+    }
+}
+
+/// Botón principal (relleno, esquinas suaves). Texto claro para contraste.
 fn boton_pri(texto: &str, color: Color32) -> egui::Button<'static> {
-    egui::Button::new(RichText::new(texto.to_string()).font(titulo(14.0)).color(fondo()))
+    // Sobre acento/colores oscuros el texto va claro; sobre ámbar/verde claros, oscuro.
+    let claro = color == acento() || color == rojo();
+    egui::Button::new(RichText::new(texto.to_string()).font(titulo(13.5)).color(if claro { Color32::from_rgb(0xf6, 0xf7, 0xfb) } else { Color32::from_rgb(0x12, 0x14, 0x1a) }))
         .fill(color)
-        .corner_radius(CornerRadius::same(7))
-        .min_size(Vec2::new(0.0, 34.0))
+        .corner_radius(CornerRadius::same(8))
+        .min_size(Vec2::new(0.0, 36.0))
 }
 
 /// Botón secundario (contorno).
@@ -1928,6 +2255,176 @@ fn chip(ui: &mut Ui, t: &str, col: Color32) {
     p.rect_filled(resp.rect, CornerRadius::same(4), col.gamma_multiply(0.20));
     p.rect_stroke(resp.rect, CornerRadius::same(4), Stroke::new(1.0, col), StrokeKind::Inside);
     p.galley(resp.rect.center() - g.size() / 2.0, g, col);
+}
+
+/// Cabecera de una vista secundaria (icono + título + subtítulo).
+fn titulo_vista(ui: &mut Ui, icono: &str, titulo_txt: &str, sub: &str) {
+    ui.horizontal(|ui| {
+        let (rid, _) = ui.allocate_exact_size(Vec2::splat(24.0), Sense::hover());
+        dibujar_icono(&ui.painter().clone(), rid.center(), 9.5, icono, acento());
+        ui.add_space(2.0);
+        ui.vertical(|ui| {
+            ui.label(RichText::new(titulo_txt).font(titulo(19.0)).color(texto()));
+            ui.label(RichText::new(sub).font(FontId::proportional(12.0)).color(morado_claro()));
+        });
+    });
+    ui.add_space(12.0);
+}
+
+/// Estado vacío centrado con icono grande.
+fn panel_vacio(ui: &mut Ui, icono: &str, titulo_txt: &str, sub: &str) {
+    ui.add_space(54.0);
+    ui.vertical_centered(|ui| {
+        let (rid, _) = ui.allocate_exact_size(Vec2::splat(50.0), Sense::hover());
+        dibujar_icono(&ui.painter().clone(), rid.center(), 19.0, icono, morado_medio());
+        ui.add_space(10.0);
+        ui.label(RichText::new(titulo_txt).font(titulo(17.0)).color(morado_claro()));
+        ui.label(RichText::new(sub).font(FontId::proportional(12.5)).color(morado_medio()));
+    });
+}
+
+/// Tarjeta informativa (Inicio): insignia de icono + título + descripción.
+fn tarjeta_info(ui: &mut Ui, icono: &str, titulo_txt: &str, desc: &str) {
+    egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, morado())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(14)).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.set_min_height(120.0);
+        let (badge, _) = ui.allocate_exact_size(Vec2::splat(32.0), Sense::hover());
+        let p = ui.painter().clone();
+        p.rect_filled(badge, CornerRadius::same(8), acento().gamma_multiply(0.18));
+        dibujar_icono(&p, badge.center(), 9.0, icono, acento());
+        ui.add_space(9.0);
+        ui.label(RichText::new(titulo_txt).font(titulo(14.5)).color(texto()));
+        ui.add_space(2.0);
+        ui.label(RichText::new(desc).font(FontId::proportional(12.0)).color(morado_claro()));
+    });
+}
+
+/// Tarjeta de función Pro bloqueada.
+fn tarjeta_pro(ui: &mut Ui, msg: &str, vista: &mut Vista) {
+    egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, acento().gamma_multiply(0.6))).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(18)).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal(|ui| {
+            chip(ui, "PRO", acento());
+            ui.label(RichText::new(msg).font(titulo(14.0)).color(texto()));
+        });
+        ui.add_space(8.0);
+        ui.label(RichText::new(tr("Activate CAPAS Pro to unlock version comparison and more.", "Activa CAPAS Pro para desbloquear la comparación de versiones y más.")).font(FontId::proportional(12.5)).color(morado_claro()));
+        ui.add_space(12.0);
+        if ui.add(boton_pri(tr("Go to Settings", "Ir a Ajustes"), acento())).clicked() {
+            *vista = Vista::Ajustes;
+        }
+    });
+}
+
+/// Tarjeta de ajuste con título.
+fn tarjeta_ajuste<R>(ui: &mut Ui, titulo_txt: &str, contenido: impl FnOnce(&mut Ui) -> R) -> R {
+    egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, morado())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(16)).show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.label(RichText::new(titulo_txt).font(titulo(15.0)).color(texto()));
+        ui.add_space(10.0);
+        contenido(ui)
+    }).inner
+}
+
+/// Icono según la extensión del archivo.
+fn icono_archivo(nombre: &str) -> &'static str {
+    let ext = nombre.rsplit('.').next().unwrap_or("").to_lowercase();
+    match ext.as_str() {
+        "png" | "jpg" | "jpeg" | "gif" | "bmp" | "webp" | "tga" | "dds" | "ktx" | "svg" => "imagen",
+        "iso" | "bin" | "cue" | "img" | "chd" => "disco",
+        "md" | "txt" | "json" | "log" => "informe",
+        _ => "archivo",
+    }
+}
+
+/// Árbol del sistema de ficheros (Explorador). Profundidad acotada.
+fn arbol_disco(ui: &mut Ui, dir: &Path, prof: usize) {
+    if prof > 7 {
+        return;
+    }
+    let Ok(rd) = fs::read_dir(dir) else { return };
+    let mut entradas: Vec<_> = rd.filter_map(|e| e.ok()).collect();
+    entradas.sort_by_key(|e| (!e.path().is_dir(), e.file_name().to_string_lossy().to_lowercase()));
+    for e in entradas {
+        let path = e.path();
+        let nombre = e.file_name().to_string_lossy().into_owned();
+        if path.is_dir() {
+            let id = ui.make_persistent_id(&path);
+            egui::collapsing_header::CollapsingState::load_with_default_open(ui.ctx(), id, prof < 1)
+                .show_header(ui, |ui| {
+                    dibujar_icono(&ui.painter().clone(), ui.cursor().left_center() + Vec2::new(8.0, 9.0), 7.0, "carpeta", acento());
+                    ui.add_space(20.0);
+                    ui.label(RichText::new(&nombre).font(mono(12.0)).color(texto()));
+                })
+                .body(|ui| arbol_disco(ui, &path, prof + 1));
+        } else {
+            let tam = e.metadata().ok().map(|m| humano(m.len())).unwrap_or_default();
+            ui.horizontal(|ui| {
+                ui.add_space(20.0);
+                dibujar_icono(&ui.painter().clone(), ui.cursor().left_center() + Vec2::new(7.0, 0.0), 7.0, icono_archivo(&nombre), morado_claro());
+                ui.add_space(18.0);
+                if ui.add(egui::Label::new(RichText::new(&nombre).font(mono(12.0)).color(morado_claro())).sense(Sense::click())).clicked() {
+                    abrir_en_sistema(&path);
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.label(RichText::new(tam).font(mono(10.5)).color(morado_medio()));
+                });
+            });
+        }
+    }
+}
+
+/// Compara dos carpetas de salida por los nombres de sus informe.json.
+fn comparar_salidas(a: &Path, b: &Path) -> (Vec<String>, Vec<String>, usize) {
+    fn nombres(dir: &Path) -> std::collections::BTreeSet<String> {
+        let mut set = std::collections::BTreeSet::new();
+        if let Ok(txt) = fs::read_to_string(dir.join("informe.json")) {
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&txt) {
+                fn rec(v: &serde_json::Value, set: &mut std::collections::BTreeSet<String>) {
+                    if let Some(arr) = v.as_array() {
+                        for n in arr {
+                            rec(n, set);
+                        }
+                    } else if let Some(o) = v.as_object() {
+                        if let Some(n) = o.get("nombre").and_then(|x| x.as_str()) {
+                            set.insert(n.to_string());
+                        }
+                        if let Some(h) = o.get("hijos") {
+                            rec(h, set);
+                        }
+                    }
+                }
+                rec(&v, &mut set);
+            }
+        }
+        set
+    }
+    let (sa, sb) = (nombres(a), nombres(b));
+    let nuevos: Vec<String> = sb.difference(&sa).cloned().collect();
+    let quitados: Vec<String> = sa.difference(&sb).cloned().collect();
+    let comunes = sa.intersection(&sb).count();
+    (nuevos, quitados, comunes)
+}
+
+/// Pastilla redondeada con icono + texto (p. ej. "IA desconectada").
+fn pastilla(ui: &mut Ui, icono: &str, txt: &str, fg: Color32, bg: Color32) {
+    let g = ui.painter().layout_no_wrap(txt.to_string(), FontId::proportional(11.5), fg);
+    let w = g.size().x + 34.0;
+    let (resp, p) = ui.allocate_painter(Vec2::new(w, 25.0), Sense::hover());
+    p.rect_filled(resp.rect, CornerRadius::same(12), bg);
+    dibujar_icono(&p, resp.rect.left_center() + Vec2::new(14.0, 0.0), 6.0, icono, fg);
+    p.galley(Pos2::new(resp.rect.left() + 25.0, resp.rect.center().y - g.size().y / 2.0), g, fg);
+}
+
+/// Icono representativo de un tipo de bloque.
+fn icono_tipo(t: Tipo) -> &'static str {
+    match t {
+        Tipo::Iso | Tipo::Disco | Tipo::Chd => "disco",
+        Tipo::Imagen => "imagen",
+        Tipo::Zip | Tipo::Tar | Tipo::SieteZ | Tipo::Rar | Tipo::Cab | Tipo::RecursoJuego | Tipo::Gzip | Tipo::Zstd | Tipo::Lz4 => "carpeta",
+        Tipo::Texto => "informe",
+        _ => "archivo",
+    }
 }
 
 /// Cuenta (bloques_totales, pendientes) recorriendo el árbol.
@@ -2123,43 +2620,38 @@ fn abrir_en_sistema(p: &Path) {
 
 // ── Estilo ──────────────────────────────────────────────────────────────
 fn configurar_estilo(ctx: &egui::Context) {
+    // Fuentes de marca embebidas: Inter (UI) + JetBrains Mono (datos).
+    // Van dentro del binario para verse idénticas en Windows, Linux y macOS.
+    const INTER: &[u8] = include_bytes!("../assets/fonts/Inter-Regular.otf");
+    const INTER_SB: &[u8] = include_bytes!("../assets/fonts/Inter-SemiBold.otf");
+    const INTER_BOLD: &[u8] = include_bytes!("../assets/fonts/Inter-Bold.otf");
+    const JBMONO: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf");
+
     let mut fuentes = FontDefinitions::default();
-    let mut familia_titulo = Vec::new();
-    for (nombre, rutas) in [
-        (
-            "serif_pesada",
-            &[
-                "/usr/share/fonts/truetype/dejavu/DejaVuSerifCondensed-Bold.ttf",
-                "/usr/share/fonts/dejavu/DejaVuSerifCondensed-Bold.ttf",
-                "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
-                "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf",
-                "/usr/share/fonts/liberation-serif/LiberationSerif-Bold.ttf",
-                "C:\\Windows\\Fonts\\timesbd.ttf",
-                "/System/Library/Fonts/Supplemental/Times New Roman Bold.ttf",
-                "/Library/Fonts/Times New Roman Bold.ttf",
-            ][..],
-        ),
-    ] {
-        if let Some(datos) = rutas.iter().find_map(|r| fs::read(r).ok()) {
-            fuentes.font_data.insert(nombre.into(), Arc::new(FontData::from_owned(datos)));
-            familia_titulo.push(nombre.to_string());
-        }
-    }
-    for r in [
-        "/usr/share/fonts/truetype/jetbrains-mono/JetBrainsMono-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf",
-        "C:\\Windows\\Fonts\\consola.ttf",
-        "/System/Library/Fonts/Menlo.ttc",
-    ] {
-        if let Ok(d) = fs::read(r) {
-            fuentes.font_data.insert("mono_sistema".into(), Arc::new(FontData::from_owned(d)));
-            fuentes.families.entry(FontFamily::Monospace).or_default().insert(0, "mono_sistema".into());
-            break;
-        }
-    }
-    let respaldo = fuentes.families.get(&FontFamily::Proportional).cloned().unwrap_or_default();
-    familia_titulo.extend(respaldo);
-    fuentes.families.insert(FontFamily::Name("titulo".into()), familia_titulo);
+    fuentes.font_data.insert("inter".into(), Arc::new(FontData::from_static(INTER)));
+    fuentes.font_data.insert("inter_sb".into(), Arc::new(FontData::from_static(INTER_SB)));
+    fuentes.font_data.insert("inter_bold".into(), Arc::new(FontData::from_static(INTER_BOLD)));
+    fuentes.font_data.insert("jbmono".into(), Arc::new(FontData::from_static(JBMONO)));
+
+    // Respaldo (emoji/CJK) que egui ya trae, para conservarlo tras nuestras fuentes.
+    let resp_prop = fuentes.families.get(&FontFamily::Proportional).cloned().unwrap_or_default();
+    let resp_mono = fuentes.families.get(&FontFamily::Monospace).cloned().unwrap_or_default();
+
+    // Cuerpo (Proportional) = Inter Regular.
+    let mut prop = vec!["inter".to_string()];
+    prop.extend(resp_prop.iter().filter(|f| *f != "inter").cloned());
+    fuentes.families.insert(FontFamily::Proportional, prop);
+
+    // Títulos ("titulo") = Inter Bold.
+    let mut titulo = vec!["inter_bold".to_string(), "inter_sb".to_string()];
+    titulo.extend(resp_prop.iter().cloned());
+    fuentes.families.insert(FontFamily::Name("titulo".into()), titulo);
+
+    // Monoespaciada = JetBrains Mono.
+    let mut mono = vec!["jbmono".to_string()];
+    mono.extend(resp_mono.iter().filter(|f| *f != "jbmono").cloned());
+    fuentes.families.insert(FontFamily::Monospace, mono);
+
     ctx.set_fonts(fuentes);
 
     aplicar_visuals(ctx);
@@ -2205,7 +2697,7 @@ fn icono() -> egui::IconData {
     // Logo: pila isométrica de 3 capas en naranja de marca (independiente del tema).
     let n = 128usize;
     let mut rgba = vec![0u8; n * n * 4];
-    let base = Color32::from_rgb(0xDE, 0x92, 0x33);
+    let base = Color32::from_rgb(0x6d, 0x5c, 0xf5);
     let (w, h, t, gap) = (34.0f32, 18.0f32, 15.0f32, 21.0f32);
     let cx = n as f32 / 2.0;
     let cy0 = n as f32 / 2.0 + 6.0;
