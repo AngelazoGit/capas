@@ -298,6 +298,9 @@ pub struct App {
     visor: Option<Visor>,
     auto_iniciar: bool,
     tema: u8,
+    // Rediseño "Serio": vista activa de la barra lateral y filtro de bloques.
+    vista: Vista,
+    solo_pendientes: bool,
     // Módulo de claves (interfaz).
     clave_entrada: String,
     clave_lic: String,
@@ -312,6 +315,13 @@ pub struct App {
     clasif: Vec<(Categoria, usize)>,
     // Resultado de la auditoría: (nombre, veredicto, hallazgos que no son info).
     audit: Vec<(String, Veredicto, Vec<(Nivel, String)>)>,
+}
+
+/// Vistas de la barra lateral del rediseño "Serio".
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Vista {
+    Analisis,
+    Configuracion,
 }
 
 const ALFABETOS: &[(&str, &str)] = &[
@@ -343,6 +353,10 @@ pub fn lanzar(sis: Sistema, archivos: Vec<PathBuf>, salida: PathBuf, auto_inicia
             }
             let mut app = App::new(sis, archivos, salida);
             app.tema = TEMA.load(Ordering::Relaxed);
+            // Vista inicial elegible (pruebas/capturas): CAPAS_VISTA=config.
+            if matches!(std::env::var("CAPAS_VISTA").ok().as_deref(), Some("config") | Some("configuracion") | Some("settings")) {
+                app.vista = Vista::Configuracion;
+            }
             app.auto_iniciar = auto_iniciar && !app.archivos.is_empty();
             Ok(Box::new(app))
         }),
@@ -376,6 +390,8 @@ impl App {
             visor: None,
             auto_iniciar: false,
             tema: 4,
+            vista: Vista::Analisis,
+            solo_pendientes: false,
             clave_entrada: String::new(),
             clave_lic: String::new(),
             lic_estado: None,
@@ -636,29 +652,28 @@ impl eframe::App for App {
         // Animaciones continuas (suaves cuando está en espera).
         ctx.request_repaint_after(if self.analizando() { Duration::from_millis(16) } else { Duration::from_millis(50) });
 
-        let marco_panel = egui::Frame::new().fill(fondo()).inner_margin(Margin::same(10));
+        // ── Rediseño "Serio": barra lateral · cabecera · cuerpo · barra de estado ──
+        let marco_nav = egui::Frame::new().fill(hondo()).inner_margin(Margin { left: 14, right: 14, top: 16, bottom: 12 });
+        let marco_cab = egui::Frame::new().fill(morado_oscuro()).inner_margin(Margin { left: 22, right: 22, top: 0, bottom: 0 });
+        let marco_cuerpo = egui::Frame::new().fill(fondo()).inner_margin(Margin::same(18));
 
-        egui::Panel::top("cabecera").exact_size(104.0).frame(marco_panel).show(ui, |ui| self.cabecera(ui, ahora));
-        egui::Panel::bottom("estado")
-            .exact_size(28.0)
-            .frame(egui::Frame::new().fill(morado_oscuro()).inner_margin(Margin::symmetric(12, 4)))
-            .show(ui, |ui| self.barra_estado_ui(ui));
-        egui::Panel::bottom("registro")
-            .resizable(true)
-            .default_size(190.0)
-            .frame(marco_panel)
-            .show(ui, |ui| self.registro_ui(ui));
-        egui::Panel::left("recursos")
+        egui::Panel::left("nav")
             .resizable(false)
-            .exact_size(310.0)
-            .frame(marco_panel)
-            .show(ui, |ui| self.recursos_ui(ui, ahora));
-        egui::Panel::right("estratos")
-            .resizable(true)
-            .default_size(430.0)
-            .frame(marco_panel)
-            .show(ui, |ui| self.estratos_ui(ui));
-        egui::CentralPanel::default().frame(marco_panel).show(ui, |ui| self.central_ui(ui, &ctx, ahora));
+            .exact_size(216.0)
+            .frame(marco_nav)
+            .show(ui, |ui| self.nav_ui(ui));
+        egui::Panel::top("encabezado")
+            .exact_size(72.0)
+            .frame(marco_cab)
+            .show(ui, |ui| self.encabezado_ui(ui, &ctx, ahora));
+        egui::Panel::bottom("estado")
+            .exact_size(30.0)
+            .frame(egui::Frame::new().fill(morado_oscuro()).inner_margin(Margin::symmetric(16, 5)))
+            .show(ui, |ui| self.barra_estado_ui(ui));
+        egui::CentralPanel::default().frame(marco_cuerpo).show(ui, |ui| match self.vista {
+            Vista::Analisis => self.vista_analisis(ui),
+            Vista::Configuracion => self.vista_config(ui, ahora),
+        });
 
         // Resaltado al arrastrar archivos encima.
         if ctx.input(|i| !i.raw.hovered_files.is_empty()) {
@@ -1121,6 +1136,374 @@ impl App {
         }
     }
 
+    // ═══════════════════════ Rediseño "Serio" ═══════════════════════
+    // Barra lateral de navegación.
+    fn nav_ui(&mut self, ui: &mut Ui) {
+        ui.label(RichText::new("CAPAS").font(titulo(26.0)).color(naranja()));
+        ui.label(RichText::new(tr("LAYERED DECOMPOSITION", "DESCOMPOSICIÓN POR CAPAS")).font(mono(9.0)).color(morado_claro()));
+        ui.add_space(24.0);
+
+        if nav_item(ui, "◆", tr("Analysis", "Análisis"), self.vista == Vista::Analisis) {
+            self.vista = Vista::Analisis;
+        }
+        if nav_item(ui, "⚙", tr("Settings", "Configuración"), self.vista == Vista::Configuracion) {
+            self.vista = Vista::Configuracion;
+        }
+
+        ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
+            ui.add_space(2.0);
+            let ed = crate::edicion::actual();
+            let (et, ec) = match ed {
+                crate::edicion::Edicion::Core => (tr("CORE edition", "edición CORE"), morado_claro()),
+                crate::edicion::Edicion::Pro => (tr("PRO edition", "edición PRO"), acento()),
+                crate::edicion::Edicion::Studio => (tr("STUDIO edition", "edición STUDIO"), acento()),
+            };
+            if ed == crate::edicion::Edicion::Core
+                && ui.add(egui::Label::new(RichText::new(tr("› activate with a key", "› activar con una clave")).font(mono(10.0)).color(morado_medio())).sense(Sense::click())).clicked()
+            {
+                self.vista = Vista::Configuracion;
+            }
+            ui.horizontal(|ui| {
+                let (rid, _) = ui.allocate_exact_size(Vec2::splat(9.0), Sense::hover());
+                ui.painter().circle_filled(rid.center(), 3.5, ec);
+                ui.label(RichText::new(et).font(mono(11.0)).strong().color(ec));
+            });
+        });
+    }
+
+    // Cabecera: breadcrumb, título y acción principal.
+    fn encabezado_ui(&mut self, ui: &mut Ui, ctx: &egui::Context, ahora: f64) {
+        ui.horizontal_centered(|ui| {
+            ui.vertical(|ui| {
+                ui.add_space(13.0);
+                let via = match self.vista {
+                    Vista::Analisis => tr("Analysis", "Análisis"),
+                    Vista::Configuracion => tr("Settings", "Configuración"),
+                };
+                ui.label(RichText::new(format!("CAPAS   ›   {via}")).font(mono(11.0)).color(morado_claro()));
+                let t = match self.fase {
+                    Fase::Analizando { .. } => tr("Decomposing…", "Descomponiendo…"),
+                    Fase::Terminado => tr("Analysis complete", "Análisis completado"),
+                    Fase::Espera => tr("Ready to analyze", "Listo para analizar"),
+                };
+                ui.label(RichText::new(t).font(titulo(22.0)).color(texto()));
+            });
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                let es = crate::idioma::es();
+                if ui.add(boton_sec(if es { "ES" } else { "EN" })).on_hover_text(tr("Switch language", "Cambiar idioma")).clicked() {
+                    crate::idioma::set_es(!es);
+                }
+                ui.add_space(6.0);
+                if self.analizando() {
+                    let cancelar = if let Fase::Analizando { cancelar, .. } = &self.fase { Some(cancelar.clone()) } else { None };
+                    if ui.add(boton_pri(tr("■ Abort", "■ Abortar"), rojo())).clicked() {
+                        if let Some(c) = cancelar {
+                            c.store(true, Ordering::Relaxed);
+                        }
+                    }
+                } else {
+                    let listo = !self.archivos.is_empty();
+                    if ui.add_enabled(listo, boton_pri(tr("▶ Analyze", "▶ Analizar"), naranja())).clicked() {
+                        self.iniciar(ctx, ahora);
+                    }
+                    if let Some(r) = self.raiz.clone() {
+                        if ui.add(boton_sec(tr("Open output", "Abrir salida"))).clicked() {
+                            abrir_en_sistema(&r);
+                        }
+                    }
+                }
+            });
+        });
+    }
+
+    // Vista de análisis: entrada · tarjetas · tres paneles.
+    fn vista_analisis(&mut self, ui: &mut Ui) {
+        if self.archivos.is_empty() && self.arbol.is_empty() && !self.analizando() {
+            self.zona_carga(ui);
+            return;
+        }
+        self.barra_entrada(ui);
+        self.tarjetas_ui(ui);
+        ui.add_space(12.0);
+
+        egui::Panel::left("p_arbol")
+            .resizable(true)
+            .default_size(330.0)
+            .min_size(220.0)
+            .frame(card_frame())
+            .show_inside(ui, |ui| self.panel_arbol(ui));
+        egui::Panel::right("p_detalle")
+            .resizable(true)
+            .default_size(360.0)
+            .min_size(260.0)
+            .frame(card_frame())
+            .show_inside(ui, |ui| self.panel_detalle(ui));
+        egui::CentralPanel::default()
+            .frame(card_frame())
+            .show_inside(ui, |ui| self.panel_lista(ui));
+    }
+
+    fn zona_carga(&mut self, ui: &mut Ui) {
+        ui.add_space(24.0);
+        egui::Frame::new()
+            .fill(morado_oscuro())
+            .stroke(Stroke::new(1.5, morado_medio()))
+            .corner_radius(CornerRadius::same(12))
+            .inner_margin(Margin::same(30))
+            .show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.vertical_centered(|ui| {
+                    ui.add_space(26.0);
+                    ui.label(RichText::new(tr("Drop files or folders here", "Arrastra archivos o carpetas aquí")).font(titulo(24.0)).color(texto()));
+                    ui.add_space(6.0);
+                    ui.label(RichText::new(tr("Everything is analyzed locally. Nothing leaves your machine.", "Todo se analiza en local. Nada sale de tu equipo.")).font(mono(12.0)).color(morado_claro()));
+                    ui.add_space(22.0);
+                });
+                ui.horizontal(|ui| {
+                    let w = ui.available_width();
+                    ui.add_space(((w - 330.0) / 2.0).max(0.0));
+                    if ui.add(boton_pri(tr("Choose files", "Elegir archivos"), naranja())).clicked() {
+                        self.elegir_archivos();
+                    }
+                    if ui.add(boton_sec(tr("Choose folder", "Elegir carpeta"))).clicked() {
+                        if let Some(d) = rfd::FileDialog::new().pick_folder() {
+                            self.archivos.push(d);
+                        }
+                    }
+                });
+                ui.add_space(26.0);
+            });
+    }
+
+    fn barra_entrada(&mut self, ui: &mut Ui) {
+        let libre = !self.analizando();
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(tfmt(tr("{} input(s)", "{} entrada(s)"), &[self.archivos.len().to_string()])).font(mono(11.0)).color(morado_claro()));
+            ui.add_space(6.0);
+            if ui.add_enabled(libre, boton_sec(tr("+ Files", "+ Archivos"))).clicked() {
+                self.elegir_archivos();
+            }
+            if ui.add_enabled(libre, boton_sec(tr("+ Folder", "+ Carpeta"))).clicked() {
+                if let Some(d) = rfd::FileDialog::new().pick_folder() {
+                    self.archivos.push(d);
+                }
+            }
+            if ui.add_enabled(libre && !self.archivos.is_empty(), boton_sec(tr("Clear", "Vaciar"))).clicked() {
+                self.archivos.clear();
+            }
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if ui
+                    .add_enabled(libre, boton_sec(&tfmt(tr("Output: {}", "Salida: {}"), &[acortar(&self.salida.display().to_string(), 22)])))
+                    .on_hover_text(self.salida.display().to_string())
+                    .clicked()
+                {
+                    if let Some(d) = rfd::FileDialog::new().pick_folder() {
+                        self.salida = d;
+                    }
+                }
+            });
+        });
+        ui.add_space(12.0);
+    }
+
+    fn tarjetas_ui(&mut self, ui: &mut Ui) {
+        let (bloques, pendientes) = resumen_arbol(&self.arbol);
+        let capas = self.por_capa.len();
+        let avisos: usize = self.audit.iter().map(|(_, _, h)| h.len()).sum();
+        let datos = [
+            (tr("Blocks", "Bloques"), bloques, acento(), false, false),
+            (tr("Layers", "Capas"), capas, acento(), false, false),
+            (tr("Warnings", "Avisos"), avisos, naranja(), avisos > 0, false),
+            (tr("Pending", "Pendientes"), pendientes, if pendientes > 0 { rojo() } else { verde() }, pendientes > 0, self.solo_pendientes),
+        ];
+        let mut pulsado = None;
+        ui.columns(4, |c| {
+            for (i, (et, val, col, alerta, activo)) in datos.iter().enumerate() {
+                if stat_card(&mut c[i], et, *val, *col, *alerta, *activo) {
+                    pulsado = Some(i);
+                }
+            }
+        });
+        match pulsado {
+            Some(3) => self.solo_pendientes = !self.solo_pendientes,
+            Some(_) => self.solo_pendientes = false,
+            None => {}
+        }
+    }
+
+    fn panel_arbol(&mut self, ui: &mut Ui) {
+        encabezado_panel(ui, if self.solo_pendientes { tr("LAYER TREE · PENDING", "ÁRBOL · PENDIENTES") } else { tr("LAYER TREE", "ÁRBOL DE CAPAS") });
+        if self.arbol.is_empty() {
+            vacio(ui, if self.analizando() { tr("Decomposing…", "Descomponiendo…") } else { tr("No data yet", "Sin datos todavía") });
+            return;
+        }
+        let mut nueva = None;
+        let solo = self.solo_pendientes;
+        egui::ScrollArea::vertical().id_salt("arbol2").auto_shrink([false, false]).show(ui, |ui| {
+            if solo {
+                let mut flat = Vec::new();
+                recoge_pendientes(&self.arbol, &mut Vec::new(), &mut flat);
+                if flat.is_empty() {
+                    vacio(ui, tr("No pending blocks", "Sin bloques pendientes"));
+                }
+                for (ruta, n) in flat {
+                    let elegido = self.seleccion.as_ref() == Some(&ruta);
+                    let txt = RichText::new(format!("⚠ [{}] {} · {}", codigo_tipo(n.tipo), n.nombre, humano(n.tamano)))
+                        .font(mono(12.0))
+                        .color(if elegido { fondo() } else { rojo() })
+                        .background_color(if elegido { rojo() } else { Color32::TRANSPARENT });
+                    if ui.add(egui::Label::new(txt).sense(Sense::click())).clicked() {
+                        nueva = Some(ruta.clone());
+                    }
+                }
+            } else {
+                for (i, n) in self.arbol.iter().enumerate() {
+                    arbol_nodo(ui, n, vec![i], &self.seleccion, &mut nueva);
+                }
+            }
+        });
+        if let Some(s) = nueva {
+            self.seleccion = Some(s);
+        }
+    }
+
+    fn panel_lista(&mut self, ui: &mut Ui) {
+        encabezado_panel(ui, tr("CONTENTS", "CONTENIDO"));
+        let Some(sel) = self.seleccion.clone() else {
+            vacio(ui, tr("Select a block to inspect its contents", "Selecciona un bloque para ver su contenido"));
+            return;
+        };
+        let Some(n) = buscar_nodo(&self.arbol, &sel) else { return };
+        let n = n.clone();
+        let mut nueva = None;
+        egui::ScrollArea::vertical().id_salt("lista").auto_shrink([false, false]).show(ui, |ui| {
+            if n.hijos.is_empty() {
+                if n.resultados.is_empty() && n.notas.is_empty() {
+                    vacio(ui, tr("Leaf block — no children", "Bloque hoja — sin hijos"));
+                }
+                for r in &n.resultados {
+                    ui.label(RichText::new(format!("▸ {}", r.rsplit('/').next().unwrap_or(r))).font(mono(12.0)).color(acento()));
+                }
+                for nt in &n.notas {
+                    ui.label(RichText::new(format!("· {nt}")).font(mono(11.0)).color(morado_claro()));
+                }
+            } else {
+                for (i, h) in n.hijos.iter().enumerate() {
+                    let mut ruta = sel.clone();
+                    ruta.push(i);
+                    let elegido = self.seleccion.as_ref() == Some(&ruta);
+                    let marca = if h.incompleto { "⚠ " } else { "" };
+                    let txt = RichText::new(format!("{marca}[{}] {} · {}", codigo_tipo(h.tipo), h.nombre, humano(h.tamano)))
+                        .font(mono(12.0))
+                        .color(if elegido { fondo() } else { color_tipo(h.tipo) })
+                        .background_color(if elegido { color_tipo(h.tipo) } else { Color32::TRANSPARENT });
+                    if ui.add(egui::Label::new(txt).sense(Sense::click())).clicked() {
+                        nueva = Some(ruta);
+                    }
+                }
+            }
+        });
+        if let Some(s) = nueva {
+            self.seleccion = Some(s);
+        }
+    }
+
+    fn panel_detalle(&mut self, ui: &mut Ui) {
+        encabezado_panel(ui, tr("BLOCK DETAILS", "FICHA DEL BLOQUE"));
+        let Some(sel) = self.seleccion.clone() else {
+            vacio(ui, tr("No block selected", "Ningún bloque seleccionado"));
+            return;
+        };
+        let Some(n) = buscar_nodo(&self.arbol, &sel) else { return };
+        let n = n.clone();
+        let mut abrir = None;
+        let alto = (ui.available_height() - 56.0).max(140.0);
+        egui::ScrollArea::vertical().id_salt("detalle").max_height(alto).auto_shrink([false, false]).show(ui, |ui| {
+            ui.label(RichText::new(&n.nombre).font(titulo(18.0)).color(color_tipo(n.tipo)));
+            ui.horizontal(|ui| {
+                chip(ui, n.confianza.etiqueta(), color_confianza(n.confianza));
+                if n.incompleto {
+                    chip(ui, tr("PENDING", "PENDIENTE"), rojo());
+                }
+            });
+            ui.add_space(8.0);
+            egui::Grid::new("detalle_grid").num_columns(2).spacing([10.0, 3.0]).show(ui, |ui| {
+                for (k, v) in [
+                    (tr("Layer", "Capa"), n.capa.to_string()),
+                    (tr("Type", "Tipo"), n.descripcion.clone()),
+                    (tr("Size", "Tamaño"), humano(n.tamano)),
+                    (tr("Entropy", "Entropía"), format!("{:.3} bits/byte", n.entropia)),
+                    ("SHA-256", n.sha256.chars().take(32).collect()),
+                    ("", n.sha256.chars().skip(32).collect()),
+                ] {
+                    ui.label(RichText::new(k).font(mono(11.0)).color(morado_claro()));
+                    ui.label(RichText::new(v).font(mono(11.0)).color(texto()));
+                    ui.end_row();
+                }
+            });
+            barra_segmentada(ui, (n.entropia / 8.0) as f32, if n.entropia > 7.5 { rojo() } else { verde() });
+
+            ui.add_space(10.0);
+            ui.label(RichText::new(tr("PREVIEW", "VISTA PREVIA")).font(mono(10.0)).color(morado_claro()));
+            egui::Frame::new().fill(hondo()).corner_radius(CornerRadius::same(6)).inner_margin(Margin::same(10)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                let mut algo = false;
+                if !n.descripcion.is_empty() {
+                    ui.label(RichText::new(&n.descripcion).font(mono(11.0)).color(texto()));
+                    algo = true;
+                }
+                if !n.evidencia.is_empty() {
+                    ui.label(RichText::new(&n.evidencia).font(mono(10.5)).color(morado_claro()));
+                    algo = true;
+                }
+                if !algo {
+                    ui.label(RichText::new(tr("no preview available", "sin vista previa")).font(mono(10.0)).color(morado_medio()));
+                }
+            });
+
+            if !n.resultados.is_empty() {
+                ui.add_space(8.0);
+                ui.label(RichText::new(tr("RESULTS", "RESULTADOS")).font(mono(10.0)).color(naranja()));
+                for r in &n.resultados {
+                    let corto = r.rsplit('/').next().unwrap_or(r);
+                    if ui.add(egui::Label::new(RichText::new(format!("▸ {corto}")).font(mono(11.0)).color(acento())).sense(Sense::click())).on_hover_text(r).clicked() {
+                        abrir = Some(r.clone());
+                    }
+                }
+            }
+        });
+        if let Some(r) = abrir {
+            self.abrir_resultado(&r);
+        }
+
+        ui.add_space(6.0);
+        let sep = ui.cursor().top();
+        ui.painter().line_segment([Pos2::new(ui.max_rect().left(), sep), Pos2::new(ui.max_rect().right(), sep)], Stroke::new(1.0, morado()));
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            if ui.add(boton_pri(tr("▶ Extract", "▶ Extraer"), naranja())).clicked() {
+                if let Some(raiz) = self.raiz.clone() {
+                    abrir_en_sistema(&raiz.join("extraidos"));
+                } else if let Some(r) = n.resultados.first() {
+                    self.abrir_resultado(r);
+                }
+            }
+            if ui
+                .add(boton_sec(tr("Ask an AI", "Preguntar a una IA")))
+                .on_hover_text(tr("Copies a local prompt to the clipboard — no connection.", "Copia un prompt local al portapapeles — sin conexión."))
+                .clicked()
+            {
+                let ahora = ui.input(|i| i.time);
+                ui.ctx().copy_text(prompt_ia(&n));
+                self.log(ahora, tr("AI prompt copied to clipboard (offline).", "Prompt para IA copiado al portapapeles (sin conexión).").into(), acento());
+            }
+        });
+    }
+
+    fn vista_config(&mut self, ui: &mut Ui, ahora: f64) {
+        self.recursos_ui(ui, ahora);
+    }
+
     fn visor_ui(&mut self, ui: &mut Ui) {
         let mut cerrar = false;
         let Some(v) = &self.visor else { return };
@@ -1413,6 +1796,143 @@ fn arbol_nodo(ui: &mut Ui, n: &Nodo, ruta: Vec<usize>, sel: &Option<Vec<usize>>,
                 }
             });
     }
+}
+
+// ── Piezas del rediseño "Serio" ─────────────────────────────────────────
+/// Elemento de la barra lateral; devuelve true al hacer clic.
+fn nav_item(ui: &mut Ui, icono: &str, etiqueta: &str, activo: bool) -> bool {
+    let alto = 40.0;
+    let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), alto), Sense::click());
+    let p = ui.painter().clone();
+    if activo {
+        p.rect_filled(rect, CornerRadius::same(8), acento().gamma_multiply(0.18));
+        p.rect_filled(Rect::from_min_size(rect.left_top(), Vec2::new(3.0, alto)), CornerRadius::same(2), acento());
+    } else if resp.hovered() {
+        p.rect_filled(rect, CornerRadius::same(8), morado().gamma_multiply(0.7));
+    }
+    let col = if activo { texto() } else { morado_claro() };
+    p.text(rect.left_center() + Vec2::new(16.0, 0.0), Align2::LEFT_CENTER, format!("{icono}   {etiqueta}"), titulo(15.0), col);
+    ui.add_space(6.0);
+    resp.clicked()
+}
+
+/// Botón principal (relleno, esquinas suaves).
+fn boton_pri(texto: &str, color: Color32) -> egui::Button<'static> {
+    egui::Button::new(RichText::new(texto.to_string()).font(titulo(14.0)).color(fondo()))
+        .fill(color)
+        .corner_radius(CornerRadius::same(7))
+        .min_size(Vec2::new(0.0, 34.0))
+}
+
+/// Botón secundario (contorno).
+fn boton_sec(texto: &str) -> egui::Button<'static> {
+    egui::Button::new(RichText::new(texto.to_string()).font(mono(12.0)).color(morado_claro()))
+        .fill(morado())
+        .stroke(Stroke::new(1.0, morado_medio()))
+        .corner_radius(CornerRadius::same(7))
+        .min_size(Vec2::new(0.0, 34.0))
+}
+
+/// Marco de tarjeta/panel del rediseño.
+fn card_frame() -> egui::Frame {
+    egui::Frame::new()
+        .fill(morado_oscuro())
+        .stroke(Stroke::new(1.0, morado()))
+        .corner_radius(CornerRadius::same(10))
+        .inner_margin(Margin::same(14))
+        .outer_margin(Margin::same(5))
+}
+
+/// Tarjeta de estadística clicable; devuelve true al pulsarla.
+fn stat_card(ui: &mut Ui, etiqueta: &str, valor: usize, color: Color32, alerta: bool, activo: bool) -> bool {
+    let frame = egui::Frame::new()
+        .fill(morado_oscuro())
+        .stroke(Stroke::new(if activo { 1.6 } else { 1.0 }, if activo { color } else { morado() }))
+        .corner_radius(CornerRadius::same(9))
+        .inner_margin(Margin { left: 14, right: 14, top: 9, bottom: 9 });
+    let inner = frame.show(ui, |ui| {
+        ui.set_width(ui.available_width());
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(etiqueta.to_uppercase()).font(mono(10.0)).color(morado_claro()));
+            if alerta {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let (rid, _) = ui.allocate_exact_size(Vec2::splat(9.0), Sense::hover());
+                    ui.painter().circle_filled(rid.center(), 3.5, color);
+                });
+            }
+        });
+        ui.label(RichText::new(valor.to_string()).font(titulo(30.0)).color(if valor > 0 { texto() } else { morado_medio() }));
+    });
+    ui.interact(inner.response.rect, ui.make_persistent_id(("stat", etiqueta)), Sense::click()).clicked()
+}
+
+/// Encabezado fino de un panel-tarjeta.
+fn encabezado_panel(ui: &mut Ui, t: &str) {
+    ui.label(RichText::new(t).font(titulo(13.0)).color(morado_claro()));
+    ui.add_space(5.0);
+    let y = ui.cursor().top();
+    ui.painter().line_segment([Pos2::new(ui.max_rect().left(), y), Pos2::new(ui.max_rect().right(), y)], Stroke::new(1.0, morado()));
+    ui.add_space(8.0);
+}
+
+/// Mensaje centrado para estados vacíos.
+fn vacio(ui: &mut Ui, msg: &str) {
+    ui.add_space(26.0);
+    ui.vertical_centered(|ui| {
+        ui.label(RichText::new(msg).font(mono(12.0)).color(morado_medio()));
+    });
+}
+
+/// Etiqueta tipo "chip" con contorno de color.
+fn chip(ui: &mut Ui, t: &str, col: Color32) {
+    let g = ui.painter().layout_no_wrap(t.to_string(), titulo(12.0), col);
+    let (resp, p) = ui.allocate_painter(g.size() + Vec2::new(16.0, 6.0), Sense::hover());
+    p.rect_filled(resp.rect, CornerRadius::same(4), col.gamma_multiply(0.20));
+    p.rect_stroke(resp.rect, CornerRadius::same(4), Stroke::new(1.0, col), StrokeKind::Inside);
+    p.galley(resp.rect.center() - g.size() / 2.0, g, col);
+}
+
+/// Cuenta (bloques_totales, pendientes) recorriendo el árbol.
+fn resumen_arbol(nodos: &[Nodo]) -> (usize, usize) {
+    fn rec(ns: &[Nodo], b: &mut usize, p: &mut usize) {
+        for n in ns {
+            *b += 1;
+            if n.incompleto {
+                *p += 1;
+            }
+            rec(&n.hijos, b, p);
+        }
+    }
+    let (mut b, mut p) = (0, 0);
+    rec(nodos, &mut b, &mut p);
+    (b, p)
+}
+
+/// Lista plana de nodos incompletos con su ruta.
+fn recoge_pendientes<'a>(nodos: &'a [Nodo], ruta: &mut Vec<usize>, out: &mut Vec<(Vec<usize>, &'a Nodo)>) {
+    for (i, n) in nodos.iter().enumerate() {
+        ruta.push(i);
+        if n.incompleto {
+            out.push((ruta.clone(), n));
+        }
+        recoge_pendientes(&n.hijos, ruta, out);
+        ruta.pop();
+    }
+}
+
+/// Prompt local (sin red) que el usuario puede pegar en cualquier IA.
+fn prompt_ia(n: &Nodo) -> String {
+    format!(
+        "{}\n\n- {}: {}\n- {}: {} ({})\n- {}: {}\n- SHA-256: {}\n- {}: {:.3} bits/byte\n\n{}",
+        tr("I analyzed a file with CAPAS (local, layered decompiler). Help me understand this block:",
+           "He analizado un archivo con CAPAS (decompilador local por capas). Ayúdame a entender este bloque:"),
+        tr("Name", "Nombre"), n.nombre,
+        tr("Type", "Tipo"), n.descripcion, n.confianza.etiqueta(),
+        tr("Size", "Tamaño"), humano(n.tamano),
+        n.sha256,
+        tr("Entropy", "Entropía"), n.entropia,
+        tr("What is it, what is it for, and is anything suspicious?", "¿Qué es, para qué sirve y hay algo sospechoso?"),
+    )
 }
 
 // ── Piezas visuales ─────────────────────────────────────────────────────
