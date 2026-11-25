@@ -173,8 +173,12 @@ pub fn detectar(d: &[u8]) -> Tipo {
     if d.starts_with(&[0x04, 0x22, 0x4D, 0x18]) {
         return Tipo::Lz4;
     }
-    // ISO 9660: identificador "CD001" en el descriptor de volumen (sector 16).
-    if d.len() >= 0x8006 && &d[0x8001..0x8006] == b"CD001" {
+    // ISO 9660: "CD001" en el descriptor de volumen (sector 16). Cocido (2048),
+    // o crudo de 2352 B (Mode1 +16, Mode2 form1 +24) de pistas de datos .bin.
+    if (d.len() >= 0x8006 && &d[0x8001..0x8006] == b"CD001")
+        || (d.len() >= 16 * 2352 + 22 && &d[16 * 2352 + 17..16 * 2352 + 22] == b"CD001")
+        || (d.len() >= 16 * 2352 + 30 && &d[16 * 2352 + 25..16 * 2352 + 30] == b"CD001")
+    {
         return Tipo::Iso;
     }
     if d.starts_with(&[b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C]) {

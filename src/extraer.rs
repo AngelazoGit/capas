@@ -657,23 +657,66 @@ fn le32(d: &[u8], o: usize) -> Option<u32> {
     d.get(o..o + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()))
 }
 
-pub fn iso9660(d: &[u8], lim: u64) -> Result<Vec<Hijo>> {
-    const S: usize = 2048; // tamaño de sector lógico
-    let err = || anyhow!("{}", tr("corrupt or truncated ISO 9660 image", "imagen ISO 9660 corrupta o truncada"));
-    // Descriptor de volumen primario en el sector 16: tipo 1 + "CD001".
-    let pvd = d.get(16 * S..17 * S).ok_or_else(err)?;
-    if pvd[0] != 1 || &pvd[1..6] != b"CD001" {
-        bail!("{}", tr("not a primary ISO 9660 volume", "no es un volumen ISO 9660 primario"));
+/// Formato de sector de la imagen: tamaño físico y offset de los datos de usuario.
+/// 2048 = ISO "cocido"; 2352 = pista de datos cruda (.bin) Mode1 (+16) o Mode2 form1 (+24).
+struct FmtIso {
+    sector: usize,
+    usuario: usize,
+}
+
+pub fn formato_iso(d: &[u8]) -> Option<FmtIso> {
+    if d.len() >= 0x8006 && &d[0x8001..0x8006] == b"CD001" {
+        return Some(FmtIso { sector: 2048, usuario: 0 });
     }
-    // Registro de directorio raíz en el offset 156 del PVD.
+    let m1 = 16 * 2352 + 16;
+    if d.len() >= m1 + 6 && &d[m1 + 1..m1 + 6] == b"CD001" {
+        return Some(FmtIso { sector: 2352, usuario: 16 });
+    }
+    let m2 = 16 * 2352 + 24;
+    if d.len() >= m2 + 6 && &d[m2 + 1..m2 + 6] == b"CD001" {
+        return Some(FmtIso { sector: 2352, usuario: 24 });
+    }
+    None
+}
+
+/// ¿La imagen tiene un volumen ISO 9660 (cocido o crudo)? Para la detección.
+pub fn es_iso(d: &[u8]) -> bool {
+    formato_iso(d).is_some()
+}
+
+/// Lee `len` bytes "lógicos" (áreas de usuario de 2048 B por sector) desde el LBA.
+/// En imágenes cocidas es un trozo contiguo; en crudas ensambla sector a sector.
+fn leer_logico(d: &[u8], f: &FmtIso, lba: u32, len: usize) -> Vec<u8> {
+    let mut out = Vec::with_capacity(len.min(1 << 20));
+    let mut restante = len;
+    let mut s = lba as usize;
+    while restante > 0 {
+        let base = s.saturating_mul(f.sector) + f.usuario;
+        let tomar = restante.min(2048);
+        match d.get(base..base + tomar) {
+            Some(b) => out.extend_from_slice(b),
+            None => break,
+        }
+        restante -= tomar;
+        s += 1;
+    }
+    out
+}
+
+pub fn iso9660(d: &[u8], lim: u64) -> Result<Vec<Hijo>> {
+    let fmt = formato_iso(d).ok_or_else(|| anyhow!("{}", tr("not a primary ISO 9660 volume", "no es un volumen ISO 9660 primario")))?;
+    // PVD (sector 16): registro de directorio raíz en el offset 156.
+    let pvd = leer_logico(d, &fmt, 16, 2048);
+    if pvd.len() < 190 {
+        bail!("{}", tr("corrupt or truncated ISO 9660 image", "imagen ISO 9660 corrupta o truncada"));
+    }
     let raiz = &pvd[156..156 + 34];
-    let raiz_lba = le32(raiz, 2).ok_or_else(err)?;
-    let raiz_len = le32(raiz, 10).ok_or_else(err)?;
+    let raiz_lba = le32(raiz, 2).unwrap_or(0);
+    let raiz_len = le32(raiz, 10).unwrap_or(0) as usize;
 
     let mut hijos = Vec::new();
     let mut total = 0u64;
     let mut visitados = std::collections::HashSet::new();
-    // Pila de directorios por explorar: (lba, longitud, prefijo).
     let mut pila = vec![(raiz_lba, raiz_len, String::new())];
     let mut registros = 0usize;
 
@@ -681,8 +724,7 @@ pub fn iso9660(d: &[u8], lim: u64) -> Result<Vec<Hijo>> {
         if !visitados.insert(lba) {
             continue; // evita bucles de directorios
         }
-        let ini = lba as usize * S;
-        let Some(dir) = d.get(ini..ini + len as usize) else { continue };
+        let dir = leer_logico(d, &fmt, lba, len);
         let mut pos = 0usize;
         while pos < dir.len() {
             registros += 1;
@@ -691,8 +733,8 @@ pub fn iso9660(d: &[u8], lim: u64) -> Result<Vec<Hijo>> {
             }
             let rlen = dir[pos] as usize;
             if rlen == 0 {
-                // Relleno hasta el siguiente sector dentro del directorio.
-                pos = (pos / S + 1) * S;
+                // Relleno hasta el siguiente sector lógico (2048) dentro del directorio.
+                pos = (pos / 2048 + 1) * 2048;
                 continue;
             }
             let Some(rec) = dir.get(pos..pos + rlen) else { break };
@@ -705,30 +747,28 @@ pub fn iso9660(d: &[u8], lim: u64) -> Result<Vec<Hijo>> {
                 pos += rlen;
                 continue;
             };
-            let es_dir = flags & 0x02 != 0;
             // Saltar "." (0x00) y ".." (0x01).
             if nlen == 1 && (nombre_b[0] == 0 || nombre_b[0] == 1) {
                 pos += rlen;
                 continue;
             }
             let ext_lba = le32(rec, 2).unwrap_or(0);
-            let ext_len = le32(rec, 10).unwrap_or(0);
-            // Nombre: quitar el sufijo de versión ";1".
+            let ext_len = le32(rec, 10).unwrap_or(0) as usize;
             let mut nombre = String::from_utf8_lossy(nombre_b).into_owned();
             if let Some(i) = nombre.find(';') {
                 nombre.truncate(i);
             }
-            let completo = if prefijo.is_empty() { nombre.clone() } else { format!("{prefijo}/{nombre}") };
-            if es_dir {
+            let completo = if prefijo.is_empty() { nombre } else { format!("{prefijo}/{nombre}") };
+            if flags & 0x02 != 0 {
                 pila.push((ext_lba, ext_len, completo));
             } else {
-                let fi = ext_lba as usize * S;
-                if let Some(datos) = d.get(fi..fi + ext_len as usize) {
-                    total += ext_len as u64;
-                    if total > lim {
-                        bail!("{}", tfmt(tr("exceeds the limit of {} bytes (decompression bomb?)", "supera el límite de {} bytes (¿bomba de descompresión?)"), &[lim.to_string()]));
-                    }
-                    hijos.push(Hijo { nombre: completo, datos: datos.to_vec() });
+                total += ext_len as u64;
+                if total > lim {
+                    bail!("{}", tfmt(tr("exceeds the limit of {} bytes (decompression bomb?)", "supera el límite de {} bytes (¿bomba de descompresión?)"), &[lim.to_string()]));
+                }
+                let datos = leer_logico(d, &fmt, ext_lba, ext_len);
+                if !datos.is_empty() {
+                    hijos.push(Hijo { nombre: completo, datos });
                 }
             }
             pos += rlen;
@@ -783,6 +823,18 @@ mod pruebas_iso {
         img
     }
 
+    // Envuelve cada sector lógico de 2048 B en un sector crudo de 2352 B (Mode1,
+    // datos de usuario a +16), como una pista de datos .bin.
+    fn a_2352(img: &[u8]) -> Vec<u8> {
+        const S: usize = 2048;
+        let sectores = img.len() / S;
+        let mut out = vec![0u8; sectores * 2352];
+        for s in 0..sectores {
+            out[s * 2352 + 16..s * 2352 + 16 + S].copy_from_slice(&img[s * S..s * S + S]);
+        }
+        out
+    }
+
     #[test]
     fn lee_iso_minimo() {
         let img = mini_iso(b"HELLO ISO");
@@ -790,5 +842,15 @@ mod pruebas_iso {
         assert_eq!(hijos.len(), 1);
         assert_eq!(hijos[0].nombre, "FILE.TXT"); // sin ";1"
         assert_eq!(hijos[0].datos, b"HELLO ISO");
+    }
+
+    #[test]
+    fn lee_bin_crudo_2352() {
+        let crudo = a_2352(&mini_iso(b"RAW CD TRACK"));
+        assert!(super::es_iso(&crudo), "debe detectarse como ISO crudo");
+        let hijos = iso9660(&crudo, 1 << 20).unwrap();
+        assert_eq!(hijos.len(), 1);
+        assert_eq!(hijos[0].nombre, "FILE.TXT");
+        assert_eq!(hijos[0].datos, b"RAW CD TRACK");
     }
 }
