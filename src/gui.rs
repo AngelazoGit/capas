@@ -309,6 +309,9 @@ pub struct App {
     buscar: String,
     // Comprobación de actualización (hilo de fondo → estado compartido).
     actualizacion: std::sync::Arc<std::sync::Mutex<Option<Act>>>,
+    // Puente MCP (Studio): configuración y mensaje de estado.
+    mcp_externas: bool,
+    mcp_estado: Option<String>,
     // Módulo de claves (interfaz).
     clave_entrada: String,
     clave_lic: String,
@@ -443,6 +446,8 @@ impl App {
             cmp_resultado: None,
             buscar: String::new(),
             actualizacion: std::sync::Arc::new(std::sync::Mutex::new(None)),
+            mcp_externas: true,
+            mcp_estado: None,
             clave_entrada: String::new(),
             clave_lic: String::new(),
             lic_estado: None,
@@ -1230,7 +1235,19 @@ impl App {
                 ui.label(RichText::new(t).font(titulo(22.0)).color(texto()));
             });
             ui.add_space(14.0);
-            pastilla(ui, "ia", tr("Optional AI · Off", "IA opcional · Desactivada"), morado_claro(), morado());
+            // Pastilla de IA clicable → abre la config del puente MCP en Ajustes.
+            {
+                let txt = tr("Optional AI · Off", "IA opcional · Desactivada");
+                let g = ui.painter().layout_no_wrap(txt.to_string(), FontId::proportional(11.5), morado_claro());
+                let (resp, p) = ui.allocate_painter(Vec2::new(g.size().x + 34.0, 25.0), Sense::click());
+                let hov = resp.hovered();
+                p.rect_filled(resp.rect, CornerRadius::same(12), if hov { morado_medio() } else { morado() });
+                dibujar_icono(&p, resp.rect.left_center() + Vec2::new(14.0, 0.0), 6.0, "ia", morado_claro());
+                p.galley(Pos2::new(resp.rect.left() + 25.0, resp.rect.center().y - g.size().y / 2.0), g, morado_claro());
+                if resp.on_hover_text(tr("Configure the MCP bridge (connect an AI)", "Configurar el puente MCP (conectar una IA)")).clicked() {
+                    self.vista = Vista::Ajustes;
+                }
+            }
             // Aviso de actualización disponible (clicable → abre releases).
             if let Some(Act::Disponible(v)) = self.actualizacion.lock().unwrap().clone() {
                 ui.add_space(8.0);
@@ -2078,6 +2095,47 @@ impl App {
                 }
                 ui.add_space(4.0);
                 ui.label(RichText::new(tr("Checks GitHub once, only when you press the button.", "Consulta GitHub una vez, solo al pulsar el botón.")).font(FontId::proportional(10.5)).color(morado_medio()));
+            });
+            ui.add_space(12.0);
+            // IA · Puente MCP.
+            tarjeta_ajuste(ui, tr("AI · MCP bridge", "IA · Puente MCP"), |ui| {
+                let studio = crate::edicion::permite(crate::edicion::MCP);
+                if !studio {
+                    ui.horizontal(|ui| {
+                        chip(ui, "STUDIO", acento());
+                        ui.label(RichText::new(tr("Connect a local or cloud AI to CAPAS — a Studio feature.", "Conecta una IA local o en la nube a CAPAS — función de Studio.")).font(FontId::proportional(12.5)).color(texto()));
+                    });
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(tr("Activate a Studio license above to enable it.", "Activa una licencia Studio arriba para habilitarlo.")).font(FontId::proportional(11.5)).color(morado_claro()));
+                    return;
+                }
+                ui.label(RichText::new(tr("Let an AI (Claude Desktop, Ollama, OpenAI clients) use CAPAS's analysis as tools. CAPAS stays offline; the AI calls CAPAS.", "Deja que una IA (Claude Desktop, Ollama, clientes con OpenAI) use el análisis de CAPAS como herramientas. CAPAS sigue local; la IA llama a CAPAS.")).font(FontId::proportional(12.0)).color(morado_claro()));
+                ui.add_space(8.0);
+                ui.checkbox(&mut self.mcp_externas, tr("Allow external tools in MCP (deeper analysis)", "Permitir herramientas externas en MCP (análisis más profundo)"));
+                ui.add_space(8.0);
+                ui.horizontal(|ui| {
+                    if ui.add(boton_pri(tr("Enable in Claude Desktop", "Activar en Claude Desktop"), acento())).clicked() {
+                        self.mcp_estado = Some(match activar_mcp_claude(self.mcp_externas) {
+                            Ok(p) => tfmt(tr("Enabled. Restart Claude Desktop. ({})", "Activado. Reinicia Claude Desktop. ({})"), &[acortar(&p, 48)]),
+                            Err(e) => e,
+                        });
+                    }
+                    if ui.add(boton_sec(tr("Copy config", "Copiar config"))).clicked() {
+                        ui.ctx().copy_text(config_mcp_texto(self.mcp_externas));
+                        self.mcp_estado = Some(tr("Config copied to clipboard.", "Config copiada al portapapeles.").into());
+                    }
+                    if ui.add(boton_sec(tr("Copy command", "Copiar comando"))).clicked() {
+                        let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_else(|_| "capas".into());
+                        ui.ctx().copy_text(format!("\"{exe}\" --mcp{}", if self.mcp_externas { "" } else { " --sin-externas" }));
+                        self.mcp_estado = Some(tr("Command copied.", "Comando copiado.").into());
+                    }
+                });
+                if let Some(msg) = &self.mcp_estado {
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(msg).font(FontId::proportional(11.5)).color(verde()));
+                }
+                ui.add_space(6.0);
+                ui.label(RichText::new(tr("Tools: analyze a file, list formats, inspect an output. Works before or after scanning.", "Herramientas: analizar un archivo, listar formatos, inspeccionar una salida. Funciona antes o después de escanear.")).font(FontId::proportional(10.5)).color(morado_medio()));
             });
         });
     }
@@ -2927,6 +2985,55 @@ fn comprobar_actualizacion() -> Act {
         Some(_) => Act::AlDia,
         None => Act::Error,
     }
+}
+
+// ── Puente MCP (Studio): configurar y activar en clientes de IA ──────────
+/// Config JSON (formato de mcpServers) para que un cliente de IA use CAPAS.
+fn config_mcp_texto(externas: bool) -> String {
+    let exe = std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_else(|_| "capas".into());
+    let args = if externas { serde_json::json!(["--mcp"]) } else { serde_json::json!(["--mcp", "--sin-externas"]) };
+    let v = serde_json::json!({ "mcpServers": { "capas": { "command": exe, "args": args } } });
+    serde_json::to_string_pretty(&v).unwrap_or_default()
+}
+
+/// Ruta del fichero de config de Claude Desktop según el sistema.
+fn ruta_config_claude() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        return std::env::var_os("APPDATA").map(|b| PathBuf::from(b).join("Claude").join("claude_desktop_config.json"));
+    }
+    #[cfg(target_os = "macos")]
+    {
+        return std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support/Claude/claude_desktop_config.json"));
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        return std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config/Claude/claude_desktop_config.json"));
+    }
+    #[allow(unreachable_code)]
+    None
+}
+
+/// Añade/mezcla CAPAS en la config de Claude Desktop (si está instalado).
+fn activar_mcp_claude(externas: bool) -> Result<String, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let cfg = ruta_config_claude().ok_or("no se pudo resolver la carpeta de Claude Desktop")?;
+    let carpeta = cfg.parent().ok_or("ruta inválida")?;
+    if !carpeta.is_dir() {
+        return Err(tr("Claude Desktop not found — use \"Copy config\" instead.", "No encuentro Claude Desktop — usa \"Copiar config\".").to_string());
+    }
+    let mut root: serde_json::Value = fs::read_to_string(&cfg).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_else(|| serde_json::json!({}));
+    if !root.is_object() {
+        root = serde_json::json!({});
+    }
+    let obj = root.as_object_mut().unwrap();
+    let servers = obj.entry("mcpServers").or_insert(serde_json::json!({}));
+    let servers = servers.as_object_mut().ok_or("mcpServers no es un objeto")?;
+    let args = if externas { serde_json::json!(["--mcp"]) } else { serde_json::json!(["--mcp", "--sin-externas"]) };
+    servers.insert("capas".into(), serde_json::json!({ "command": exe.display().to_string(), "args": args }));
+    let txt = serde_json::to_string_pretty(&root).map_err(|e| e.to_string())?;
+    fs::write(&cfg, txt).map_err(|e| e.to_string())?;
+    Ok(cfg.display().to_string())
 }
 
 /// Pastilla redondeada con icono + texto (p. ej. "IA desconectada").
