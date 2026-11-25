@@ -15,6 +15,7 @@ pub enum Tipo {
     Zstd,
     Lz4,
     Iso,
+    Chd,
     Tar,
     SieteZ,
     Rar,
@@ -51,6 +52,7 @@ impl Tipo {
             Tipo::Zstd => "Zstandard",
             Tipo::Lz4 => "LZ4",
             Tipo::Iso => tr("ISO 9660 disc image","imagen de disco ISO 9660"),
+            Tipo::Chd => tr("CHD compressed disc image","imagen de disco comprimida CHD"),
             Tipo::Tar => "TAR",
             Tipo::SieteZ => "7-Zip",
             Tipo::Rar => "RAR",
@@ -87,6 +89,7 @@ impl Tipo {
             Tipo::Zstd => "zst",
             Tipo::Lz4 => "lz4",
             Tipo::Iso => "iso",
+            Tipo::Chd => "chd",
             Tipo::Tar => "tar",
             Tipo::SieteZ => "7z",
             Tipo::Rar => "rar",
@@ -124,6 +127,7 @@ impl Tipo {
                 | Tipo::Zstd
                 | Tipo::Lz4
                 | Tipo::Iso
+                | Tipo::Chd
                 | Tipo::Tar
                 | Tipo::SieteZ
                 | Tipo::Rar
@@ -180,6 +184,9 @@ pub fn detectar(d: &[u8]) -> Tipo {
         || (d.len() >= 16 * 2352 + 30 && &d[16 * 2352 + 25..16 * 2352 + 30] == b"CD001")
     {
         return Tipo::Iso;
+    }
+    if d.starts_with(b"MComprHD") {
+        return Tipo::Chd;
     }
     if d.starts_with(&[b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C]) {
         return Tipo::SieteZ;
@@ -392,5 +399,16 @@ mod pruebas {
         assert_eq!(detectar(b"glTF\x02\x00\x00\x00"), Tipo::RecursoJuego);
         assert_eq!(detectar(b"MThd\0\0\0\x06"), Tipo::Audio);
         assert_eq!(detectar(b"8BPS\0\x01"), Tipo::Imagen);
+    }
+}
+
+#[cfg(test)]
+mod pruebas_chd {
+    use super::{detectar, Tipo};
+    #[test]
+    fn detecta_chd() {
+        let mut d = b"MComprHD".to_vec();
+        d.extend_from_slice(&[0u8; 120]);
+        assert_eq!(detectar(&d), Tipo::Chd);
     }
 }

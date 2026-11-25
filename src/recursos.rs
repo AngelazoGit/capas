@@ -56,6 +56,7 @@ pub const HERRAMIENTAS_CONOCIDAS: &[(&str, &str)] = &[
     ("retdec-decompiler", "decompilador nativo -> C"),
     ("r2", "radare2: análisis y desensamblado por funciones"),
     ("7z", "extracción de 7z/RAR/CAB/ISO/MSI"),
+    ("chdman", "extracción de imágenes CHD (MAME) -> BIN/CUE"),
     ("analyzeHeadless", "Ghidra headless: decompilación nativa -> C (o define GHIDRA_HOME)"),
 ];
 

@@ -243,6 +243,7 @@ impl Motor {
             Tipo::MachOFat => extraer::macho_fat(d),
             Tipo::Pdf => Ok(extraer::pdf(d, lim)),
             Tipo::SieteZ | Tipo::Rar | Tipo::Cab => self.con_7z(ruta, an, nodo),
+            Tipo::Chd => self.con_chdman(ruta, an, nodo),
             Tipo::Elf | Tipo::Pe | Tipo::MachO => {
                 self.nativo(d, r, an, tipo, nodo);
                 Ok(Vec::new())
@@ -442,6 +443,41 @@ impl Motor {
             }
         }
         let _ = fs::remove_dir_all(&tmp);
+        Ok(hijos)
+    }
+
+    /// Imágenes CHD (MAME): se extraen con `chdman` a BIN/CUE (o cruda), y la
+    /// pista resultante vuelve a pasar por el motor (se detecta como ISO/BIN).
+    /// NOTA: requiere `chdman` instalado; sin él, deja una nota y no falla el resto.
+    fn con_chdman(&self, ruta: &Path, an: &Path, nodo: &mut Nodo) -> anyhow::Result<Vec<Hijo>> {
+        if self.herr.get("chdman").is_none() {
+            nodo.notas.push(tr("install chdman (mame-tools) to open CHD images", "instala chdman (mame-tools) para abrir imágenes CHD").into());
+            anyhow::bail!("CHD requiere chdman");
+        }
+        let tmp = an.join(".chd_tmp");
+        let _ = fs::create_dir_all(&tmp);
+        let cue = tmp.join("disc.cue");
+        let bin = tmp.join("disc.bin");
+        // Imagen de CD/DVD -> BIN/CUE.
+        self.externa("chdman", &[OsStr::new("extractcd"), OsStr::new("-f"), OsStr::new("-i"), ruta.as_os_str(), OsStr::new("-o"), cue.as_os_str(), OsStr::new("-ob"), bin.as_os_str()], an, "chdman.log", nodo);
+        let mut hijos = Vec::new();
+        if let Ok(datos) = fs::read(&bin) {
+            hijos.push(Hijo { nombre: "disc.bin".into(), datos });
+            if let Ok(c) = fs::read(&cue) {
+                hijos.push(Hijo { nombre: "disc.cue".into(), datos: c });
+            }
+        } else {
+            // No es un CD: intentar extracción cruda (disco duro / raw).
+            let raw = tmp.join("disc.img");
+            self.externa("chdman", &[OsStr::new("extractraw"), OsStr::new("-f"), OsStr::new("-i"), ruta.as_os_str(), OsStr::new("-o"), raw.as_os_str()], an, "chdman.log", nodo);
+            if let Ok(datos) = fs::read(&raw) {
+                hijos.push(Hijo { nombre: "disc.img".into(), datos });
+            }
+        }
+        let _ = fs::remove_dir_all(&tmp);
+        if hijos.is_empty() {
+            anyhow::bail!("chdman no produjo salida");
+        }
         Ok(hijos)
     }
 
