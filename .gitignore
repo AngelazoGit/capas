@@ -2,3 +2,6 @@
 /capas-linux-x86_64
 /REVISION.md
 /VERIFICACION.md
+# Salidas de análisis generadas (no deben versionarse).
+/output_capas/
+/salida_capas/
