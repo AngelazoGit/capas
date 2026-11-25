@@ -26,7 +26,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;family=IBM+Plex+Mono:wght@400;500;600&amp;display=swap">
-<style>html,body{margin:0;padding:0}img{max-width:100%;height:auto}</style>
+<style>html,body{margin:0;padding:0}img{max-width:100%;height:auto}
+/* Sección de formatos */
+.fmts{display:grid;gap:.5rem}
+.fmt{border:1px solid var(--border);background:var(--panel);border-radius:10px}
+.fmt summary{display:flex;align-items:center;gap:.6rem;cursor:pointer;padding:.7rem .9rem;list-style:none;font-family:"Inter",sans-serif}
+.fmt summary::-webkit-details-marker{display:none}
+.fmt summary::after{content:"+";color:var(--green);font-family:"IBM Plex Mono",monospace;margin-left:auto}
+.fmt[open] summary::after{content:"\2212"}
+.fmt .fcat{font-weight:700}
+.fmt .fn{color:var(--green-ink);font-size:.78rem;background:var(--green-wash);padding:.1rem .5rem;border-radius:20px}
+.fexts{padding:0 .9rem .9rem;color:var(--slate);font-size:.77rem;line-height:1.95;overflow-wrap:anywhere}
+</style>
 <style>
 /* Mirrors the app's "Clean/Limpio" mask: white framed panels with numbered
    badges, a slab-serif voice for titles, monospace for data, one green accent
@@ -217,6 +228,7 @@ summary{font-family:"Inter",sans-serif;font-weight:700}
     <nav>
       <a class="nl" href="#caps" data-es="CAPACIDADES" data-en="CAPABILITIES">CAPACIDADES</a>
       <a class="nl" href="#pipe" data-es="PROCESO" data-en="PIPELINE">PROCESO</a>
+      <a class="nl" href="#formats" data-es="FORMATOS" data-en="FORMATS">FORMATOS</a>
       <a class="nl" href="#pricing" data-es="EDICIONES" data-en="EDITIONS">EDICIONES</a>
       <a class="nl" href="https://github.com/AngelazoGit/capas" data-es="CÓDIGO" data-en="SOURCE">CÓDIGO</a>
       <button class="tbtn lang" id="langBtn" title="English / Español"><span data-l="en" class="on">EN</span>/<span data-l="es">ES</span></button>
@@ -281,8 +293,8 @@ summary{font-family:"Inter",sans-serif;font-weight:700}
       <p data-es="Cada bloque pasa por los mismos cuatro pasos; los hijos se procesan en cuanto aparecen, en paralelo, deduplicados por SHA-256." data-en="Each block runs the same four steps; children run the moment they appear, in parallel, deduplicated by SHA-256.">Cada bloque pasa por los mismos cuatro pasos; los hijos se procesan en cuanto aparecen, en paralelo, deduplicados por SHA-256.</p>
     </div>
     <figure class="appshot" style="max-width:640px;margin:0 0 1.8rem">
-      <div class="chrome"><span class="d"></span><span class="d"></span><span class="d"></span><span class="lbl mono" data-es="capas — máscara limpio (clara)" data-en="capas — clean mask (light)">capas — máscara limpio (clara)</span></div>
-      <img src="../capas-clean.png" alt="CAPAS in the Clean (light) mask: the same analysis with the layer tree, contents table and block details" loading="lazy" width="1440" height="900">
+      <div class="chrome"><span class="d"></span><span class="d"></span><span class="d"></span><span class="lbl mono" data-es="capas — recorrido" data-en="capas — product tour">capas — recorrido</span></div>
+      <img src="../capas_demo.gif" alt="Animated tour of CAPAS: home, a completed analysis in the dark and light masks, settings and the compare feature" loading="lazy" width="940" height="588">
     </figure>
     <div class="pipe">
       <div class="pstep"><div class="n" data-es="01 — IDENTIFICAR" data-en="01 — IDENTIFY">01 — IDENTIFICAR</div><h3 data-es="Por contenido" data-en="By content">Por contenido</h3><p data-es="Lee el formato por los bytes mágicos, nunca por el nombre del archivo." data-en="Reads the format from the magic bytes, never from the file name.">Lee el formato por los bytes mágicos, nunca por el nombre del archivo.</p></div>
@@ -303,6 +315,40 @@ summary{font-family:"Inter",sans-serif;font-weight:700}
       <div class="panel"><div class="phead"><span class="badge">A</span><span class="t" data-es="Admins de servidor" data-en="Server admins">Admins de servidor</span><span class="rule"></span></div><div class="body"><p data-es="Audita cada asset pack y mod antes de que el servidor lo cargue, y manda los sospechosos a cuarentena automáticamente." data-en="Audit every asset pack and mod before the server loads it, and route the sketchy ones to quarantine automatically.">Audita cada asset pack y mod antes de que el servidor lo cargue, y manda los sospechosos a cuarentena automáticamente.</p></div></div>
       <div class="panel"><div class="phead"><span class="badge">B</span><span class="t">Modders</span><span class="rule"></span></div><div class="body"><p data-es="Desempaqueta bundles de Unity y Godot, ve exactamente qué hay dentro, y agrupa o reconstruye recursos para que vuelvan a cargar." data-en="Unpack Unity and Godot bundles, see exactly what's inside, and group or rebuild resources so they load again.">Desempaqueta bundles de Unity y Godot, ve exactamente qué hay dentro, y agrupa o reconstruye recursos para que vuelvan a cargar.</p></div></div>
       <div class="panel"><div class="phead"><span class="badge">C</span><span class="t" data-es="Reversing y CTF" data-en="Reversing &amp; CTF">Reversing y CTF</span><span class="rule"></span></div><div class="body"><p data-es="Triaje rápido de un binario desconocido: capas, cadenas, entropía, desensamblado y un veredicto — sin conexión, sin ejecutar nada." data-en="Triage an unknown binary fast: layers, strings, entropy, disassembly and a verdict — all offline, nothing executed.">Triaje rápido de un binario desconocido: capas, cadenas, entropía, desensamblado y un veredicto — sin conexión, sin ejecutar nada.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="formats" class="band">
+  <div class="wrap">
+    <div class="lead">
+      <span class="kick" data-es="// formatos" data-en="// formats">// formatos</span>
+      <h2 data-es="729 extensiones. 11 categorías. Reconocidas por sus bytes." data-en="729 extensions. 11 categories. Recognized by their bytes.">729 extensiones. 11 categorías. Reconocidas por sus bytes.</h2>
+      <p data-es="CAPAS clasifica por contenido, no por el nombre del archivo. Esta es cada extensión que mapea, por categoría. Los contenedores y binarios se decompilan aún más, capa a capa." data-en="CAPAS classifies by content, not by the file name. Here is every extension it maps, by category — containers and binaries are then decompiled further, layer by layer.">CAPAS clasifica por contenido, no por el nombre del archivo. Esta es cada extensión que mapea, por categoría. Los contenedores y binarios se decompilan aún más, capa a capa.</p>
+    </div>
+    <div class="fmts">
+      <details class="fmt"><summary><span class="fcat" data-es="Comprimidos, paquetes e imágenes de disco" data-en="Archives, packages &amp; disk images">Comprimidos, paquetes e imágenes de disco</span><span class="fn mono">81</span></summary>
+        <div class="fexts mono">.7z · .aab · .aar · .apk · .apks · .appx · .appxbundle · .arj · .br · .bz2 · .cab · .cpgz · .cpio · .crx · .deb · .dmg · .ear · .egg · .esd · .flatpak · .gem · .gz · .hqx · .img · .ipa · .iso · .jmod · .lha · .lrz · .lz · .lz4 · .lzh · .lzma · .lzo · .mdf · .msix · .msixbundle · .nrg · .nupkg · .obb · .pax · .pet · .pkg · .pup · .qcow · .qcow2 · .rar · .rpm · .sea · .sfs · .shar · .sit · .sitx · .snap · .squashfs · .swm · .tar · .taz · .tbz2 · .tgz · .tlz · .toast · .txz · .tzst · .vdi · .vhd · .vhdx · .vmdk · .vsix · .war · .whl · .wim · .xapk · .xar · .xpi · .xz · .z · .zip · .zoo · .zpaq · .zst</div></details>
+      <details class="fmt"><summary><span class="fcat" data-es="Ejecutables y bibliotecas" data-en="Executables &amp; libraries">Ejecutables y bibliotecas</span><span class="fn mono">28</span></summary>
+        <div class="fexts mono">.386 · .app · .appimage · .axf · .bin · .bundle · .com · .dll · .dol · .drv · .dylib · .efi · .elf · .exe · .ko · .lib · .msi · .o · .out · .prx · .rlib · .rpx · .scr · .self · .so · .sys · .vxd · .xex</div></details>
+      <details class="fmt"><summary><span class="fcat" data-es="Bytecode y máquinas virtuales" data-en="Bytecode &amp; VMs">Bytecode y máquinas virtuales</span><span class="fn mono">16</span></summary>
+        <div class="fexts mono">.beam · .class · .cmo · .cmx · .dex · .hi · .jar · .luac · .nro · .nso · .pyc · .pyd · .pyo · .rbc · .swf · .wasm</div></details>
+      <details class="fmt"><summary><span class="fcat" data-es="Imágenes" data-en="Images">Imágenes</span><span class="fn mono">51</span></summary>
+        <div class="fexts mono">.apng · .arw · .avif · .bmp · .cr2 · .cr3 · .cur · .dib · .dng · .exr · .gif · .hdp · .hdr · .heic · .heif · .icns · .ico · .j2k · .jfif · .jp2 · .jpeg · .jpf · .jpg · .jpx · .jxl · .jxr · .nef · .orf · .pbm · .pcx · .pef · .pgm · .png · .pnm · .ppm · .psd · .qoi · .raf · .raw · .rw2 · .sgi · .sr2 · .srw · .svg · .tga · .tif · .tiff · .wbmp · .wdp · .webp · .xcf</div></details>
+      <details class="fmt"><summary><span class="fcat" data-es="Audio" data-en="Audio">Audio</span><span class="fn mono">38</span></summary>
+        <div class="fexts mono">.8svx · .aac · .ac3 · .aif · .aifc · .aiff · .amr · .ape · .au · .bwf · .caf · .dff · .dsf · .dts · .flac · .it · .m4a · .mid · .midi · .mka · .mod · .mp3 · .mpc · .oga · .ogg · .opus · .ra · .s3m · .snd · .spx · .tta · .voc · .w64 · .wav · .wma · .wv · .xm · .xmf</div></details>
+      <details class="fmt"><summary><span class="fcat" data-es="Vídeo" data-en="Video">Vídeo</span><span class="fn mono">29</span></summary>
+        <div class="fexts mono">.3g2 · .3gp · .asf · .avi · .divx · .f4v · .flv · .h264 · .h265 · .hevc · .m2ts · .m2v · .m4v · .mkv · .mov · .mp4 · .mpeg · .mpg · .mts · .mxf · .ogm · .ogv · .rm · .rmvb · .vob · .webm · .wmv · .y4m · .yuv</div></details>
+      <details class="fmt"><summary><span class="fcat" data-es="Documentos" data-en="Documents">Documentos</span><span class="fn mono">49</span></summary>
+        <div class="fexts mono">.azw · .azw3 · .cb7 · .cbr · .cbz · .chm · .djvu · .doc · .docm · .docx · .dotm · .dotx · .eps · .epub · .fb2 · .fodp · .fods · .fodt · .hlp · .mobi · .numbers · .odf · .odg · .odp · .ods · .odt · .one · .oxps · .pages · .pdf · .potx · .ppsx · .ppt · .pptm · .pptx · .ps · .pub · .rtf · .tex · .vsd · .vsdx · .wpd · .wps · .xls · .xlsb · .xlsm · .xlsx · .xltx · .xps</div></details>
+      <details class="fmt"><summary><span class="fcat" data-es="Código fuente y scripts" data-en="Source code &amp; scripts">Código fuente y scripts</span><span class="fn mono">131</span></summary>
+        <div class="fexts mono">.ahk · .asm · .astro · .awk · .bash · .bat · .bzl · .c · .cabal · .cairo · .capnp · .cc · .cjs · .cl · .clj · .cmake · .cmd · .coffee · .cpp · .cr · .cs · .csproj · .css · .cts · .cu · .cuh · .cxx · .d · .dart · .dhall · .dockerfile · .ejs · .elm · .erl · .ex · .exs · .fish · .frag · .fs · .fsi · .fsx · .gd · .gdshader · .gemspec · .glsl · .go · .gql · .gradle · .graphql · .groovy · .gvy · .gyp · .h · .hbs · .hcl · .hh · .hlsl · .hpp · .hs · .htm · .html · .hxx · .inl · .ipp · .jade · .java · .jl · .js · .jsonnet · .jsx · .kt · .kts · .less · .lua · .m · .meson · .metal · .mjs · .mk · .ml · .mli · .mm · .move · .nim · .ninja · .nix · .nu · .pbxproj · .php · .pl · .podspec · .prisma · .ps1 · .psm1 · .pug · .py · .r · .rake · .rb · .rs · .s · .sass · .scala · .scss · .sh · .shader · .sln · .sol · .sql · .styl · .sv · .svelte · .swift · .tcl · .tf · .thrift · .ts · .tsx · .twig · .v · .vb · .vbs · .vcxproj · .vert · .vhdl · .vue · .wgsl · .wsf · .xcconfig · .zig · .zsh</div></details>
+      <details class="fmt"><summary><span class="fcat" data-es="Juegos, 3D, motores y ROMs" data-en="Game, 3D, engines &amp; ROMs">Juegos, 3D, motores y ROMs</span><span class="fn mono">172</span></summary>
+        <div class="fexts mono">.32x · .3ds · .a26 · .a78 · .abc · .acb · .adf · .anim · .art · .assets · .astc · .at9 · .awb · .ba2 · .bank · .basis · .bcstm · .bdae · .bfstm · .big · .blend · .blocky · .bnk · .brstm · .bsa · .bsp · .c4d · .cci · .cginc · .chd · .cia · .ciso · .compute · .controller · .cso · .d64 · .dae · .dat · .datapack · .dds · .dsk · .esm · .esp · .fbx · .fds · .fsb · .gb · .gba · .gbc · .gcm · .gdns · .gen · .gg · .glb · .gltf · .gma · .grp · .hca · .hip · .iso9660 · .ktx · .ktx2 · .kv6 · .kvx · .litematic · .lnx · .love · .lwo · .lws · .ma · .max · .mb · .mca · .mcaddon · .mcmeta · .mcpack · .mcr · .mcstructure · .mctemplate · .mcworld · .md5 · .mdl · .meta · .mmd · .ms3d · .n64 · .nbt · .nca · .nds · .nes · .ngp · .nif · .nsp · .nus3bank · .obj · .pak · .pbp · .pce · .pck · .phy · .pk3 · .pk4 · .ply · .pmd · .pmx · .prefab · .pvr · .qb · .qbt · .qc · .region · .resource · .rff · .rom · .rpa · .rpf · .rvz · .sav · .sbs · .sbsar · .schem · .schematic · .sfc · .shadergraph · .smc · .smd · .sms · .spirv · .spp · .spv · .stl · .tres · .tscn · .uasset · .umap · .umx · .unity3d · .upk · .usd · .usda · .usdc · .usdz · .v64 · .vag · .vmd · .vmt · .vol · .vox · .voxel · .vpk · .vrm · .vta · .vtf · .vtx · .vvd · .vxl · .wad · .wbfs · .wem · .wia · .xci · .xnb · .xsb · .xwb · .ybn · .ydr · .yft · .ymap · .ytd · .z64 · .zpr · .ztl</div></details>
+      <details class="fmt"><summary><span class="fcat" data-es="Datos, bases de datos, certificados, fuentes y modelos IA" data-en="Data, databases, certs, fonts &amp; AI models">Datos, bases de datos, certificados, fuentes y modelos IA</span><span class="fn mono">103</span></summary>
+        <div class="fexts mono">.accdb · .arrow · .avro · .bdf · .bson · .caffemodel · .cap · .cdf · .cer · .cfg · .ckpt · .conf · .crt · .csr · .csv · .db · .dbf · .der · .dfont · .editorconfig · .env · .eot · .etl · .evtx · .feather · .fnt · .fon · .frm · .geojson · .ggml · .gguf · .gpg · .h5 · .har · .hdf5 · .ibd · .ini · .jks · .joblib · .json · .jsonl · .kdbx · .key · .keystore · .ldb · .lock · .mat · .mdb · .mlmodel · .msgpack · .myd · .myi · .nc · .ndjson · .npy · .npz · .onnx · .orc · .otf · .ovpn · .p12 · .p7b · .p7c · .p8 · .parquet · .pb · .pcap · .pcapng · .pcf · .pdml · .pem · .pfa · .pfb · .pfm · .pfx · .pickle · .pkl · .plist · .properties · .proto · .pt · .pth · .realm · .reg · .resx · .safetensors · .sfd · .shm · .sqlite · .sqlite3 · .sst · .tflite · .toml · .topojson · .tsv · .ttc · .ttf · .wal · .woff · .woff2 · .xml · .yaml · .yml</div></details>
+      <details class="fmt"><summary><span class="fcat" data-es="Texto, subtítulos y notas" data-en="Text, subtitles &amp; notes">Texto, subtítulos y notas</span><span class="fn mono">31</span></summary>
+        <div class="fexts mono">.adoc · .asc · .asciidoc · .ass · .diff · .ics · .info · .log · .lrc · .man · .markdown · .md · .mdown · .me · .mkd · .nfo · .org · .patch · .po · .readme · .rst · .sbv · .srt · .ssa · .sub · .text · .textile · .txt · .vcf · .vtt · .wiki</div></details>
     </div>
   </div>
 </section>
