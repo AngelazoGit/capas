@@ -16,6 +16,7 @@ pub enum Tipo {
     Lz4,
     Iso,
     Chd,
+    Disco,
     Tar,
     SieteZ,
     Rar,
@@ -53,6 +54,7 @@ impl Tipo {
             Tipo::Lz4 => "LZ4",
             Tipo::Iso => tr("ISO 9660 disc image","imagen de disco ISO 9660"),
             Tipo::Chd => tr("CHD compressed disc image","imagen de disco comprimida CHD"),
+            Tipo::Disco => tr("partitioned disk image (MBR/GPT)","imagen de disco con particiones (MBR/GPT)"),
             Tipo::Tar => "TAR",
             Tipo::SieteZ => "7-Zip",
             Tipo::Rar => "RAR",
@@ -90,6 +92,7 @@ impl Tipo {
             Tipo::Lz4 => "lz4",
             Tipo::Iso => "iso",
             Tipo::Chd => "chd",
+            Tipo::Disco => "img",
             Tipo::Tar => "tar",
             Tipo::SieteZ => "7z",
             Tipo::Rar => "rar",
@@ -128,6 +131,7 @@ impl Tipo {
                 | Tipo::Lz4
                 | Tipo::Iso
                 | Tipo::Chd
+                | Tipo::Disco
                 | Tipo::Tar
                 | Tipo::SieteZ
                 | Tipo::Rar
@@ -156,6 +160,21 @@ pub fn es_pe(d: &[u8]) -> bool {
         }
         _ => false,
     }
+}
+
+/// ¿El MBR (bytes 0x1BE..0x1FE) tiene al menos una partición con tipo no nulo y
+/// un LBA de inicio plausible dentro de la imagen? Evita falsos positivos de 55AA.
+fn mbr_valido(d: &[u8]) -> bool {
+    for i in 0..4 {
+        let e = 0x1be + i * 16;
+        let tipo = d[e + 4];
+        let lba = u32::from_le_bytes([d[e + 8], d[e + 9], d[e + 10], d[e + 11]]) as u64;
+        let sectores = u32::from_le_bytes([d[e + 12], d[e + 13], d[e + 14], d[e + 15]]) as u64;
+        if tipo != 0 && lba > 0 && sectores > 0 && lba.saturating_mul(512) < d.len() as u64 {
+            return true;
+        }
+    }
+    false
 }
 
 pub fn detectar(d: &[u8]) -> Tipo {
@@ -187,6 +206,13 @@ pub fn detectar(d: &[u8]) -> Tipo {
     }
     if d.starts_with(b"MComprHD") {
         return Tipo::Chd;
+    }
+    // Tabla de particiones: GPT ("EFI PART" en el sector 1) o MBR con entradas válidas.
+    if d.len() >= 0x208 && &d[0x200..0x208] == b"EFI PART" {
+        return Tipo::Disco;
+    }
+    if d.len() >= 0x200 && d[0x1fe] == 0x55 && d[0x1ff] == 0xAA && mbr_valido(d) {
+        return Tipo::Disco;
     }
     if d.starts_with(&[b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C]) {
         return Tipo::SieteZ;

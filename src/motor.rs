@@ -244,6 +244,7 @@ impl Motor {
             Tipo::Pdf => Ok(extraer::pdf(d, lim)),
             Tipo::SieteZ | Tipo::Rar | Tipo::Cab => self.con_7z(ruta, an, nodo),
             Tipo::Chd => self.con_chdman(ruta, an, nodo),
+            Tipo::Disco => extraer::particiones(d, lim),
             Tipo::Elf | Tipo::Pe | Tipo::MachO => {
                 self.nativo(d, r, an, tipo, nodo);
                 Ok(Vec::new())

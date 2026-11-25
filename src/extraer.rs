@@ -903,3 +903,136 @@ mod pruebas_disco {
         assert!(plataforma_disco(&hijos).is_none());
     }
 }
+
+// ── Tabla de particiones (MBR / GPT) ──────────────────────────────────────
+// Lista las particiones de una imagen de disco y devuelve la región de cada
+// una, para que el motor detecte su sistema de ficheros. Parser defensivo.
+
+fn le64(d: &[u8], o: usize) -> u64 {
+    d.get(o..o + 8).map(|b| u64::from_le_bytes(b.try_into().unwrap())).unwrap_or(0)
+}
+
+fn tipo_mbr(t: u8) -> &'static str {
+    match t {
+        0x07 => "ntfs/exfat",
+        0x0b | 0x0c => "fat32",
+        0x04 | 0x06 | 0x0e => "fat",
+        0x83 => "linux",
+        0x82 => "linux-swap",
+        0xef => "efi",
+        0x05 | 0x0f => "extended",
+        _ => "part",
+    }
+}
+
+pub fn particiones(d: &[u8], lim: u64) -> Result<Vec<Hijo>> {
+    const S: u64 = 512;
+    let mut hijos = Vec::new();
+    let mut total = 0u64;
+    let empuja = |hijos: &mut Vec<Hijo>, total: &mut u64, nombre: String, ini: u64, bytes: u64| -> Result<()> {
+        if bytes == 0 {
+            return Ok(());
+        }
+        let fin = ini.saturating_add(bytes).min(d.len() as u64);
+        let ini = ini.min(d.len() as u64);
+        let trozo = (fin - ini).min(lim.saturating_sub(*total));
+        if trozo == 0 {
+            return Ok(());
+        }
+        if let Some(b) = d.get(ini as usize..(ini + trozo) as usize) {
+            *total += trozo;
+            hijos.push(Hijo { nombre, datos: b.to_vec() });
+        }
+        Ok(())
+    };
+
+    // GPT: cabecera en el sector 1.
+    if d.len() >= 0x208 && &d[0x200..0x208] == b"EFI PART" {
+        let entradas_lba = le64(d, 0x200 + 0x48);
+        let num = u32::from_le_bytes([d[0x200 + 0x50], d[0x200 + 0x51], d[0x200 + 0x52], d[0x200 + 0x53]]) as usize;
+        let tam = u32::from_le_bytes([d[0x200 + 0x54], d[0x200 + 0x55], d[0x200 + 0x56], d[0x200 + 0x57]]) as usize;
+        if tam >= 128 && num <= 1024 {
+            let base = entradas_lba.saturating_mul(S) as usize;
+            for i in 0..num {
+                let e = base + i * tam;
+                let Some(ent) = d.get(e..e + 128) else { break };
+                if ent[0..16].iter().all(|&b| b == 0) {
+                    continue; // tipo nulo = sin usar
+                }
+                let first = le64(ent, 32);
+                let last = le64(ent, 40);
+                if last < first {
+                    continue;
+                }
+                let bytes = (last - first + 1).saturating_mul(S);
+                empuja(&mut hijos, &mut total, format!("gpt_part{}", i + 1), first * S, bytes)?;
+            }
+        }
+        if !hijos.is_empty() {
+            return Ok(hijos);
+        }
+    }
+
+    // MBR: 4 entradas primarias en 0x1BE.
+    if d.len() >= 0x200 && d[0x1fe] == 0x55 && d[0x1ff] == 0xAA {
+        for i in 0..4 {
+            let e = 0x1be + i * 16;
+            let tipo = d[e + 4];
+            if tipo == 0 {
+                continue;
+            }
+            let lba = u32::from_le_bytes([d[e + 8], d[e + 9], d[e + 10], d[e + 11]]) as u64;
+            let sect = u32::from_le_bytes([d[e + 12], d[e + 13], d[e + 14], d[e + 15]]) as u64;
+            empuja(&mut hijos, &mut total, format!("mbr_part{}_{}", i + 1, tipo_mbr(tipo)), lba * S, sect * S)?;
+        }
+    }
+    Ok(hijos)
+}
+
+#[cfg(test)]
+mod pruebas_particiones {
+    use super::particiones;
+
+    #[test]
+    fn lee_gpt_sintetico() {
+        const S: usize = 512;
+        let mut img = vec![0u8; 40 * S];
+        // MBR protector mínimo (no imprescindible, pero realista).
+        img[0x1fe] = 0x55; img[0x1ff] = 0xAA;
+        // Cabecera GPT en el sector 1.
+        img[S..S + 8].copy_from_slice(b"EFI PART");
+        img[S + 0x48..S + 0x50].copy_from_slice(&2u64.to_le_bytes()); // entradas en LBA 2
+        img[S + 0x50..S + 0x54].copy_from_slice(&4u32.to_le_bytes()); // 4 entradas
+        img[S + 0x54..S + 0x58].copy_from_slice(&128u32.to_le_bytes()); // 128 B/entrada
+        // Entrada 0 (LBA 2): partición en los sectores 10..12 (2 sectores).
+        let e = 2 * S;
+        img[e..e + 16].copy_from_slice(&[0xA2; 16]); // type GUID no nulo
+        img[e + 32..e + 40].copy_from_slice(&10u64.to_le_bytes()); // first_lba
+        img[e + 40..e + 48].copy_from_slice(&11u64.to_le_bytes()); // last_lba
+        // Datos de la partición (sector 10): un marcador reconocible.
+        img[10 * S..10 * S + 11].copy_from_slice(b"PART-DATA-1");
+
+        let hijos = particiones(&img, 1 << 20).unwrap();
+        assert_eq!(hijos.len(), 1);
+        assert_eq!(hijos[0].nombre, "gpt_part1");
+        assert_eq!(hijos[0].datos.len(), 2 * S); // 2 sectores
+        assert_eq!(&hijos[0].datos[..11], b"PART-DATA-1");
+    }
+
+    #[test]
+    fn lee_mbr_sintetico() {
+        const S: usize = 512;
+        let mut img = vec![0u8; 20 * S];
+        img[0x1fe] = 0x55; img[0x1ff] = 0xAA;
+        let e = 0x1be;
+        img[e + 4] = 0x0c; // FAT32
+        img[e + 8..e + 12].copy_from_slice(&5u32.to_le_bytes());  // lba_start 5
+        img[e + 12..e + 16].copy_from_slice(&3u32.to_le_bytes()); // 3 sectores
+        img[5 * S..5 * S + 6].copy_from_slice(b"FATFS!");
+
+        let hijos = particiones(&img, 1 << 20).unwrap();
+        assert_eq!(hijos.len(), 1);
+        assert_eq!(hijos[0].nombre, "mbr_part1_fat32");
+        assert_eq!(hijos[0].datos.len(), 3 * S);
+    }
+}

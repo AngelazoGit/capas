@@ -204,6 +204,7 @@ fn codigo_tipo(tp: Tipo) -> &'static str {
         Tipo::Lz4 => "LZ4",
         Tipo::Iso => "ISO",
         Tipo::Chd => "CHD",
+        Tipo::Disco => "DISK",
         Tipo::Tar => "TAR",
         Tipo::SieteZ => "7Z",
         Tipo::Rar => "RAR",
