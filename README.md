@@ -7,21 +7,24 @@
 > decompiling, carving out hidden files and telling you, with evidence, what each
 > piece actually is. Fast, offline, and it **never runs** what it inspects.
 
-![capas analyzing a file](docs/analizando.png)
+![capas in action](docs/capas_demo.gif)
 
-**Free and complete.** The whole analysis engine is free: hundreds of formats across
+![capas analysis view](docs/capas-app.png)
+
+**Free and complete.** The whole analysis engine is free: 729 file formats across
 every platform, parallel layer extraction, confidence levels, family relations, a
 queryable SQLite index and full reports. Paid **Pro/Studio** editions add engine-bundle
 unpacking and team/automation tooling — but you never hit a wall just trying to
 understand a file.
 
 - 🧅 **Layer-by-layer** extraction and decompilation, in parallel across every core
-- 🔬 **Content-based detection** of **hundreds of formats** (Windows, macOS, Linux, Android/iOS, consoles) — not just by extension
+- 🔬 **Content-based detection** of **729 formats** in 11 categories (Windows, macOS, Linux, Android/iOS, consoles) — not just by extension
 - 🏷️ **Confidence levels** (Confirmed / Compatible / Probable / Unknown) with the evidence behind each call
 - 🔗 **Family relations** + a **SQLite index** you can query and diff between versions
 - 🛡️ **Package audit** (APPROVED / QUARANTINE / REJECTED) for asset packs and mods — before a server ever loads them
 - 🎮 **Engine bundle unpacking** (Unity, Godot) — *Pro*
-- 🖥️ **GUI + console**, portable Windows `.exe`, **English/Spanish**, four themes
+- 🖥️ **GUI + console**, portable Windows `.exe`, **English/Spanish**, five masks
+- 🧭 **Product UI**: sidebar (Home · Analysis · Explorer · Compare · Formats · Tools · Settings), stat cards, a three-pane analysis (layer tree · contents table · block details) and recent analyses
 
 Take files (or folders) apart **layer by layer** and decompile them using your
 computer's resources: every CPU core, a memory budget tuned to the free RAM, and
@@ -39,8 +42,8 @@ sample.tar.gz  (GZIP)
 
 A single program with a **graphical interface** and a **console mode**. Builds to a
 portable Windows `.exe`. Default UI language is **English** (Spanish available), and
-it ships with a clean light **"Clean"** business theme by default, plus **"Serene"**,
-**"Neutral"** and the original intense **"Command"** look.
+it ships with a dark **"Serious"** product theme by default, plus a light **"Clean"**
+business mask and the **"Serene"**, **"Neutral"** and **"Command"** looks.
 
 ## How it works
 
@@ -171,7 +174,7 @@ by magic bytes + extension, so detection can be extended for custom formats.
 
 capas is **free to use and genuinely complete on its own**: the whole analysis engine —
 layer-by-layer extraction (now including **Zstandard** and **LZ4**), detection of
-**hundreds of formats across every platform**, classification, confidence levels, family
+**729 formats across every platform**, classification, confidence levels, family
 relations, the SQLite index, every report, the package audit, the password module and the
 cache watch/locate tools — is **Core, and free**. The paid editions add operational and
 automation features for teams and pipelines; in the released binary they are activated
@@ -181,7 +184,7 @@ feature's required edition is a one-line constant, so the tiering is easy to adj
 
 | Edition | What you get |
 |---|---|
-| **Core** — free | The full analyser: extraction (zip/gzip/bzip2/xz/lzma/zstd/lz4/tar/7z/rar…), content detection of hundreds of formats, classification, **confidence levels**, **family relations**, **SQLite index**, all reports, **package audit**, **password module**, **plugin/active-code report**, and the **watch/locate** cache tools. |
+| **Core** — free | The full analyser: extraction (zip/gzip/bzip2/xz/lzma/zstd/lz4/tar/7z/rar…), content detection of 729 formats, classification, **confidence levels**, **family relations**, **SQLite index**, all reports, **package audit**, **password module**, **plugin/active-code report**, and the **watch/locate** cache tools. |
 | **Pro** | **`--desempaquetar`** (unpack Unity/Godot engine bundles), **`--politica`** (operational policy ALLOW/WARN/REVIEW/BLOCK → `politica.md`), **`--comparar base.db`** (version diff between two indexes → `comparacion.md`). |
 | **Studio** | Everything in Pro, plus **`--ci`** (CI/CD: machine line on stdout + exit code 0/1/2/3 from the policy) and **`--api <port>`** (local read-only REST over the index: `/`, `/files`, `/relations`, `/findings`, `/runs`). |
 
@@ -253,5 +256,6 @@ out/
 Created by **@angelazo**. The signature appears in the window, in `capas --help` and
 at the end of each report. MIT license (see `LICENSE`).
 
-The interface is an original design with a '90s "command center" aesthetic (purple,
-green, orange). It uses no logos, names or assets from any existing work.
+The interface is an original, modern product design: a dark indigo theme with a
+sidebar, stat cards and a three-pane analysis view (plus a light "Clean" mask). It
+uses no logos, names or assets from any existing work.

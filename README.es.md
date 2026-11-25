@@ -9,21 +9,24 @@
 > capa: descomprime, decompila, extrae ficheros escondidos y te dice, con pruebas,
 > qué es cada pieza. Rápido, sin conexión y **nunca ejecuta** lo que analiza.
 
-![capas analizando](docs/analizando.png)
+![capas en funcionamiento](docs/capas_demo.gif)
 
-**Gratis y completo.** Todo el motor de análisis es gratuito: cientos de formatos de
+![vista de análisis de capas](docs/capas-app.png)
+
+**Gratis y completo.** Todo el motor de análisis es gratuito: 729 formatos de
 todas las plataformas, extracción por capas en paralelo, niveles de confianza,
 relaciones de familia, un índice SQLite consultable e informes completos. Las ediciones
 de pago **Pro/Studio** añaden el desempaquetado de bundles de motor y herramientas de
 equipo/automatización, pero nunca te chocas con un muro solo por querer entender un archivo.
 
 - 🧅 **Capa a capa**: extracción y decompilación en paralelo en todos los núcleos
-- 🔬 **Detección por contenido** de **cientos de formatos** (Windows, macOS, Linux, Android/iOS, consolas), no solo por extensión
+- 🔬 **Detección por contenido** de **729 formatos** en 11 categorías (Windows, macOS, Linux, Android/iOS, consolas), no solo por extensión
 - 🏷️ **Niveles de confianza** (Confirmado / Compatible / Probable / Desconocido) con la evidencia de cada decisión
 - 🔗 **Relaciones de familia** + **índice SQLite** que puedes consultar y comparar entre versiones
 - 🛡️ **Auditoría de paquetes** (APROBADO / CUARENTENA / RECHAZADO) para asset packs y mods, antes de que un servidor los cargue
 - 🎮 **Desempaquetado de bundles** de motor (Unity, Godot) — *Pro*
-- 🖥️ **Interfaz gráfica + consola**, `.exe` portable de Windows, **inglés/español**, cuatro temas
+- 🖥️ **Interfaz gráfica + consola**, `.exe` portable de Windows, **inglés/español**, cinco máscaras
+- 🧭 **Interfaz de producto**: barra lateral (Inicio · Análisis · Explorador · Comparar · Formatos · Herramientas · Ajustes), tarjetas de estado, análisis en tres paneles (árbol de capas · tabla de contenido · ficha del bloque) y análisis recientes
 
 Desmonta y decompila archivos **capa a capa** usando los recursos del ordenador:
 todos los núcleos de la CPU, un límite de memoria ajustado a la RAM libre y las
@@ -59,7 +62,7 @@ Al terminar, el **módulo de clasificación** agrupa todos los archivos finales 
 categoría y el **módulo de claves** habrá abierto, por el camino, los ZIP
 protegidos cuya contraseña estuviera entre las candidatas.
 
-![interfaz con los módulos de claves y clasificación](docs/modulos.png)
+![pantalla de inicio: selección, accesos y análisis recientes](docs/capas-home.png)
 
 ## Windows: `.exe` portable
 
@@ -118,7 +121,7 @@ El primero abre la ventana vacía; el segundo la abre y empieza a analizar `arch
 - **E Árbol de estratos** y **F Ficha**: navega por las capas; pulsa un resultado (desensamblado, cabeceras, javap…) para verlo en el **visor** con resaltado.
 - **Registro**: todo lo que ocurre, con marca de tiempo.
 
-![visor de desensamblado](docs/visor.png)
+![vista de análisis: árbol de capas, tabla de contenido y ficha del bloque](docs/capas-app.png)
 
 ## Modo consola
 
@@ -239,7 +242,7 @@ tope de intentos (`--max-intentos`). No descifra AES con contraseña fuerte: sol
 la encuentra si está entre las que se prueban. En la interfaz está en el panel
 **05 CLAVES**.
 
-![módulos de claves y clasificación](docs/claves.png)
+![herramientas: subsistemas, parámetros y claves](docs/capas-tools.png)
 
 ## Módulo de auditoría (asset packs / mods)
 
@@ -266,7 +269,7 @@ En la interfaz es el panel **H AUDITORÍA DE PAQUETES** y se activa con la casil
 *AUDITAR PAQUETES*. Recuerda: un hash demuestra identidad, no inocencia; analiza los
 paquetes en cuarentena con antivirus/sandbox y mantén el software actualizado.
 
-![auditoría de paquetes](docs/auditoria.png)
+![formatos compatibles: 729 extensiones en 11 categorías](docs/capas-formats.png)
 
 ### Modo vigilancia (puerta antes de la carga del servidor)
 
@@ -361,7 +364,7 @@ salida/
 ## Ediciones (Core / Pro / Studio)
 
 capas es **gratis y, por sí solo, completo**: todo el motor de análisis —extracción
-capa a capa (ahora también **Zstandard** y **LZ4**), detección de **cientos de formatos
+capa a capa (ahora también **Zstandard** y **LZ4**), detección de **729 formatos
 de todas las plataformas**, clasificación, niveles de confianza, relaciones de familia,
 índice SQLite, todos los informes, la auditoría de paquetes, el módulo de claves y las
 herramientas de vigilancia/localización de caché— es **Core, y gratuito**. Las ediciones
@@ -372,7 +375,7 @@ una línea, así que mover una función de plan es trivial.
 
 | Edición | Qué incluye |
 |---|---|
-| **Core** — gratis | El analizador completo: extracción (zip/gzip/bzip2/xz/lzma/zstd/lz4/tar/7z/rar…), detección por contenido de cientos de formatos, clasificación, **niveles de confianza**, **relaciones de familia**, **índice SQLite**, todos los informes, **auditoría de paquetes**, **módulo de claves**, **informe de plugins/código activo** y las herramientas de **vigilancia/localización** de caché. |
+| **Core** — gratis | El analizador completo: extracción (zip/gzip/bzip2/xz/lzma/zstd/lz4/tar/7z/rar…), detección por contenido de 729 formatos, clasificación, **niveles de confianza**, **relaciones de familia**, **índice SQLite**, todos los informes, **auditoría de paquetes**, **módulo de claves**, **informe de plugins/código activo** y las herramientas de **vigilancia/localización** de caché. |
 | **Pro** | **`--desempaquetar`** (abre bundles de motor Unity/Godot), **`--politica`** (política operativa PERMITIR/ADVERTIR/REVISAR/BLOQUEAR → `politica.md`), **`--comparar base.db`** (diff entre dos índices → `comparacion.md`). |
 | **Studio** | Todo lo de Pro, más **`--ci`** (CI/CD: línea de máquina en stdout + código de salida 0/1/2/3) y **`--api <puerto>`** (REST local de solo lectura sobre el índice). |
 
@@ -399,6 +402,6 @@ capas --api 8080 --indice capas.db --edicion studio            # sirve el índic
 Creado por **@angelazo**. La firma aparece en la ventana, en `capas --help`
 y al final de cada `informe.md`. Licencia MIT (ver `LICENSE`).
 
-La interfaz es un diseño original con una estética de "centro de mando" de anime de
-los 90 (morado, verde neón y naranja). No usa logotipos, nombres ni recursos
-de ninguna obra existente.
+La interfaz es un diseño de producto original y moderno: tema oscuro índigo con
+barra lateral, tarjetas de estado y análisis en tres paneles (más una máscara clara
+"Limpio"). No usa logotipos, nombres ni recursos de ninguna obra existente.
