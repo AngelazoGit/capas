@@ -639,6 +639,10 @@ impl eframe::App for App {
         let marco_panel = egui::Frame::new().fill(fondo()).inner_margin(Margin::same(10));
 
         egui::Panel::top("cabecera").exact_size(104.0).frame(marco_panel).show(ui, |ui| self.cabecera(ui, ahora));
+        egui::Panel::bottom("estado")
+            .exact_size(28.0)
+            .frame(egui::Frame::new().fill(morado_oscuro()).inner_margin(Margin::symmetric(12, 4)))
+            .show(ui, |ui| self.barra_estado_ui(ui));
         egui::Panel::bottom("registro")
             .resizable(true)
             .default_size(190.0)
@@ -1311,6 +1315,37 @@ impl App {
         if let Some(r) = abrir {
             self.abrir_resultado(&r);
         }
+    }
+
+    fn barra_estado_ui(&mut self, ui: &mut Ui) {
+        // Línea superior sutil que separa la barra del registro.
+        let top = ui.max_rect();
+        ui.painter().line_segment(
+            [Pos2::new(top.left() - 12.0, top.top() - 4.0), Pos2::new(top.right() + 12.0, top.top() - 4.0)],
+            Stroke::new(1.0, morado()),
+        );
+        ui.horizontal_centered(|ui| {
+            ui.spacing_mut().item_spacing.x = 10.0;
+            // Izquierda: producto + edición.
+            ui.label(RichText::new(format!("CAPAS v{VERSION}")).font(mono(11.0)).color(morado_claro()));
+            ui.label(RichText::new("·").font(mono(11.0)).color(morado_medio()));
+            let ed = crate::edicion::actual();
+            let (et, ec) = match ed {
+                crate::edicion::Edicion::Core => (tr("CORE", "CORE"), morado_claro()),
+                crate::edicion::Edicion::Pro => (tr("PRO", "PRO"), acento()),
+                crate::edicion::Edicion::Studio => (tr("STUDIO", "STUDIO"), acento()),
+            };
+            ui.label(RichText::new(et).font(mono(11.0)).strong().color(ec));
+
+            // Derecha: garantía de privacidad (señal de confianza clave).
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.spacing_mut().item_spacing.x = 7.0;
+                ui.label(RichText::new(tr("LOCAL ANALYSIS · OFFLINE", "ANÁLISIS LOCAL · SIN CONEXIÓN")).font(mono(11.0)).color(morado_claro()));
+                // Punto verde = estado seguro (sin red). El verde se reserva a "éxito/seguro".
+                let (rid, _) = ui.allocate_exact_size(Vec2::splat(9.0), egui::Sense::hover());
+                ui.painter().circle_filled(rid.center(), 4.0, verde());
+            });
+        });
     }
 
     fn registro_ui(&mut self, ui: &mut Ui) {
