@@ -332,6 +332,7 @@ enum Vista {
     Analisis,
     Explorador,
     Comparar,
+    Formatos,
     Herramientas,
     Ajustes,
 }
@@ -343,6 +344,7 @@ impl Vista {
             Vista::Analisis => tr("Analysis", "Análisis"),
             Vista::Explorador => tr("Explorer", "Explorador"),
             Vista::Comparar => tr("Compare", "Comparar"),
+            Vista::Formatos => tr("Formats", "Formatos"),
             Vista::Herramientas => tr("Tools", "Herramientas"),
             Vista::Ajustes => tr("Settings", "Ajustes"),
         }
@@ -353,6 +355,7 @@ impl Vista {
             Vista::Analisis => "lupa",
             Vista::Explorador => "carpeta",
             Vista::Comparar => "comparar",
+            Vista::Formatos => "informe",
             Vista::Herramientas => "llave",
             Vista::Ajustes => "engranaje",
         }
@@ -394,6 +397,7 @@ pub fn lanzar(sis: Sistema, archivos: Vec<PathBuf>, salida: PathBuf, auto_inicia
                     "inicio" | "home" => Vista::Inicio,
                     "explorador" | "explorer" => Vista::Explorador,
                     "comparar" | "compare" => Vista::Comparar,
+                    "formatos" | "formats" => Vista::Formatos,
                     "herramientas" | "tools" | "config" => Vista::Herramientas,
                     "ajustes" | "settings" => Vista::Ajustes,
                     _ => Vista::Analisis,
@@ -634,10 +638,16 @@ impl App {
                             }
                         }
                         self.arbol = r.arbol;
-                        self.raiz = Some(r.raiz);
+                        self.raiz = Some(r.raiz.clone());
                         if !self.arbol.is_empty() {
                             self.seleccion = Some(vec![0]);
                         }
+                        // Guarda el análisis en el historial reciente.
+                        let (_, pend) = resumen_arbol(&self.arbol);
+                        let avisos = self.audit.iter().any(|(_, _, h)| !h.is_empty());
+                        let estado = if self.arbol.is_empty() { "error" } else if avisos { "con avisos" } else if pend > 0 { "incompleto" } else { "completado" };
+                        let nombre = self.arbol.first().map(|n| n.nombre.clone()).unwrap_or_else(|| tr("analysis", "análisis").to_string());
+                        registrar_reciente(&nombre, &r.raiz, estado);
                     }
                     Ok(Err(e)) => self.log(ahora, tfmt(tr("FAILURE: {}","FALLO: {}"), &[format!("{e:#}")]), rojo()),
                     Err(_) => self.log(ahora, tr("FAILURE: the analysis thread stopped", "FALLO: el hilo de análisis se ha detenido").into(), rojo()),
@@ -722,6 +732,7 @@ impl eframe::App for App {
             Vista::Analisis => self.vista_analisis(ui),
             Vista::Explorador => self.vista_explorador(ui),
             Vista::Comparar => self.vista_comparar(ui),
+            Vista::Formatos => self.vista_formatos(ui),
             Vista::Herramientas => self.recursos_ui(ui, ahora),
             Vista::Ajustes => self.vista_ajustes(ui),
         });
@@ -1157,7 +1168,7 @@ impl App {
         ui.painter().line_segment([Pos2::new(ui.max_rect().left(), yd), Pos2::new(ui.max_rect().right(), yd)], Stroke::new(1.0, morado()));
         ui.add_space(12.0);
 
-        for v in [Vista::Inicio, Vista::Analisis, Vista::Explorador, Vista::Comparar, Vista::Herramientas, Vista::Ajustes] {
+        for v in [Vista::Inicio, Vista::Analisis, Vista::Explorador, Vista::Comparar, Vista::Formatos, Vista::Herramientas, Vista::Ajustes] {
             if nav_item(ui, v.icono(), v.etiqueta(), self.vista == v) {
                 self.vista = v;
             }
@@ -1172,14 +1183,15 @@ impl App {
                 crate::edicion::Edicion::Studio => (tr("STUDIO edition", "edición STUDIO"), acento()),
             };
             if ed == crate::edicion::Edicion::Core
-                && ui.add(egui::Label::new(RichText::new(tr("› activate with a key", "› activar con una clave")).font(FontId::proportional(10.5)).color(morado_medio())).sense(Sense::click())).clicked()
+                && ui.add(egui::Label::new(RichText::new(tr("› Activate license", "› Activar licencia")).font(FontId::proportional(11.5)).color(morado_claro())).sense(Sense::click())).clicked()
             {
                 self.vista = Vista::Ajustes;
             }
+            ui.add_space(2.0);
             ui.horizontal(|ui| {
-                let (rid, _) = ui.allocate_exact_size(Vec2::splat(9.0), Sense::hover());
-                ui.painter().circle_filled(rid.center(), 3.5, ec);
-                ui.label(RichText::new(et).font(FontId::proportional(11.5)).color(ec));
+                let (rid, _) = ui.allocate_exact_size(Vec2::splat(10.0), Sense::hover());
+                ui.painter().circle_filled(rid.center(), 4.0, ec);
+                ui.label(RichText::new(et).font(titulo(12.5)).color(ec));
             });
         });
     }
@@ -1218,7 +1230,7 @@ impl App {
                 ui.label(RichText::new(t).font(titulo(22.0)).color(texto()));
             });
             ui.add_space(14.0);
-            pastilla(ui, "ia", tr("AI disconnected", "IA desconectada"), morado_claro(), morado());
+            pastilla(ui, "ia", tr("Optional AI · Off", "IA opcional · Desactivada"), morado_claro(), morado());
             // Aviso de actualización disponible (clicable → abre releases).
             if let Some(Act::Disponible(v)) = self.actualizacion.lock().unwrap().clone() {
                 ui.add_space(8.0);
@@ -1690,37 +1702,187 @@ impl App {
     // ── Inicio ───────────────────────────────────────────────────────────
     fn vista_inicio(&mut self, ui: &mut Ui) {
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
-            ui.add_space(30.0);
+            ui.add_space(18.0);
             ui.vertical_centered(|ui| {
-                let (r, _) = ui.allocate_exact_size(Vec2::new(340.0, 72.0), Sense::hover());
+                let (r, _) = ui.allocate_exact_size(Vec2::new(300.0, 54.0), Sense::hover());
                 let p = ui.painter().clone();
-                marca_capas(&p, Pos2::new(r.left() + 26.0, r.center().y), 22.0, acento());
-                p.text(Pos2::new(r.left() + 64.0, r.center().y), Align2::LEFT_CENTER, "CAPAS", titulo(44.0), texto());
+                marca_capas(&p, Pos2::new(r.left() + 22.0, r.center().y), 17.0, acento());
+                p.text(Pos2::new(r.left() + 52.0, r.center().y), Align2::LEFT_CENTER, "CAPAS", titulo(34.0), texto());
             });
             ui.vertical_centered(|ui| {
-                ui.label(RichText::new(tr("Explore and reverse-engineer any file, layer by layer — fully local.", "Explora y haz ingeniería inversa de cualquier archivo, capa a capa — 100% local.")).font(FontId::proportional(14.5)).color(morado_claro()));
+                ui.label(RichText::new(tr("Explore and reverse-engineer any file, layer by layer — fully local.", "Explora y haz ingeniería inversa de cualquier archivo, capa a capa — 100% local.")).font(FontId::proportional(13.5)).color(morado_claro()));
             });
-            ui.add_space(22.0);
-            self.zona_carga(ui);
             ui.add_space(16.0);
-            ui.columns(3, |c| {
-                tarjeta_info(&mut c[0], "capas", tr("Layered decomposition", "Descomposición por capas"), tr("Unpacks archives, disk images, binaries and engine bundles recursively.", "Desempaqueta archivos, imágenes de disco, binarios y bundles de motor de forma recursiva."));
-                tarjeta_info(&mut c[1], "lupa", tr("Identifies everything", "Lo identifica todo"), tr("200+ formats from every platform, each with a confidence level.", "200+ formatos de todas las plataformas, cada uno con su nivel de confianza."));
-                tarjeta_info(&mut c[2], "monitor", tr("Fully local", "100% local"), tr("Nothing leaves your machine. No account, no connection required.", "Nada sale de tu equipo. Sin cuenta ni conexión."));
-            });
+
+            // Selección actual o zona de carga.
+            if self.archivos.is_empty() {
+                self.zona_carga(ui);
+            } else {
+                self.seleccion_ui(ui);
+            }
+
+            // Análisis en curso de esta sesión.
             if !self.arbol.is_empty() {
-                ui.add_space(14.0);
-                egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, morado())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(14)).show(ui, |ui| {
+                ui.add_space(12.0);
+                egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, morado())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(13)).show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.horizontal(|ui| {
                         let (bloques, pend) = resumen_arbol(&self.arbol);
-                        ui.label(RichText::new(tr("Last analysis", "Último análisis")).font(titulo(14.0)).color(texto()));
+                        dibujar_icono(&ui.painter().clone(), ui.cursor().left_center() + Vec2::new(7.0, 9.0), 7.0, "check", verde());
+                        ui.add_space(18.0);
+                        ui.label(RichText::new(tr("Current analysis", "Análisis en curso")).font(titulo(14.0)).color(texto()));
                         ui.label(RichText::new(tfmt(tr("· {} blocks · {} layers · {} pending", "· {} bloques · {} capas · {} pendientes"), &[bloques.to_string(), self.por_capa.len().to_string(), pend.to_string()])).font(FontId::proportional(12.5)).color(morado_claro()));
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if ui.add(boton_pri(tr("View analysis", "Ver análisis"), acento())).clicked() {
                                 self.vista = Vista::Analisis;
                             }
                         });
+                    });
+                });
+            }
+
+            // Accesos: qué quieres hacer.
+            ui.add_space(16.0);
+            ui.label(RichText::new(tr("What do you want to do?", "¿Qué quieres hacer?")).font(titulo(14.0)).color(morado_claro()));
+            ui.add_space(8.0);
+            let mut accion = None;
+            ui.columns(3, |c| {
+                if tarjeta_accion(&mut c[0], "carpeta", tr("Open a file", "Abrir un archivo"), tr("Pick files or a folder to analyze.", "Elige archivos o una carpeta para analizar.")) {
+                    accion = Some(0);
+                }
+                if tarjeta_accion(&mut c[1], "comparar", tr("Compare versions", "Comparar versiones"), tr("Diff two analyses to see what changed.", "Compara dos análisis y ve qué cambió.")) {
+                    accion = Some(1);
+                }
+                if tarjeta_accion(&mut c[2], "informe", tr("Supported formats", "Formatos compatibles"), tr("See what CAPAS does with each file type.", "Mira qué hace CAPAS con cada tipo de archivo.")) {
+                    accion = Some(2);
+                }
+            });
+            match accion {
+                Some(0) => self.elegir_archivos(),
+                Some(1) => self.vista = Vista::Comparar,
+                Some(2) => self.vista = Vista::Formatos,
+                _ => {}
+            }
+
+            // Análisis recientes (persistencia real).
+            ui.add_space(18.0);
+            self.recientes_ui(ui);
+        });
+    }
+
+    fn seleccion_ui(&mut self, ui: &mut Ui) {
+        egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.3, acento().gamma_multiply(0.65))).corner_radius(CornerRadius::same(11)).inner_margin(Margin::same(16)).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                let (badge, _) = ui.allocate_exact_size(Vec2::splat(40.0), Sense::hover());
+                let p = ui.painter().clone();
+                p.rect_filled(badge, CornerRadius::same(9), acento().gamma_multiply(0.18));
+                dibujar_icono(&p, badge.center(), 11.0, "archivo", acento());
+                ui.add_space(6.0);
+                ui.vertical(|ui| {
+                    let n = self.archivos.len();
+                    let primero = self.archivos.first().and_then(|p| p.file_name()).map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+                    let titulo_sel = if n == 1 { primero.clone() } else { tfmt(tr("{} items selected", "{} elementos seleccionados"), &[n.to_string()]) };
+                    ui.label(RichText::new(acortar(&titulo_sel, 48)).font(titulo(16.0)).color(texto()));
+                    if n > 1 {
+                        let muestra: Vec<String> = self.archivos.iter().take(3).filter_map(|p| p.file_name().map(|f| f.to_string_lossy().into_owned())).collect();
+                        let extra = if n > 3 { format!(" +{}", n - 3) } else { String::new() };
+                        ui.label(RichText::new(format!("{}{}", muestra.join(" · "), extra)).font(FontId::proportional(11.5)).color(morado_claro()));
+                    } else {
+                        ui.label(RichText::new(tr("Ready to analyze", "Listo para analizar")).font(FontId::proportional(11.5)).color(morado_claro()));
+                    }
+                });
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    let libre = !self.analizando();
+                    if ui.add_enabled(libre, boton_sec(tr("Clear", "Vaciar"))).clicked() {
+                        self.archivos.clear();
+                    }
+                    if ui.add_enabled(libre, boton_sec(tr("+ Add", "+ Añadir"))).clicked() {
+                        self.elegir_archivos();
+                    }
+                    if ui.add_enabled(libre, boton_pri(tr("▶ Analyze", "▶ Analizar"), acento())).clicked() {
+                        self.auto_iniciar = true;
+                        self.vista = Vista::Analisis;
+                    }
+                });
+            });
+        });
+    }
+
+    fn recientes_ui(&mut self, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            dibujar_icono(&ui.painter().clone(), ui.cursor().left_center() + Vec2::new(7.0, 9.0), 7.0, "informe", morado_claro());
+            ui.add_space(18.0);
+            ui.label(RichText::new(tr("Recent analyses", "Análisis recientes")).font(titulo(14.0)).color(texto()));
+        });
+        ui.add_space(8.0);
+        let recientes = leer_recientes();
+        if recientes.is_empty() {
+            egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, morado())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(16)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label(RichText::new(tr("No analyses yet.", "Aún no hay análisis.")).font(FontId::proportional(13.0)).color(morado_claro()));
+                ui.add_space(2.0);
+                ui.label(RichText::new(tr("When you analyze a file, it is saved here so you can reopen its report.", "Cuando analices un archivo, se guardará aquí para que puedas reabrir su informe.")).font(FontId::proportional(11.5)).color(morado_medio()));
+            });
+            return;
+        }
+        for r in &recientes {
+            let raiz = PathBuf::from(&r.raiz);
+            let existe = raiz.join("informe.md").exists() || raiz.exists();
+            egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, morado())).corner_radius(CornerRadius::same(9)).inner_margin(Margin { left: 14, right: 12, top: 9, bottom: 9 }).outer_margin(Margin { left: 0, right: 0, top: 0, bottom: 6 }).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    let col = color_estado(&r.estado);
+                    let (rid, _) = ui.allocate_exact_size(Vec2::splat(9.0), Sense::hover());
+                    ui.painter().circle_filled(rid.center(), 3.5, col);
+                    ui.vertical(|ui| {
+                        ui.label(RichText::new(acortar(&r.nombre, 40)).font(titulo(13.5)).color(texto()));
+                        ui.horizontal(|ui| {
+                            chip(ui, etiqueta_estado(&r.estado), col);
+                            ui.label(RichText::new(hace(r.epoch)).font(FontId::proportional(11.0)).color(morado_claro()));
+                            if !existe {
+                                ui.label(RichText::new(tr("· output not found", "· salida no encontrada")).font(FontId::proportional(11.0)).color(rojo()));
+                            }
+                        });
+                    });
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if ui.add_enabled(existe, boton_sec(tr("Open report", "Abrir informe"))).clicked() {
+                            let informe = raiz.join("informe.md");
+                            abrir_en_sistema(if informe.exists() { &informe } else { &raiz });
+                        }
+                    });
+                });
+            });
+        }
+    }
+
+    // ── Formatos compatibles ─────────────────────────────────────────────
+    fn vista_formatos(&mut self, ui: &mut Ui) {
+        titulo_vista(ui, "informe", tr("Supported formats", "Formatos compatibles"), tr("What CAPAS can do with each type. Support depends on the format — not every action applies to every file.", "Qué puede hacer CAPAS con cada tipo. El soporte depende del formato — no todas las acciones aplican a todos los archivos."));
+        egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+            // Leyenda de verbos.
+            egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, morado())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(12)).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal_wrapped(|ui| {
+                    for (k, v) in VERBOS {
+                        chip(ui, tr(k, v), acento());
+                    }
+                });
+            });
+            ui.add_space(10.0);
+            for (en, es, n, verbos) in FORMATOS_CAP {
+                egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, morado())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(13)).outer_margin(Margin { left: 0, right: 0, top: 0, bottom: 8 }).show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(tr(en, es)).font(titulo(14.5)).color(texto()));
+                        ui.label(RichText::new(tfmt(tr("{} extensions", "{} extensiones"), &[n.to_string()])).font(FontId::proportional(11.5)).color(morado_claro()));
+                    });
+                    ui.add_space(6.0);
+                    ui.horizontal_wrapped(|ui| {
+                        for &vi in *verbos {
+                            let (ke, ks) = VERBOS[vi];
+                            chip(ui, tr(ke, ks), if vi == 0 { verde() } else { morado_claro() });
+                        }
                     });
                 });
             }
@@ -2500,6 +2662,60 @@ fn tarjeta_info(ui: &mut Ui, icono: &str, titulo_txt: &str, desc: &str) {
     });
 }
 
+/// Tarjeta de acceso clicable (pantalla de inicio). Devuelve true al pulsarla.
+fn tarjeta_accion(ui: &mut Ui, icono: &str, titulo_txt: &str, desc: &str) -> bool {
+    let id = ui.make_persistent_id(("accion", titulo_txt));
+    let hov = ui.ctx().read_response(id).map(|r| r.hovered()).unwrap_or(false);
+    let inner = egui::Frame::new()
+        .fill(if hov { mezclar(morado_oscuro(), morado(), 0.5) } else { morado_oscuro() })
+        .stroke(Stroke::new(1.0, if hov { acento() } else { morado() }))
+        .corner_radius(CornerRadius::same(10))
+        .inner_margin(Margin::same(14))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.set_min_height(104.0);
+            let (badge, _) = ui.allocate_exact_size(Vec2::splat(32.0), Sense::hover());
+            let p = ui.painter().clone();
+            p.rect_filled(badge, CornerRadius::same(8), acento().gamma_multiply(0.18));
+            dibujar_icono(&p, badge.center(), 9.0, icono, acento());
+            ui.add_space(9.0);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(titulo_txt).font(titulo(14.5)).color(texto()));
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    ui.label(RichText::new("›").font(titulo(17.0)).color(if hov { acento() } else { morado_medio() }));
+                });
+            });
+            ui.add_space(2.0);
+            ui.label(RichText::new(desc).font(FontId::proportional(12.0)).color(morado_claro()));
+        });
+    ui.interact(inner.response.rect, id, Sense::click()).clicked()
+}
+
+/// Verbos de capacidad (leyenda de la vista Formatos).
+const VERBOS: [(&str, &str); 6] = [
+    ("Detect", "Detectar"),
+    ("Explore", "Explorar"),
+    ("Extract", "Extraer"),
+    ("Preview", "Previsualizar"),
+    ("Analyze", "Analizar"),
+    ("Rebuild", "Reconstruir"),
+];
+
+/// Capacidades honestas por categoría: (etiqueta EN, ES, nº extensiones, verbos).
+const FORMATOS_CAP: &[(&str, &str, u32, &[usize])] = &[
+    ("Archives, packages & disk images", "Comprimidos, paquetes e imágenes de disco", 81, &[0, 1, 2, 4, 5]),
+    ("Executables & libraries", "Ejecutables y bibliotecas", 28, &[0, 1, 2, 4]),
+    ("Bytecode & VMs", "Bytecode y máquinas virtuales", 16, &[0, 1, 4]),
+    ("Images", "Imágenes", 51, &[0, 4]),
+    ("Audio", "Audio", 38, &[0, 4]),
+    ("Video", "Vídeo", 29, &[0, 4]),
+    ("Documents", "Documentos", 49, &[0, 1, 2, 4]),
+    ("Source code & scripts", "Código fuente y scripts", 131, &[0, 3, 4]),
+    ("Game, 3D, engines & ROMs", "Juegos, 3D, motores y ROMs", 172, &[0, 1, 2, 4, 5]),
+    ("Data, databases, certs, fonts & AI models", "Datos, bases de datos, certificados, fuentes y modelos IA", 103, &[0, 4]),
+    ("Text, subtitles & notes", "Texto, subtítulos y notas", 31, &[0, 3, 4]),
+];
+
 /// Tarjeta de función Pro bloqueada.
 fn tarjeta_pro(ui: &mut Ui, msg: &str, vista: &mut Vista) {
     egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, acento().gamma_multiply(0.6))).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(18)).show(ui, |ui| {
@@ -2605,6 +2821,75 @@ fn comparar_salidas(a: &Path, b: &Path) -> (Vec<String>, Vec<String>, usize) {
     let quitados: Vec<String> = sa.difference(&sb).cloned().collect();
     let comunes = sa.intersection(&sb).count();
     (nuevos, quitados, comunes)
+}
+
+// ── Historial de análisis recientes (persistencia real en ~/.capas) ──────
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+struct Reciente {
+    nombre: String,
+    epoch: u64,
+    raiz: String,
+    estado: String, // "completado" | "con avisos" | "incompleto" | "error"
+}
+
+fn dir_capas() -> Option<PathBuf> {
+    let home = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
+    let d = PathBuf::from(home).join(".capas");
+    fs::create_dir_all(&d).ok()?;
+    Some(d)
+}
+
+fn leer_recientes() -> Vec<Reciente> {
+    dir_capas()
+        .and_then(|d| fs::read_to_string(d.join("recientes.json")).ok())
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
+fn registrar_reciente(nombre: &str, raiz: &Path, estado: &str) {
+    let Some(d) = dir_capas() else { return };
+    let raiz_s = raiz.display().to_string();
+    let mut v = leer_recientes();
+    v.retain(|r| r.raiz != raiz_s); // dedup por carpeta de salida
+    let epoch = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|x| x.as_secs()).unwrap_or(0);
+    v.insert(0, Reciente { nombre: nombre.to_string(), epoch, raiz: raiz_s, estado: estado.to_string() });
+    v.truncate(20);
+    if let Ok(txt) = serde_json::to_string_pretty(&v) {
+        let _ = fs::write(d.join("recientes.json"), txt);
+    }
+}
+
+/// Tiempo relativo legible a partir de un epoch en segundos.
+fn hace(epoch: u64) -> String {
+    let ahora = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|x| x.as_secs()).unwrap_or(epoch);
+    let d = ahora.saturating_sub(epoch);
+    if d < 60 {
+        tr("just now", "ahora mismo").to_string()
+    } else if d < 3600 {
+        tfmt(tr("{} min ago", "hace {} min"), &[(d / 60).to_string()])
+    } else if d < 86400 {
+        tfmt(tr("{} h ago", "hace {} h"), &[(d / 3600).to_string()])
+    } else {
+        tfmt(tr("{} d ago", "hace {} d"), &[(d / 86400).to_string()])
+    }
+}
+
+/// Color del estado de un análisis reciente.
+fn color_estado(estado: &str) -> Color32 {
+    match estado {
+        "completado" => verde(),
+        "con avisos" => naranja(),
+        "incompleto" => rojo(),
+        _ => morado_claro(),
+    }
+}
+fn etiqueta_estado(estado: &str) -> &'static str {
+    match estado {
+        "completado" => tr("Completed", "Completado"),
+        "con avisos" => tr("Warnings", "Con avisos"),
+        "incompleto" => tr("Incomplete", "Incompleto"),
+        _ => tr("Error", "Error"),
+    }
 }
 
 /// Estado de la comprobación de actualización (manual: la única conexión opcional).
