@@ -307,6 +307,8 @@ pub struct App {
     cmp_resultado: Option<(Vec<String>, Vec<String>, usize)>,
     // Barra de búsqueda del análisis.
     buscar: String,
+    // Comprobación de actualización (hilo de fondo → estado compartido).
+    actualizacion: std::sync::Arc<std::sync::Mutex<Option<Act>>>,
     // Módulo de claves (interfaz).
     clave_entrada: String,
     clave_lic: String,
@@ -436,6 +438,7 @@ impl App {
             cmp_b: None,
             cmp_resultado: None,
             buscar: String::new(),
+            actualizacion: std::sync::Arc::new(std::sync::Mutex::new(None)),
             clave_entrada: String::new(),
             clave_lic: String::new(),
             lic_estado: None,
@@ -1216,6 +1219,19 @@ impl App {
             });
             ui.add_space(14.0);
             pastilla(ui, "ia", tr("AI disconnected", "IA desconectada"), morado_claro(), morado());
+            // Aviso de actualización disponible (clicable → abre releases).
+            if let Some(Act::Disponible(v)) = self.actualizacion.lock().unwrap().clone() {
+                ui.add_space(8.0);
+                let txt = tfmt(tr("Update v{}", "Actualización v{}"), &[v]);
+                let g = ui.painter().layout_no_wrap(txt, FontId::proportional(11.5), Color32::from_rgb(0xf6, 0xf7, 0xfb));
+                let (resp, p) = ui.allocate_painter(Vec2::new(g.size().x + 36.0, 25.0), Sense::click());
+                p.rect_filled(resp.rect, CornerRadius::same(12), acento());
+                dibujar_icono(&p, resp.rect.left_center() + Vec2::new(14.0, 0.0), 6.0, "extraer", Color32::from_rgb(0xf6, 0xf7, 0xfb));
+                p.galley(Pos2::new(resp.rect.left() + 25.0, resp.rect.center().y - g.size().y / 2.0), g, Color32::from_rgb(0xf6, 0xf7, 0xfb));
+                if resp.on_hover_text(tr("Open the latest release", "Abrir la última versión")).clicked() {
+                    abrir_en_sistema(Path::new(URL_RELEASES));
+                }
+            }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let es = crate::idioma::es();
                 if ui.add(boton_sec(if es { "ES" } else { "EN" })).on_hover_text(tr("Switch language", "Cambiar idioma")).clicked() {
@@ -1859,6 +1875,47 @@ impl App {
                     let col = if crate::edicion::actual() == crate::edicion::Edicion::Core { rojo() } else { verde() };
                     ui.label(RichText::new(msg).font(FontId::proportional(11.5)).color(col));
                 }
+            });
+            ui.add_space(12.0);
+            // Actualizaciones.
+            tarjeta_ajuste(ui, tr("Updates", "Actualizaciones"), |ui| {
+                ui.label(RichText::new(tfmt(tr("Installed version: v{}", "Versión instalada: v{}"), &[VERSION.to_string()])).font(FontId::proportional(13.0)).color(texto()));
+                ui.add_space(8.0);
+                let estado = self.actualizacion.lock().unwrap().clone();
+                ui.horizontal(|ui| {
+                    let comprobando = matches!(estado, Some(Act::Comprobando));
+                    if ui.add_enabled(!comprobando, boton_pri(tr("Check for updates", "Buscar actualizaciones"), acento())).clicked() {
+                        let arc = self.actualizacion.clone();
+                        *arc.lock().unwrap() = Some(Act::Comprobando);
+                        std::thread::spawn(move || {
+                            let r = comprobar_actualizacion();
+                            *arc.lock().unwrap() = Some(r);
+                        });
+                    }
+                    match &estado {
+                        Some(Act::Comprobando) => {
+                            ui.label(RichText::new(tr("Checking…", "Comprobando…")).font(FontId::proportional(12.0)).color(morado_claro()));
+                        }
+                        Some(Act::Disponible(v)) => {
+                            if ui.add(boton_pri(&tfmt(tr("↓ Download v{}", "↓ Descargar v{}"), &[v.clone()]), verde())).clicked() {
+                                abrir_en_sistema(Path::new(URL_RELEASES));
+                            }
+                        }
+                        Some(Act::AlDia) => {
+                            ui.label(RichText::new(tr("You're up to date.", "Estás al día.")).font(FontId::proportional(12.5)).color(verde()));
+                        }
+                        Some(Act::Error) => {
+                            ui.label(RichText::new(tr("Couldn't check (no releases or no connection).", "No se pudo comprobar (sin releases o sin conexión).")).font(FontId::proportional(12.0)).color(naranja()));
+                        }
+                        None => {}
+                    }
+                });
+                if let Some(Act::Disponible(v)) = &estado {
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(tfmt(tr("Update available: v{}", "Actualización disponible: v{}"), &[v.clone()])).font(titulo(13.0)).color(acento()));
+                }
+                ui.add_space(4.0);
+                ui.label(RichText::new(tr("Checks GitHub once, only when you press the button.", "Consulta GitHub una vez, solo al pulsar el botón.")).font(FontId::proportional(10.5)).color(morado_medio()));
             });
         });
     }
@@ -2550,6 +2607,43 @@ fn comparar_salidas(a: &Path, b: &Path) -> (Vec<String>, Vec<String>, usize) {
     (nuevos, quitados, comunes)
 }
 
+/// Estado de la comprobación de actualización (manual: la única conexión opcional).
+#[derive(Clone)]
+enum Act {
+    Comprobando,
+    Disponible(String),
+    AlDia,
+    Error,
+}
+
+const REPO: &str = "AngelazoGit/capas";
+const URL_RELEASES: &str = "https://github.com/AngelazoGit/capas/releases/latest";
+
+fn triple(s: &str) -> (u32, u32, u32) {
+    let mut it = s.trim().trim_start_matches('v').split('.').map(|n| n.trim().parse::<u32>().unwrap_or(0));
+    (it.next().unwrap_or(0), it.next().unwrap_or(0), it.next().unwrap_or(0))
+}
+/// ¿`a` es una versión semántica mayor que `b`? (x.y.z, componentes faltantes = 0)
+fn version_mayor(a: &str, b: &str) -> bool {
+    triple(a) > triple(b)
+}
+
+/// Pregunta a GitHub por la última release y compara con la versión instalada.
+fn comprobar_actualizacion() -> Act {
+    let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
+    let agente = ureq::AgentBuilder::new().timeout(Duration::from_secs(10)).build();
+    let Ok(resp) = agente.get(&url).set("User-Agent", "capas-updater").set("Accept", "application/vnd.github+json").call() else {
+        return Act::Error;
+    };
+    let Ok(cuerpo) = resp.into_string() else { return Act::Error };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&cuerpo) else { return Act::Error };
+    match v.get("tag_name").and_then(|t| t.as_str()) {
+        Some(tag) if version_mayor(tag, VERSION) => Act::Disponible(tag.trim_start_matches('v').to_string()),
+        Some(_) => Act::AlDia,
+        None => Act::Error,
+    }
+}
+
 /// Pastilla redondeada con icono + texto (p. ej. "IA desconectada").
 fn pastilla(ui: &mut Ui, icono: &str, txt: &str, fg: Color32, bg: Color32) {
     let g = ui.painter().layout_no_wrap(txt.to_string(), FontId::proportional(11.5), fg);
@@ -2883,4 +2977,19 @@ fn icono() -> egui::IconData {
         }
     }
     egui::IconData { rgba, width: n as u32, height: n as u32 }
+}
+
+#[cfg(test)]
+mod pruebas_version {
+    use super::version_mayor;
+    #[test]
+    fn compara_semver() {
+        assert!(version_mayor("0.2.0", "0.1.0"));
+        assert!(version_mayor("1.0.1", "1.0.0"));
+        assert!(version_mayor("1.1.0", "1.0.9"));
+        assert!(version_mayor("v0.2.0", "0.1.0"));
+        assert!(!version_mayor("0.1.0", "0.1.0"));
+        assert!(!version_mayor("0.1.0", "0.1")); // 0.1 == 0.1.0
+        assert!(!version_mayor("0.1.0", "0.2.0"));
+    }
 }
