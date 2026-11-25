@@ -899,7 +899,7 @@ impl App {
                 });
             });
 
-            seccion(ui, "05", tr("KEYS (PROTECTED ZIP)", "CLAVES (ZIP PROTEGIDO)"), naranja(), |ui| {
+            seccion(ui, "05", tr("KEYS (protected ZIP/RAR/7z)", "CLAVES (ZIP/RAR/7z protegidos)"), naranja(), |ui| {
                 ui.add_enabled_ui(!bloqueado, |ui| {
                     ui.label(RichText::new(tr("PASSWORDS TO TRY (one per line):", "CONTRASEÑAS A PROBAR (una por línea):")).font(mono(10.0)).color(morado_claro()));
                     ui.add(
@@ -935,7 +935,7 @@ impl App {
                         ui.add(egui::Slider::new(&mut self.fuerza_long, 1..=8).text(tr("MAX LEN", "LONG. MÁX")));
                         ui.label(RichText::new(tr("⚠ long brute force can take a while", "⚠ la fuerza bruta larga puede tardar mucho")).font(mono(9.0)).color(naranja()));
                     }
-                    let estado = if self.claves_activas() { (tr("MODULE ACTIVE", "MÓDULO ACTIVO"), verde()) } else { (tr("INACTIVE (encrypted ZIPs skipped)", "INACTIVO (ZIP cifrados se omiten)"), morado_medio()) };
+                    let estado = if self.claves_activas() { (tr("MODULE ACTIVE", "MÓDULO ACTIVO"), verde()) } else { (tr("INACTIVE (encrypted archives skipped)", "INACTIVO (cifrados se omiten)"), morado_medio()) };
                     ui.label(RichText::new(estado.0).font(mono(10.0)).color(estado.1));
                 });
                 for (arch, clave) in &self.claves_halladas {

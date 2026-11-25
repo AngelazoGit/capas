@@ -105,6 +105,37 @@ impl Claves {
         v
     }
 
+    /// Candidatas para herramientas externas (7z/RAR/…): las que da el usuario +
+    /// comunes + diccionario, SIN fuerza bruta (cada intento lanza un proceso).
+    pub fn candidatas_externas(&self) -> Vec<String> {
+        let mut v = Vec::new();
+        let mut vistas = std::collections::HashSet::new();
+        for c in &self.explicitas {
+            if vistas.insert(c.clone()) {
+                v.push(c.clone());
+            }
+        }
+        if self.comunes {
+            for c in COMUNES {
+                if vistas.insert((*c).to_string()) {
+                    v.push((*c).to_string());
+                }
+            }
+        }
+        if let Some(d) = &self.diccionario {
+            if let Ok(t) = std::fs::read_to_string(d) {
+                for l in t.lines() {
+                    let c = l.trim_end_matches(['\r', '\n']);
+                    if !c.is_empty() && vistas.insert(c.to_string()) {
+                        v.push(c.to_string());
+                    }
+                }
+            }
+        }
+        v.truncate(200); // acotado: cada intento ejecuta 7z
+        v
+    }
+
     /// Resuelve un ZIP: devuelve sus hijos y, si estaba cifrado y se encontró,
     /// la contraseña usada.
     pub fn abrir_zip(&self, d: &[u8], lim: u64, notas: &mut Vec<String>) -> Result<(Vec<Hijo>, Option<String>)> {

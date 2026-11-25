@@ -132,9 +132,12 @@ pub fn ejecutar(
                 if m.cancelar.load(Ordering::Relaxed) {
                     return None;
                 }
+                // Los archivos que elige el usuario (nivel 0) no se descartan por el
+                // límite por bloque — ese límite protege de bombas en las capas hijas.
+                // Solo se omite si supera el presupuesto total (evita agotar la RAM).
                 let tam = fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
-                if tam > op.max_archivo {
-                    m.emitir(Evento::Aviso(tfmt(tr("{} ({}) exceeds the per-block limit","{} ({}) supera el límite por bloque"), &[p.display().to_string(), humano(tam)])));
+                if tam > op.max_total {
+                    m.emitir(Evento::Aviso(tfmt(tr("{} ({}) exceeds the total budget","{} ({}) supera el presupuesto total"), &[p.display().to_string(), humano(tam)])));
                     return None;
                 }
                 match fs::read(&p) {

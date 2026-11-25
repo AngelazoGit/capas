@@ -76,6 +76,19 @@ impl Herramientas {
                 rutas.insert(nombre.to_string(), p);
             }
         }
+        // En Windows 7-Zip no suele estar en el PATH: lo buscamos donde se instala.
+        #[cfg(windows)]
+        if !rutas.contains_key("7z") {
+            for p in [
+                r"C:\Program Files\7-Zip\7z.exe",
+                r"C:\Program Files (x86)\7-Zip\7z.exe",
+            ] {
+                if Path::new(p).is_file() {
+                    rutas.insert("7z".into(), PathBuf::from(p));
+                    break;
+                }
+            }
+        }
         if !rutas.contains_key("analyzeHeadless") {
             if let Ok(home) = env::var("GHIDRA_HOME") {
                 let p = Path::new(&home).join("support").join("analyzeHeadless");
@@ -93,8 +106,17 @@ impl Herramientas {
 }
 
 fn buscar_en_path(nombre: &str) -> Option<PathBuf> {
-    let path = env::var_os("PATH")?;
-    for dir in env::split_paths(&path) {
+    // También junto al propio ejecutable (uso portable: deja la herramienta al lado).
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    if let Ok(exe) = env::current_exe() {
+        if let Some(d) = exe.parent() {
+            dirs.push(d.to_path_buf());
+        }
+    }
+    if let Some(path) = env::var_os("PATH") {
+        dirs.extend(env::split_paths(&path));
+    }
+    for dir in dirs {
         let p = dir.join(nombre);
         if p.is_file() {
             #[cfg(unix)]

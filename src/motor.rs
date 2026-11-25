@@ -429,7 +429,34 @@ impl Motor {
         let tmp = an.join(".7z_tmp");
         let mut o = std::ffi::OsString::from("-o");
         o.push(&tmp);
-        self.externa("7z", &[OsStr::new("x"), OsStr::new("-y"), OsStr::new("-p-"), &o, ruta.as_os_str()], an, "7z.log", nodo);
+        // Intenta sin contraseña y, si no sale nada (archivo cifrado), con las
+        // contraseñas del módulo de Claves. No hay fuerza bruta aquí.
+        let mut intentos: Vec<String> = vec!["-".to_string()];
+        intentos.extend(self.cfg.claves.candidatas_externas());
+        let mut usada: Option<String> = None;
+        let mut ok = false;
+        for (i, pass) in intentos.iter().enumerate() {
+            let _ = fs::remove_dir_all(&tmp);
+            let arg_p = std::ffi::OsString::from(format!("-p{pass}"));
+            self.externa("7z", &[OsStr::new("x"), OsStr::new("-y"), &arg_p, &o, ruta.as_os_str()], an, "7z.log", nodo);
+            if dir_con_archivos(&tmp) {
+                ok = true;
+                if i > 0 {
+                    usada = Some(pass.clone());
+                }
+                break;
+            }
+        }
+        if let Some(p) = &usada {
+            self.emitir(Evento::Aviso(format!("contraseña hallada para '{}': {}", nodo.nombre, p)));
+        }
+        if !ok {
+            nodo.incompleto = true;
+            nodo.notas.push(crate::idioma::tr(
+                "protected or unreadable archive — add its password in the Keys module and re-run",
+                "archivo protegido o ilegible — añade su contraseña en el módulo de Claves y reanaliza",
+            ).into());
+        }
         let mut hijos = Vec::new();
         let mut pila = vec![tmp.clone()];
         while let Some(d) = pila.pop() {
@@ -536,6 +563,23 @@ fn es_reservado_windows(nombre: &str) -> bool {
             && tronco.len() == 4
             && tronco.as_bytes()[3].is_ascii_digit()
             && tronco.as_bytes()[3] != b'0')
+}
+
+/// ¿El directorio (recursivo) contiene al menos un archivo? Sirve para saber si
+/// una extracción con 7z produjo algo (contraseña correcta) o nada (cifrado).
+fn dir_con_archivos(dir: &Path) -> bool {
+    let mut pila = vec![dir.to_path_buf()];
+    while let Some(d) = pila.pop() {
+        for e in fs::read_dir(&d).into_iter().flatten().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                pila.push(p);
+            } else if p.is_file() {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 pub fn ruta_segura(nombre: &str) -> PathBuf {
