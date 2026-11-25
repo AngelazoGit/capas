@@ -6,7 +6,7 @@
 <title>CAPAS — Layered file decompiler &amp; analyzer</title>
 <meta name="description" content="Open any file and read every layer. CAPAS identifies files by content, decompiles them, extracts each layer and audits packs and mods — offline, and it never runs what it inspects. Free core; Pro unpacks Unity and Godot bundles.">
 <link rel="canonical" href="https://capas.dev/">
-<meta name="theme-color" content="#2f8f52">
+<meta name="theme-color" content="#6d5cf5">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="CAPAS">
 <meta property="og:title" content="CAPAS — layered file decompiler &amp; analyzer">
@@ -26,44 +26,45 @@
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zilla+Slab:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>html,body{margin:0;padding:0}img{max-width:100%;height:auto}</style>
 <style>
 /* Mirrors the app's "Clean/Limpio" mask: white framed panels with numbered
    badges, a slab-serif voice for titles, monospace for data, one green accent
    with amber reserved for the mark and alerts. Square HUD edges. Light tokens
    on :root are the exact app palette; dark is a neutral mirror. */
+/* Índigo de marca (acento), navy de producto en oscuro, verde solo éxito. */
 :root{
-  --bg:#f5f5f7; --panel:#ffffff; --inset:#f1f1f4; --well:#eeeef1;
-  --border:#e4e4ea; --border-2:#bfbfc8;
-  --ink:#1a1b1f; --slate:#44474f; --faint:#73767f;
-  --green:#2f8f52; --green-ink:#1f6e3c; --green-wash:#d9ebdf;
-  --amber:#b07116; --amber-wash:#f1e2c7;
-  --red:#c23b2e; --blue:#2f5fae;
+  --bg:#f6f7fb; --panel:#ffffff; --inset:#f1f2f7; --well:#eceef5;
+  --border:#e3e5ee; --border-2:#c7cad8;
+  --ink:#14161d; --slate:#44485a; --faint:#71768a;
+  --green:#6d5cf5; --green-ink:#5a49e0; --green-wash:#ece9fe;
+  --amber:#c07d1e; --amber-wash:#f6ecd6;
+  --red:#d23b47; --blue:#2f5fae; --ok:#22a06b;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#131419; --panel:#1a1c22; --inset:#1f222a; --well:#23262f;
-  --border:#2a2d35; --border-2:#3a3e48;
-  --ink:#ececf0; --slate:#aeb2bb; --faint:#777c86;
-  --green:#6fc98a; --green-ink:#8ad89f; --green-wash:#1e2b23;
-  --amber:#dca45f; --amber-wash:#2a2318;
-  --red:#e08a7d; --blue:#7ea6e6;
+  --bg:#0f1117; --panel:#191c26; --inset:#1e2230; --well:#23283a;
+  --border:#262a37; --border-2:#353b4d;
+  --ink:#e9ebf2; --slate:#9aa3b7; --faint:#6b7280;
+  --green:#7c6cff; --green-ink:#a99bff; --green-wash:#211f3a;
+  --amber:#f0b84e; --amber-wash:#2a2318;
+  --red:#ef5f6b; --blue:#7ea6e6; --ok:#35d49a;
   color-scheme:dark;
 }}
 :root[data-theme="dark"]{
-  --bg:#131419; --panel:#1a1c22; --inset:#1f222a; --well:#23262f;
-  --border:#2a2d35; --border-2:#3a3e48;
-  --ink:#ececf0; --slate:#aeb2bb; --faint:#777c86;
-  --green:#6fc98a; --green-ink:#8ad89f; --green-wash:#1e2b23;
-  --amber:#dca45f; --amber-wash:#2a2318;
-  --red:#e08a7d; --blue:#7ea6e6;
+  --bg:#0f1117; --panel:#191c26; --inset:#1e2230; --well:#23283a;
+  --border:#262a37; --border-2:#353b4d;
+  --ink:#e9ebf2; --slate:#9aa3b7; --faint:#6b7280;
+  --green:#7c6cff; --green-ink:#a99bff; --green-wash:#211f3a;
+  --amber:#f0b84e; --amber-wash:#2a2318;
+  --red:#ef5f6b; --blue:#7ea6e6; --ok:#35d49a;
   color-scheme:dark;
 }
 
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--ink);font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.6}
-h1,h2,h3,.slab{font-family:"Zilla Slab","IBM Plex Sans",Georgia,serif;margin:0;line-height:1.1}
+body{background:var(--bg);color:var(--ink);font-family:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+h1,h2,h3,.slab{font-family:"Inter",system-ui,sans-serif;font-weight:800;margin:0;line-height:1.12;letter-spacing:-.01em}
 p{margin:0}
 a{color:inherit}
 .mono{font-family:"IBM Plex Mono",ui-monospace,Menlo,monospace}
@@ -186,12 +187,29 @@ footer a:hover{color:var(--ink)}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 :focus-visible{outline:2px solid var(--green);outline-offset:2px}
+
+/* Estética de producto (v2): bordes suaves, Inter en títulos, menos mayúsculas HUD. */
+.panel,.pipe,.price,.log,details,.fp .body,.who .body{border-radius:12px}
+.appshot{border-radius:14px;overflow:hidden;box-shadow:0 1px 0 var(--border),0 24px 60px rgba(10,10,25,.28)}
+.btn,.tbtn,.status span{border-radius:9px}
+.badge,.pro,.pt .pn .best,.pt li .ck{border-radius:6px}
+.btn{text-transform:none;letter-spacing:0;font-family:"Inter",sans-serif;font-weight:600;font-size:.86rem}
+.phead h3,.phead .t,.pstep h3,.log .lh .t,.fp .ti,.pt .pn .nm,.kick,.pstep .n{text-transform:none;font-family:"Inter",sans-serif;letter-spacing:0;font-weight:700}
+.kick{color:var(--green-ink);font-size:.8rem}
+.badge{border-radius:6px;font-weight:700}
+.pt.mark{box-shadow:inset 0 3px 0 var(--green)}
+.wordmark .nm{color:var(--ink);font-family:"Inter",sans-serif;font-weight:800}
+.wordmark .st{color:var(--faint)}
+.wordmark svg{width:28px;height:30px}
+.hero h1,.lead h2,.pt .cost{font-family:"Inter",sans-serif}
+summary{font-family:"Inter",sans-serif;font-weight:700}
+.tbtn:hover{border-color:var(--green)}
 </style>
 
 <header class="bar">
   <div class="wrap">
     <span class="wordmark">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><polygon points="16,3 28,10 28,22 16,29 4,22 4,10" fill="none" stroke="var(--amber)" stroke-width="2"/><polygon points="16,9 23,13 23,19 16,23 9,19 9,13" fill="none" stroke="var(--green)" stroke-width="2"/><circle cx="16" cy="16" r="2.4" fill="var(--green)"/></svg>
+      <svg viewBox="0 0 32 34" aria-hidden="true"><g stroke="#0b0d12" stroke-width=".9" stroke-linejoin="round"><polygon points="8,12 16,16.3 16,19 8,14.7" fill="#4a3fb0"/><polygon points="16,16.3 24,12 24,14.7 16,19" fill="#3f368f"/><polygon points="16,8 24,12 16,16.3 8,12" fill="#8b7bff"/><polygon points="8,18 16,22.3 16,25 8,20.7" fill="#352d73"/><polygon points="16,22.3 24,18 24,20.7 16,25" fill="#2b245e"/><polygon points="16,14 24,18 16,22.3 8,18" fill="#6d5cf5"/></g></svg>
       <span>
         <span class="nm">CAPAS</span>
         <span class="st" data-es="SISTEMA DE DESCOMPOSICIÓN POR CAPAS · OPERADOR @angelazo">LAYERED DECOMPOSITION SYSTEM · OPERATOR @angelazo</span>
@@ -229,10 +247,10 @@ footer a:hover{color:var(--ink)}
 
     <div>
       <figure class="appshot">
-        <div class="chrome"><span class="d"></span><span class="d"></span><span class="d"></span><span class="lbl mono" data-es="capas — máscara limpio · análisis completado">capas — clean mask · analysis complete</span></div>
-        <img src="capas-app.png" alt="CAPAS interface in the Clean mask with a completed analysis" loading="lazy" width="1440" height="900">
+        <div class="chrome"><span class="d"></span><span class="d"></span><span class="d"></span><span class="lbl mono" data-es="capas — análisis completado">capas — analysis complete</span></div>
+        <img src="capas-app.png" alt="CAPAS interface with a completed analysis: layer tree, contents table and block details" loading="lazy" width="1440" height="900">
       </figure>
-      <div class="appcap" data-es="interfaz real · máscara limpio (clara)">actual interface · clean mask (light)</div>
+      <div class="appcap" data-es="interfaz real de la app">actual app interface</div>
     </div>
   </div>
 </section>
@@ -264,8 +282,8 @@ footer a:hover{color:var(--ink)}
       <p data-es="Cada bloque pasa por los mismos cuatro pasos; los hijos se procesan en cuanto aparecen, en paralelo, deduplicados por SHA-256.">Each block runs the same four steps; children run the moment they appear, in parallel, deduplicated by SHA-256.</p>
     </div>
     <figure class="appshot" style="max-width:640px;margin:0 0 1.8rem">
-      <div class="chrome"><span class="d"></span><span class="d"></span><span class="d"></span><span class="lbl mono" data-es="capas — árbol de capas (ejemplo)">capas — layer tree (example)</span></div>
-      <img src="capas_demo.gif" alt="Animation: CAPAS peeling a package open layer by layer with confidence levels and an audit verdict" loading="lazy" width="760" height="424">
+      <div class="chrome"><span class="d"></span><span class="d"></span><span class="d"></span><span class="lbl mono" data-es="capas — máscara limpio (clara)">capas — clean mask (light)</span></div>
+      <img src="capas-clean.png" alt="CAPAS in the Clean (light) mask: the same analysis with the layer tree, contents table and block details" loading="lazy" width="1440" height="900">
     </figure>
     <div class="pipe">
       <div class="pstep"><div class="n" data-es="01 — IDENTIFICAR">01 — IDENTIFY</div><h3 data-es="Por contenido">By content</h3><p data-es="Lee el formato por los bytes mágicos, nunca por el nombre del archivo.">Reads the format from the magic bytes, never from the file name.</p></div>

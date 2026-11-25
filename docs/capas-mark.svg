@@ -1,19 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 112 120" width="112" height="120" role="img" aria-label="CAPAS">
   <title>CAPAS</title>
   <!-- Pila isométrica de 3 capas; la superior separada (descomposición por capas). -->
-  <g stroke="#15171e" stroke-width="1.6" stroke-linejoin="round">
-    <!-- capa 2 (frente/abajo) se dibuja al final; orden: 0 (atrás) → 2 (frente) -->
-    <!-- capa 0 (arriba, separada) -->
-    <polygon points="26,28 56,44 56,58 26,42" fill="#8a5a22"/>
-    <polygon points="56,44 86,28 86,42 56,58" fill="#754b1c"/>
-    <polygon points="56,12 86,28 56,44 26,28" fill="#ecae57"/>
-    <!-- capa 1 (medio) -->
-    <polygon points="26,60 56,76 56,90 26,74" fill="#774d1d"/>
-    <polygon points="56,76 86,60 86,74 56,90" fill="#654117"/>
-    <polygon points="56,44 86,60 56,76 26,60" fill="#d38b36"/>
-    <!-- capa 2 (abajo, frente) -->
-    <polygon points="26,82 56,98 56,112 26,96" fill="#654117"/>
-    <polygon points="56,98 86,82 86,96 56,112" fill="#573913"/>
-    <polygon points="56,66 86,82 56,98 26,82" fill="#b4762c"/>
+  <g stroke="#0b0d12" stroke-width="1.6" stroke-linejoin="round">
+    <polygon points="26,28 56,44 56,58 26,42" fill="#4a3fb0"/>
+    <polygon points="56,44 86,28 86,42 56,58" fill="#3f368f"/>
+    <polygon points="56,12 86,28 56,44 26,28" fill="#8b7bff"/>
+    <polygon points="26,60 56,76 56,90 26,74" fill="#3f368f"/>
+    <polygon points="56,76 86,60 86,74 56,90" fill="#352d73"/>
+    <polygon points="56,44 86,60 56,76 26,60" fill="#6d5cf5"/>
+    <polygon points="26,82 56,98 56,112 26,96" fill="#352d73"/>
+    <polygon points="56,98 86,82 86,96 56,112" fill="#2b245e"/>
+    <polygon points="56,66 86,82 56,98 26,82" fill="#574bc8"/>
   </g>
 </svg>
