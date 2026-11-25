@@ -99,6 +99,14 @@ fn auditar_paquete(raiz: &Nodo) -> Paquete {
 
     recorrer(raiz, &mut |n| {
         archivos += 1;
+        // 0) Análisis incompleto (cifrado, truncado, límites, error): a revisión.
+        if n.incompleto {
+            h.push(Hallazgo {
+                nivel: Nivel::Aviso,
+                regla: "analisis-incompleto".into(),
+                detalle: tfmt(tr("'{}' could not be fully analyzed (encrypted/truncated/limit) — needs review", "'{}' no se pudo analizar del todo (cifrado/truncado/límite) — requiere revisión"), &[n.nombre.clone()]),
+            });
+        }
         // 1) Rutas de escape (se comprueba sobre el nombre ORIGINAL de la entrada).
         if let Some(motivo) = ruta_escape(&n.nombre) {
             h.push(Hallazgo {
@@ -291,5 +299,27 @@ mod pruebas {
         assert!(ruta_escape("C:\\Windows\\x").is_some());
         assert!(ruta_escape("assets/ok.png").is_none());
         assert!(ruta_escape("a..b/ok.json").is_none()); // ".." dentro de un nombre, no un segmento
+    }
+
+    fn nodo(nombre: &str, tipo: crate::detectar::Tipo, incompleto: bool, hijos: Vec<crate::motor::Nodo>) -> crate::motor::Nodo {
+        crate::motor::Nodo {
+            nombre: nombre.into(), capa: 0, tipo, descripcion: String::new(), tamano: 1,
+            sha256: "00".into(), entropia: 0.0, directorio: String::new(),
+            confianza: crate::clasificar::Confianza::Confirmado, evidencia: String::new(),
+            resultados: vec![], notas: vec![], incompleto, hijos,
+            ruta_fisica: std::path::PathBuf::new(),
+        }
+    }
+
+    #[test]
+    fn incompleto_va_a_cuarentena() {
+        use crate::detectar::Tipo;
+        // Paquete con manifest válido no es posible aquí (sin disco), pero un hijo
+        // incompleto debe forzar al menos CUARENTENA, nunca APROBADO.
+        let hijo = nodo("secreto.bin", Tipo::Desconocido, true, vec![]);
+        let pack = nodo("pack.zip", Tipo::Zip, false, vec![hijo]);
+        let p = auditar_paquete(&pack);
+        assert_ne!(p.veredicto, Veredicto::Aprobado, "un análisis incompleto no puede APROBARSE");
+        assert!(p.hallazgos.iter().any(|x| x.regla == "analisis-incompleto"));
     }
 }

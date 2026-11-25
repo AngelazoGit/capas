@@ -51,6 +51,10 @@ pub struct Nodo {
     pub evidencia: String,
     pub resultados: Vec<String>,
     pub notas: Vec<String>,
+    /// El análisis de este bloque quedó incompleto (cifrado, truncado, límite de
+    /// profundidad/presupuesto, error de extracción…). La auditoría lo manda a revisión.
+    #[serde(default)]
+    pub incompleto: bool,
     pub hijos: Vec<Nodo>,
     /// Ruta del archivo en disco (no se serializa: es propia de esta máquina).
     #[serde(skip)]
@@ -132,6 +136,7 @@ impl Motor {
             evidencia,
             resultados: Vec::new(),
             notas: Vec::new(),
+            incompleto: false,
             hijos: Vec::new(),
             ruta_fisica: ruta_fisica.clone(),
         };
@@ -161,6 +166,11 @@ impl Motor {
 
         let hijos = self.capa(&datos, &nombre, &ruta_fisica, &analisis, tipo, &mut nodo);
         drop(datos);
+        // Un contenedor del que no se extrajo nada suele estar cifrado, truncado o
+        // corrupto: análisis incompleto (el PDF puede no llevar flujos y no cuenta).
+        if tipo.es_contenedor() && tipo != Tipo::Pdf && hijos.is_empty() {
+            nodo.incompleto = true;
+        }
         self.recorrer_hijos(hijos, &dir.join("capas"), capa, &mut nodo);
         nodo
     }
@@ -294,6 +304,7 @@ impl Motor {
             Ok(h) => h,
             Err(e) => {
                 nodo.notas.push(tfmt(tr("could not extract the layer: {}","no se pudo extraer la capa: {}"), &[e.to_string()]));
+                nodo.incompleto = true;
                 Vec::new()
             }
         };
@@ -431,6 +442,7 @@ impl Motor {
         }
         if capa + 1 > self.cfg.profundidad_max {
             nodo.notas.push(tfmt(tr("{} unexplored children: maximum depth reached","{} hijos sin explorar: profundidad máxima alcanzada"), &[hijos.len().to_string()]));
+            nodo.incompleto = true;
         }
         // Nombres de directorio únicos y seguros (sin "..", rutas absolutas...).
         let mut usados = HashSet::new();
@@ -439,6 +451,7 @@ impl Motor {
             let total = self.usado.fetch_add(h.datos.len() as u64, Ordering::Relaxed) + h.datos.len() as u64;
             if total > self.cfg.max_total {
                 nodo.notas.push(tfmt(tr("'{}' skipped: total extraction budget exhausted","'{}' omitido: presupuesto total de extracción agotado"), &[h.nombre.clone()]));
+                nodo.incompleto = true;
                 continue;
             }
             let mut rel = ruta_segura(&h.nombre);
@@ -452,6 +465,7 @@ impl Motor {
             let fisico = dir.join(&archivo);
             if fs::create_dir_all(&dir).is_err() || fs::write(&fisico, &h.datos).is_err() {
                 nodo.notas.push(tfmt(tr("could not write '{}'","no se pudo escribir '{}'"), &[h.nombre.clone()]));
+                nodo.incompleto = true;
                 continue;
             }
             tareas.push((h, dir, fisico));
@@ -468,6 +482,16 @@ impl Motor {
     }
 }
 
+/// ¿El nombre (ignorando la extensión) es un dispositivo reservado de Windows?
+fn es_reservado_windows(nombre: &str) -> bool {
+    let tronco = nombre.split('.').next().unwrap_or(nombre).to_ascii_uppercase();
+    matches!(tronco.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || ((tronco.starts_with("COM") || tronco.starts_with("LPT"))
+            && tronco.len() == 4
+            && tronco.as_bytes()[3].is_ascii_digit()
+            && tronco.as_bytes()[3] != b'0')
+}
+
 pub fn ruta_segura(nombre: &str) -> PathBuf {
     let mut p = PathBuf::new();
     for comp in nombre.split(['/', '\\']) {
@@ -480,7 +504,11 @@ pub fn ruta_segura(nombre: &str) -> PathBuf {
             .take(120)
             .collect();
         // "analisis" y "capas" están reservados dentro de cada nodo.
-        let limpio = if limpio == "analisis" || limpio == "capas" { format!("{limpio}_") } else { limpio };
+        let mut limpio = if limpio == "analisis" || limpio == "capas" { format!("{limpio}_") } else { limpio };
+        // Nombres de dispositivo reservados en Windows (CON, NUL, COM1…): prefijar.
+        if es_reservado_windows(&limpio) {
+            limpio = format!("_{limpio}");
+        }
         p.push(limpio);
     }
     if p.as_os_str().is_empty() {
@@ -518,3 +546,48 @@ public class DecompilarTodo extends GhidraScript {
     }
 }
 "#;
+
+#[cfg(test)]
+mod pruebas_ruta {
+    use super::ruta_segura;
+    use std::path::Path;
+
+    fn s(x: &str) -> String {
+        ruta_segura(x).to_string_lossy().replace('\\', "/")
+    }
+
+    #[test]
+    fn sin_escape_de_directorio() {
+        assert_eq!(s("../../etc/passwd"), "etc/passwd");
+        assert_eq!(s("/etc/passwd"), "etc/passwd");
+        assert_eq!(s("a/../../b"), "a/b");
+        assert_eq!(s("foo\\bar"), "foo/bar");
+        assert_eq!(s("C:\\Windows\\System32\\x.dll"), "C_/Windows/System32/x.dll");
+        assert_eq!(s("\\\\server\\share\\f"), "server/share/f");
+        assert_eq!(s("a\u{0}b"), "a_b");
+    }
+
+    #[test]
+    fn nombres_reservados_y_vacios() {
+        assert_eq!(s("analisis"), "analisis_");
+        assert_eq!(s("capas"), "capas_");
+        assert_eq!(s("CON"), "_CON");
+        assert_eq!(s("nul.txt"), "_nul.txt");
+        assert_eq!(s("COM1"), "_COM1");
+        assert_eq!(s("COM0"), "COM0"); // 0 no es dispositivo
+        assert_eq!(s("COMA"), "COMA"); // 4º no es dígito
+        assert_eq!(s(""), "sin_nombre");
+        assert_eq!(s(".."), "sin_nombre");
+        assert_eq!(s("/"), "sin_nombre");
+    }
+
+    #[test]
+    fn propiedad_siempre_bajo_la_base() {
+        let base = Path::new("/salida/run");
+        for evil in ["../../../../etc/shadow", "/root/.ssh/id_rsa", "..\\..\\x", "C:\\x", "foo/../../bar", "", ".."] {
+            let p = base.join(ruta_segura(evil));
+            assert!(p.starts_with(base), "escape con {evil:?} -> {p:?}");
+            assert!(!p.components().any(|c| c.as_os_str() == ".."), "quedó .. con {evil:?}");
+        }
+    }
+}
