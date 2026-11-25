@@ -647,3 +647,148 @@ mod pruebas_bundle {
         assert_eq!(hijos[0].datos, data);
     }
 }
+
+// ── Imagen de disco ISO 9660 ──────────────────────────────────────────────
+// Lee el descriptor de volumen primario y recorre el árbol de directorios,
+// devolviendo cada fichero. Parser defensivo: datos no confiables, con guardas
+// de límites, de bucles (extents visitados) y de presupuesto.
+
+fn le32(d: &[u8], o: usize) -> Option<u32> {
+    d.get(o..o + 4).map(|b| u32::from_le_bytes(b.try_into().unwrap()))
+}
+
+pub fn iso9660(d: &[u8], lim: u64) -> Result<Vec<Hijo>> {
+    const S: usize = 2048; // tamaño de sector lógico
+    let err = || anyhow!("{}", tr("corrupt or truncated ISO 9660 image", "imagen ISO 9660 corrupta o truncada"));
+    // Descriptor de volumen primario en el sector 16: tipo 1 + "CD001".
+    let pvd = d.get(16 * S..17 * S).ok_or_else(err)?;
+    if pvd[0] != 1 || &pvd[1..6] != b"CD001" {
+        bail!("{}", tr("not a primary ISO 9660 volume", "no es un volumen ISO 9660 primario"));
+    }
+    // Registro de directorio raíz en el offset 156 del PVD.
+    let raiz = &pvd[156..156 + 34];
+    let raiz_lba = le32(raiz, 2).ok_or_else(err)?;
+    let raiz_len = le32(raiz, 10).ok_or_else(err)?;
+
+    let mut hijos = Vec::new();
+    let mut total = 0u64;
+    let mut visitados = std::collections::HashSet::new();
+    // Pila de directorios por explorar: (lba, longitud, prefijo).
+    let mut pila = vec![(raiz_lba, raiz_len, String::new())];
+    let mut registros = 0usize;
+
+    while let Some((lba, len, prefijo)) = pila.pop() {
+        if !visitados.insert(lba) {
+            continue; // evita bucles de directorios
+        }
+        let ini = lba as usize * S;
+        let Some(dir) = d.get(ini..ini + len as usize) else { continue };
+        let mut pos = 0usize;
+        while pos < dir.len() {
+            registros += 1;
+            if registros > 200_000 {
+                bail!("{}", tr("too many ISO entries", "demasiadas entradas en el ISO"));
+            }
+            let rlen = dir[pos] as usize;
+            if rlen == 0 {
+                // Relleno hasta el siguiente sector dentro del directorio.
+                pos = (pos / S + 1) * S;
+                continue;
+            }
+            let Some(rec) = dir.get(pos..pos + rlen) else { break };
+            if rec.len() < 34 {
+                break;
+            }
+            let flags = rec[25];
+            let nlen = rec[32] as usize;
+            let Some(nombre_b) = rec.get(33..33 + nlen) else {
+                pos += rlen;
+                continue;
+            };
+            let es_dir = flags & 0x02 != 0;
+            // Saltar "." (0x00) y ".." (0x01).
+            if nlen == 1 && (nombre_b[0] == 0 || nombre_b[0] == 1) {
+                pos += rlen;
+                continue;
+            }
+            let ext_lba = le32(rec, 2).unwrap_or(0);
+            let ext_len = le32(rec, 10).unwrap_or(0);
+            // Nombre: quitar el sufijo de versión ";1".
+            let mut nombre = String::from_utf8_lossy(nombre_b).into_owned();
+            if let Some(i) = nombre.find(';') {
+                nombre.truncate(i);
+            }
+            let completo = if prefijo.is_empty() { nombre.clone() } else { format!("{prefijo}/{nombre}") };
+            if es_dir {
+                pila.push((ext_lba, ext_len, completo));
+            } else {
+                let fi = ext_lba as usize * S;
+                if let Some(datos) = d.get(fi..fi + ext_len as usize) {
+                    total += ext_len as u64;
+                    if total > lim {
+                        bail!("{}", tfmt(tr("exceeds the limit of {} bytes (decompression bomb?)", "supera el límite de {} bytes (¿bomba de descompresión?)"), &[lim.to_string()]));
+                    }
+                    hijos.push(Hijo { nombre: completo, datos: datos.to_vec() });
+                }
+            }
+            pos += rlen;
+        }
+    }
+    Ok(hijos)
+}
+
+#[cfg(test)]
+mod pruebas_iso {
+    use super::iso9660;
+
+    // Construye un ISO 9660 mínimo con un fichero "FILE.TXT" en la raíz.
+    fn mini_iso(contenido: &[u8]) -> Vec<u8> {
+        const S: usize = 2048;
+        let mut img = vec![0u8; 20 * S];
+        let put = |img: &mut Vec<u8>, o: usize, v: u32| {
+            img[o..o + 4].copy_from_slice(&v.to_le_bytes());
+            img[o + 4..o + 8].copy_from_slice(&v.to_be_bytes());
+        };
+        // Registro de directorio de 34 bytes.
+        let dir_rec = |img: &mut Vec<u8>, off: usize, lba: u32, len: u32, es_dir: bool, name: &[u8]| {
+            let rlen = 33 + name.len();
+            let rlen = rlen + (rlen & 1); // par
+            img[off] = rlen as u8;
+            img[off + 2..off + 6].copy_from_slice(&lba.to_le_bytes());
+            img[off + 6..off + 10].copy_from_slice(&lba.to_be_bytes());
+            img[off + 10..off + 14].copy_from_slice(&len.to_le_bytes());
+            img[off + 14..off + 18].copy_from_slice(&len.to_be_bytes());
+            img[off + 25] = if es_dir { 0x02 } else { 0 };
+            img[off + 32] = name.len() as u8;
+            img[off + 33..off + 33 + name.len()].copy_from_slice(name);
+            rlen
+        };
+        // PVD en el sector 16.
+        let pvd = 16 * S;
+        img[pvd] = 1;
+        img[pvd + 1..pvd + 6].copy_from_slice(b"CD001");
+        img[pvd + 6] = 1;
+        dir_rec(&mut img, pvd + 156, 18, S as u32, true, &[0]); // raíz -> sector 18
+        // Terminador en el sector 17.
+        img[17 * S] = 255;
+        img[17 * S + 1..17 * S + 6].copy_from_slice(b"CD001");
+        // Directorio raíz en el sector 18: ".", "..", FILE.TXT;1
+        let mut o = 18 * S;
+        o += dir_rec(&mut img, o, 18, S as u32, true, &[0]);
+        o += dir_rec(&mut img, o, 18, S as u32, true, &[1]);
+        dir_rec(&mut img, o, 19, contenido.len() as u32, false, b"FILE.TXT;1");
+        // Datos del fichero en el sector 19.
+        img[19 * S..19 * S + contenido.len()].copy_from_slice(contenido);
+        let _ = put;
+        img
+    }
+
+    #[test]
+    fn lee_iso_minimo() {
+        let img = mini_iso(b"HELLO ISO");
+        let hijos = iso9660(&img, 1 << 20).unwrap();
+        assert_eq!(hijos.len(), 1);
+        assert_eq!(hijos[0].nombre, "FILE.TXT"); // sin ";1"
+        assert_eq!(hijos[0].datos, b"HELLO ISO");
+    }
+}

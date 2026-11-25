@@ -98,6 +98,7 @@ capas --help               # all options
 | Format | Built-in (Rust) | External if installed |
 |---|---|---|
 | gzip, bzip2, xz, lzma, zlib, zip/jar/apk, tar, ar/.deb, Mach-O fat | extraction | — |
+| ISO 9660 disc image (CD/DVD, PS2…) | lists and extracts files, including nested folders | — |
 | 7z, RAR, CAB | — | `7z` |
 | PDF | extracts and inflates its streams | — |
 | ELF / PE / Mach-O | headers, sections, imports, symbols, x86/x64 disassembly with symbol labels | `readelf`, `objdump`, `r2`, `retdec-decompiler`, Ghidra → C |

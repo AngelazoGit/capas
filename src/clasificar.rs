@@ -146,7 +146,7 @@ pub fn categoria(tipo: Tipo, nombre: &str) -> Categoria {
         Tipo::RecursoJuego => return Categoria::RecursoJuego,
         Tipo::Pdf => return Categoria::Documento,
         Tipo::Zip | Tipo::Gzip | Tipo::Bzip2 | Tipo::Xz | Tipo::Lzma | Tipo::Zlib | Tipo::Zstd
-        | Tipo::Lz4 | Tipo::Tar | Tipo::SieteZ | Tipo::Rar | Tipo::Cab | Tipo::ArUnix => return Categoria::Comprimido,
+        | Tipo::Lz4 | Tipo::Iso | Tipo::Tar | Tipo::SieteZ | Tipo::Rar | Tipo::Cab | Tipo::ArUnix => return Categoria::Comprimido,
         _ => {}
     }
     // 2) Por extensión.

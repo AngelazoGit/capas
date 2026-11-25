@@ -229,6 +229,7 @@ impl Motor {
             Tipo::Zlib => extraer::zlib(d, nombre, lim),
             Tipo::Zstd => extraer::zstd(d, nombre, lim),
             Tipo::Lz4 => extraer::lz4(d, nombre, lim),
+            Tipo::Iso => extraer::iso9660(d, lim),
             Tipo::Tar => extraer::tar(d, lim, &mut notas),
             Tipo::ArUnix => extraer::ar(d),
             Tipo::MachOFat => extraer::macho_fat(d),

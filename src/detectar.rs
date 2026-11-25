@@ -14,6 +14,7 @@ pub enum Tipo {
     Zlib,
     Zstd,
     Lz4,
+    Iso,
     Tar,
     SieteZ,
     Rar,
@@ -49,6 +50,7 @@ impl Tipo {
             Tipo::Zlib => "ZLIB",
             Tipo::Zstd => "Zstandard",
             Tipo::Lz4 => "LZ4",
+            Tipo::Iso => tr("ISO 9660 disc image","imagen de disco ISO 9660"),
             Tipo::Tar => "TAR",
             Tipo::SieteZ => "7-Zip",
             Tipo::Rar => "RAR",
@@ -84,6 +86,7 @@ impl Tipo {
             Tipo::Zlib => "zlib",
             Tipo::Zstd => "zst",
             Tipo::Lz4 => "lz4",
+            Tipo::Iso => "iso",
             Tipo::Tar => "tar",
             Tipo::SieteZ => "7z",
             Tipo::Rar => "rar",
@@ -120,6 +123,7 @@ impl Tipo {
                 | Tipo::Zlib
                 | Tipo::Zstd
                 | Tipo::Lz4
+                | Tipo::Iso
                 | Tipo::Tar
                 | Tipo::SieteZ
                 | Tipo::Rar
@@ -168,6 +172,10 @@ pub fn detectar(d: &[u8]) -> Tipo {
     }
     if d.starts_with(&[0x04, 0x22, 0x4D, 0x18]) {
         return Tipo::Lz4;
+    }
+    // ISO 9660: identificador "CD001" en el descriptor de volumen (sector 16).
+    if d.len() >= 0x8006 && &d[0x8001..0x8006] == b"CD001" {
+        return Tipo::Iso;
     }
     if d.starts_with(&[b'7', b'z', 0xBC, 0xAF, 0x27, 0x1C]) {
         return Tipo::SieteZ;
