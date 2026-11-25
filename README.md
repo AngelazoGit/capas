@@ -25,6 +25,7 @@ understand a file.
 - 🎮 **Engine bundle unpacking** (Unity, Godot) — *Pro*
 - 🖥️ **GUI + console**, portable Windows `.exe`, **English/Spanish**, five masks
 - 🧭 **Product UI**: sidebar (Home · Analysis · Explorer · Compare · Formats · Tools · Settings), stat cards, a three-pane analysis (layer tree · contents table · block details) and recent analyses
+- 🤖 **MCP bridge** (`capas --mcp`): let a local or cloud AI (Claude Desktop, Ollama, OpenAI clients) use CAPAS's analysis as tools — CAPAS stays offline. See [MCP.md](MCP.md)
 
 Take files (or folders) apart **layer by layer** and decompile them using your
 computer's resources: every CPU core, a memory budget tuned to the free RAM, and

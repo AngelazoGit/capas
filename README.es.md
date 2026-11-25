@@ -27,6 +27,7 @@ equipo/automatización, pero nunca te chocas con un muro solo por querer entende
 - 🎮 **Desempaquetado de bundles** de motor (Unity, Godot) — *Pro*
 - 🖥️ **Interfaz gráfica + consola**, `.exe` portable de Windows, **inglés/español**, cinco máscaras
 - 🧭 **Interfaz de producto**: barra lateral (Inicio · Análisis · Explorador · Comparar · Formatos · Herramientas · Ajustes), tarjetas de estado, análisis en tres paneles (árbol de capas · tabla de contenido · ficha del bloque) y análisis recientes
+- 🤖 **Puente MCP** (`capas --mcp`): deja que una IA local o en la nube (Claude Desktop, Ollama, clientes con OpenAI) use el análisis de CAPAS como herramientas — CAPAS sigue sin conexión. Ver [MCP.md](MCP.md)
 
 Desmonta y decompila archivos **capa a capa** usando los recursos del ordenador:
 todos los núcleos de la CPU, un límite de memoria ajustado a la RAM libre y las

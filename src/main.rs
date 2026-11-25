@@ -25,6 +25,7 @@ mod idioma;
 mod indice;
 mod licencia;
 mod localizar;
+mod mcp;
 mod motor;
 mod plugins;
 mod politica;
@@ -227,6 +228,10 @@ struct Args {
     #[arg(long, value_name = "PUERTO")]
     api: Option<u16>,
 
+    /// Run as an MCP server over stdio (connect an AI client: Claude Desktop, Ollama, …)
+    #[arg(long)]
+    mcp: bool,
+
     /// License file (also CAPAS_LICENCIA, or capas.lic next to the binary)
     #[arg(long, value_name = "FILE")]
     licencia: Option<PathBuf>,
@@ -378,6 +383,11 @@ fn main() -> Result<()> {
     licencia::aplicar(a.licencia.clone());
     licencia::aplicar_clave(a.licencia_clave.clone());
     let sis = Sistema::detectar();
+
+    // Puente MCP por stdio: expone el análisis local como tools para una IA.
+    if a.mcp {
+        return mcp::servir(sis, Herramientas::detectar(a.sin_externas));
+    }
 
     // [Studio] API local de solo lectura sobre el índice.
     if let Some(puerto) = a.api {
