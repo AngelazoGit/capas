@@ -6,6 +6,12 @@ authors = ["@angelazo"]
 description = "Desmonta y decompila archivos por capas usando los recursos del ordenador"
 license = "MIT"
 
+[features]
+# Permite que --edicion / CAPAS_EDICION fuercen la edición (solo desarrollo).
+# El binario de producción se compila SIN esta feature: la edición de pago solo
+# se activa con una licencia firmada.
+override-edicion = []
+
 [dependencies]
 anyhow = "1.0.104"
 bzip2 = "0.6.1"

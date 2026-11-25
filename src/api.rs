@@ -19,9 +19,18 @@ pub fn servir(db: PathBuf, puerto: u16) -> std::io::Result<()> {
         return Ok(());
     }
     let l = TcpListener::bind(("127.0.0.1", puerto))?;
+    let con_token = std::env::var("CAPAS_API_TOKEN").ok().filter(|t| !t.is_empty()).is_some();
     eprintln!(
         "{} http://127.0.0.1:{puerto}  (GET / · /files · /relations · /findings · /runs)  — Ctrl-C",
         tr("Local read-only API at", "API local de solo lectura en"),
+    );
+    eprintln!(
+        "  {}",
+        if con_token {
+            tr("auth: CAPAS_API_TOKEN required (?token= or Authorization: Bearer)", "auth: se exige CAPAS_API_TOKEN (?token= o Authorization: Bearer)")
+        } else {
+            tr("auth: none — set CAPAS_API_TOKEN to require a token", "auth: ninguna — define CAPAS_API_TOKEN para exigir token")
+        },
     );
     for stream in l.incoming().flatten() {
         let mut stream = stream;
@@ -34,27 +43,56 @@ fn atender(stream: &mut std::net::TcpStream, db: &Path) -> std::io::Result<()> {
     let mut lector = BufReader::new(&mut *stream);
     let mut linea = String::new();
     lector.read_line(&mut linea)?;
-    // "GET /ruta HTTP/1.1"
-    let ruta = linea.split_whitespace().nth(1).unwrap_or("/").split('?').next().unwrap_or("/").to_string();
-    // Descartar el resto de cabeceras.
+    // "GET /ruta?token=... HTTP/1.1"
+    let objetivo = linea.split_whitespace().nth(1).unwrap_or("/").to_string();
+    let ruta = objetivo.split('?').next().unwrap_or("/").to_string();
+    let token_query = objetivo.split_once('?').and_then(|(_, q)| {
+        q.split('&').find_map(|kv| kv.strip_prefix("token=").map(|v| v.to_string()))
+    });
+    // Leer cabeceras (solo nos interesa Authorization: Bearer <token>).
+    let mut token_auth = None;
     loop {
         let mut l = String::new();
         if lector.read_line(&mut l)? == 0 || l == "\r\n" || l == "\n" {
             break;
         }
+        if let Some(v) = l.split_once(':').filter(|(k, _)| k.trim().eq_ignore_ascii_case("authorization")) {
+            token_auth = v.1.trim().strip_prefix("Bearer ").map(|t| t.trim().to_string());
+        }
     }
-    let (codigo, cuerpo) = match consulta(db, &ruta) {
-        Ok(Some(v)) => (200, serde_json::to_string_pretty(&v).unwrap_or_else(|_| "{}".into())),
-        Ok(None) => (404, json!({"error": "not found"}).to_string()),
-        Err(e) => (500, json!({"error": e.to_string()}).to_string()),
+    // Autenticación opcional: si CAPAS_API_TOKEN está definido, se exige.
+    let (codigo, cuerpo) = if let Some(req) = std::env::var("CAPAS_API_TOKEN").ok().filter(|t| !t.is_empty()) {
+        let dado = token_auth.or(token_query);
+        if dado.as_deref() == Some(req.as_str()) {
+            resolver_consulta(db, &ruta)
+        } else {
+            (401, json!({"error": "unauthorized"}).to_string())
+        }
+    } else {
+        resolver_consulta(db, &ruta)
     };
-    let estado = if codigo == 200 { "200 OK" } else if codigo == 404 { "404 Not Found" } else { "500 Internal Server Error" };
+    let estado = match codigo {
+        200 => "200 OK",
+        401 => "401 Unauthorized",
+        404 => "404 Not Found",
+        _ => "500 Internal Server Error",
+    };
+    // Sin `Access-Control-Allow-Origin: *`: así una web no puede leer el índice
+    // desde el navegador del usuario. Herramientas locales/CI no necesitan CORS.
     let resp = format!(
-        "HTTP/1.1 {estado}\r\nContent-Type: application/json; charset=utf-8\r\nAccess-Control-Allow-Origin: *\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{cuerpo}",
+        "HTTP/1.1 {estado}\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{cuerpo}",
         cuerpo.len()
     );
     stream.write_all(resp.as_bytes())?;
     stream.flush()
+}
+
+fn resolver_consulta(db: &Path, ruta: &str) -> (u16, String) {
+    match consulta(db, ruta) {
+        Ok(Some(v)) => (200, serde_json::to_string_pretty(&v).unwrap_or_else(|_| "{}".into())),
+        Ok(None) => (404, json!({"error": "not found"}).to_string()),
+        Err(e) => (500, json!({"error": e.to_string()}).to_string()),
+    }
 }
 
 fn consulta(db: &Path, ruta: &str) -> rusqlite::Result<Option<Value>> {

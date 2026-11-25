@@ -173,8 +173,9 @@ layer-by-layer extraction (now including **Zstandard** and **LZ4**), detection o
 **hundreds of formats across every platform**, classification, confidence levels, family
 relations, the SQLite index, every report, the package audit, the password module and the
 cache watch/locate tools — is **Core, and free**. The paid editions add operational and
-automation features for teams and pipelines; they're selected with `--edicion` (or the
-`CAPAS_EDICION` env var) and, in a release, activated by a signed license key. Each
+automation features for teams and pipelines; in the released binary they are activated
+**only** by a signed license key (`--edicion`/`CAPAS_EDICION` force an edition only in a
+development build compiled with the `override-edicion` feature). Each
 feature's required edition is a one-line constant, so the tiering is easy to adjust.
 
 | Edition | What you get |
@@ -201,8 +202,11 @@ file next to the binary (or `--licencia file` / `CAPAS_LICENCIA`).
 
 Vendor setup (once): generate your key pair and paste the public key into
 `PUBLICA_HEX` in `src/licencia.rs`, then rebuild. **Keep the private key secret —
-never commit it.** The shipped build has a zero placeholder, so licensing is inert
-(everyone stays Core) until you set your key.
+never commit it.** This build ships with the vendor's public key configured, so a
+license signed with the matching private key activates Pro/Studio. (A build whose
+`PUBLICA_HEX` is all zeros leaves licensing inert — everyone stays Core.) Paid
+editions are granted **only** by a valid license; `--edicion`/`CAPAS_EDICION` are a
+development-only override behind the `override-edicion` build feature.
 
 ```bash
 capas --generar-clave ./claves           # writes capas_private.key + the public key to embed

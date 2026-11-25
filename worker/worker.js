@@ -73,10 +73,13 @@ function importeDe(s) {
 }
 
 function edicionDesde(session) {
-  // Preferimos metadata.edition del Payment Link; si no, por el importe (>=50$ → Studio).
+  // Fuente de verdad: metadata.edition del Payment Link (ponla SIEMPRE en el link).
+  // Fallback por importe con umbral de 38$ (3800): separa Pro ($29, o $17,40 con
+  // 40% off) de Studio ($79, o $47,40 con 40% off). Si usas descuentos mayores,
+  // la metadata es imprescindible para no confundir ediciones.
   const m = (session?.metadata?.edition || '').toLowerCase();
   if (m === 'studio' || m === 'pro') return m;
-  return importeDe(session) >= 5000 ? 'studio' : 'pro';
+  return importeDe(session) >= 3800 ? 'studio' : 'pro';
 }
 
 function emailHtml(token, edicion) {

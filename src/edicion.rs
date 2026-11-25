@@ -40,13 +40,25 @@ pub fn set(e: Edicion) {
     ACTUAL.store(e as u8, Ordering::Relaxed);
 }
 
-/// Resuelve la edición desde la bandera o el entorno (bandera tiene prioridad).
+/// Resuelve la edición desde la bandera o el entorno.
+///
+/// SEGURIDAD: en el binario distribuido, `--edicion` y `CAPAS_EDICION` NO
+/// desbloquean ediciones de pago — solo una licencia firmada lo hace. El
+/// override manual queda tras la feature de compilación `override-edicion`,
+/// pensada solo para desarrollo/pruebas (`cargo build --features override-edicion`).
 pub fn resolver(bandera: Option<&str>) {
-    let fuente = bandera.map(str::to_string).or_else(|| std::env::var("CAPAS_EDICION").ok());
-    if let Some(s) = fuente {
-        if let Some(e) = desde_str(&s) {
-            set(e);
+    #[cfg(feature = "override-edicion")]
+    {
+        let fuente = bandera.map(str::to_string).or_else(|| std::env::var("CAPAS_EDICION").ok());
+        if let Some(s) = fuente {
+            if let Some(e) = desde_str(&s) {
+                set(e);
+            }
         }
+    }
+    #[cfg(not(feature = "override-edicion"))]
+    {
+        let _ = bandera; // ignorado: la edición solo la concede la licencia
     }
 }
 

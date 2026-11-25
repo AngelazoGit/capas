@@ -16,10 +16,11 @@ use crate::idioma::{tfmt, tr};
 
 /// Clave pública del vendedor (hex de 32 bytes).
 ///
-/// MARCADOR: todo ceros = licencias desactivadas (todo queda en Core). Antes de
-/// vender, ejecuta `capas --generar-clave <dir>`, pega aquí el valor PUBLICA_HEX
-/// que imprime y recompila. Guarda la clave privada en secreto (nunca al repo):
-/// con ella firmas las licencias de tus clientes con `capas --firmar-licencia`.
+/// CONFIGURADA: este binario lleva la clave pública del vendedor, así que las
+/// licencias firmadas con la clave privada correspondiente se validan sin
+/// conexión. (Todo ceros = licencias desactivadas; no es el caso aquí.)
+/// La clave privada se guarda en secreto y nunca va al repo; con ella se firman
+/// las licencias de los clientes (`capas --firmar-lote` / `--firmar-licencia`).
 const PUBLICA_HEX: &str = "8f979be75c8838cdb9e0047c1c6ccc255a5e50c3ccb47524df7bab98db2f0a91";
 
 #[derive(Serialize, Deserialize)]
