@@ -1139,9 +1139,17 @@ impl App {
     // ═══════════════════════ Rediseño "Serio" ═══════════════════════
     // Barra lateral de navegación.
     fn nav_ui(&mut self, ui: &mut Ui) {
-        ui.label(RichText::new("CAPAS").font(titulo(26.0)).color(naranja()));
-        ui.label(RichText::new(tr("LAYERED DECOMPOSITION", "DESCOMPOSICIÓN POR CAPAS")).font(mono(9.0)).color(morado_claro()));
-        ui.add_space(24.0);
+        // Marca: logo de capas + wordmark.
+        let (rect, _) = ui.allocate_exact_size(Vec2::new(ui.available_width(), 50.0), Sense::hover());
+        let p = ui.painter().clone();
+        marca_capas(&p, Pos2::new(rect.left() + 17.0, rect.center().y + 2.0), 14.0, naranja());
+        p.text(Pos2::new(rect.left() + 44.0, rect.center().y), Align2::LEFT_CENTER, "CAPAS", titulo(27.0), naranja());
+        ui.add_space(1.0);
+        ui.label(RichText::new(tr("LAYERED DECOMPOSITION", "DESCOMPOSICIÓN POR CAPAS")).font(mono(8.5)).color(morado_claro()));
+        ui.add_space(16.0);
+        let yd = ui.cursor().top();
+        ui.painter().line_segment([Pos2::new(ui.max_rect().left(), yd), Pos2::new(ui.max_rect().right(), yd)], Stroke::new(1.0, morado()));
+        ui.add_space(16.0);
 
         if nav_item(ui, "◆", tr("Analysis", "Análisis"), self.vista == Vista::Analisis) {
             self.vista = Vista::Analisis;
@@ -1214,6 +1222,8 @@ impl App {
                 }
             });
         });
+        let r = ui.max_rect();
+        ui.painter().line_segment([Pos2::new(r.left() - 22.0, r.bottom()), Pos2::new(r.right() + 22.0, r.bottom())], Stroke::new(1.0, morado()));
     }
 
     // Vista de análisis: entrada · tarjetas · tres paneles.
@@ -1816,6 +1826,24 @@ fn nav_item(ui: &mut Ui, icono: &str, etiqueta: &str, activo: bool) -> bool {
     resp.clicked()
 }
 
+/// Logo de CAPAS: pila isométrica de 3 capas (la de arriba separada), en
+/// tonos de `base`. Dibuja de atrás (arriba) hacia delante (abajo).
+fn marca_capas(p: &egui::Painter, centro: Pos2, escala: f32, base: Color32) {
+    let (w, h, t, gap) = (escala, escala * 0.52, escala * 0.44, escala * 0.60);
+    let tope = [base, base.gamma_multiply(0.80), base.gamma_multiply(0.63)];
+    let lado = [base.gamma_multiply(0.52), base.gamma_multiply(0.42), base.gamma_multiply(0.34)];
+    let borde = Stroke::new((escala * 0.07).max(1.0), hondo());
+    for k in 0..3 {
+        let extra = if k == 0 { escala * 0.34 } else { 0.0 };
+        let (cx, cy) = (centro.x, centro.y + (k as f32 - 1.0) * gap - extra);
+        let (tp, rp, bp, lp) = (Pos2::new(cx, cy - h), Pos2::new(cx + w, cy), Pos2::new(cx, cy + h), Pos2::new(cx - w, cy));
+        let (lp2, bp2, rp2) = (Pos2::new(cx - w, cy + t), Pos2::new(cx, cy + h + t), Pos2::new(cx + w, cy + t));
+        p.add(egui::Shape::convex_polygon(vec![lp, bp, bp2, lp2], lado[k], Stroke::NONE));
+        p.add(egui::Shape::convex_polygon(vec![bp, rp, rp2, bp2], lado[k].gamma_multiply(0.82), Stroke::NONE));
+        p.add(egui::Shape::convex_polygon(vec![tp, rp, bp, lp], tope[k], borde));
+    }
+}
+
 /// Botón principal (relleno, esquinas suaves).
 fn boton_pri(texto: &str, color: Color32) -> egui::Button<'static> {
     egui::Button::new(RichText::new(texto.to_string()).font(titulo(14.0)).color(fondo()))
@@ -1845,15 +1873,17 @@ fn card_frame() -> egui::Frame {
 
 /// Tarjeta de estadística clicable; devuelve true al pulsarla.
 fn stat_card(ui: &mut Ui, etiqueta: &str, valor: usize, color: Color32, alerta: bool, activo: bool) -> bool {
+    let id = ui.make_persistent_id(("stat", etiqueta));
+    let hov = ui.ctx().read_response(id).map(|r| r.hovered()).unwrap_or(false);
     let frame = egui::Frame::new()
-        .fill(morado_oscuro())
+        .fill(if hov { mezclar(morado_oscuro(), morado(), 0.5) } else { morado_oscuro() })
         .stroke(Stroke::new(if activo { 1.6 } else { 1.0 }, if activo { color } else { morado() }))
         .corner_radius(CornerRadius::same(9))
-        .inner_margin(Margin { left: 14, right: 14, top: 9, bottom: 9 });
+        .inner_margin(Margin { left: 18, right: 14, top: 9, bottom: 10 });
     let inner = frame.show(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.horizontal(|ui| {
-            ui.label(RichText::new(etiqueta.to_uppercase()).font(mono(10.0)).color(morado_claro()));
+            ui.label(RichText::new(etiqueta.to_uppercase()).font(mono(10.0)).color(if activo { color } else { morado_claro() }));
             if alerta {
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                     let (rid, _) = ui.allocate_exact_size(Vec2::splat(9.0), Sense::hover());
@@ -1861,15 +1891,23 @@ fn stat_card(ui: &mut Ui, etiqueta: &str, valor: usize, color: Color32, alerta: 
                 });
             }
         });
-        ui.label(RichText::new(valor.to_string()).font(titulo(30.0)).color(if valor > 0 { texto() } else { morado_medio() }));
+        ui.label(RichText::new(valor.to_string()).font(titulo(31.0)).color(if valor > 0 { texto() } else { morado_medio() }));
     });
-    ui.interact(inner.response.rect, ui.make_persistent_id(("stat", etiqueta)), Sense::click()).clicked()
+    // Barra de acento vertical a la izquierda.
+    let rr = inner.response.rect;
+    let bar = if valor > 0 || activo { color } else { morado_medio() };
+    ui.painter().rect_filled(Rect::from_min_size(rr.left_top() + Vec2::new(0.0, 8.0), Vec2::new(3.0, rr.height() - 16.0)), CornerRadius::same(2), bar);
+    ui.interact(rr, id, Sense::click()).clicked()
 }
 
 /// Encabezado fino de un panel-tarjeta.
 fn encabezado_panel(ui: &mut Ui, t: &str) {
-    ui.label(RichText::new(t).font(titulo(13.0)).color(morado_claro()));
-    ui.add_space(5.0);
+    ui.horizontal(|ui| {
+        let (rid, _) = ui.allocate_exact_size(Vec2::new(10.0, 10.0), Sense::hover());
+        ui.painter().rect_filled(Rect::from_center_size(rid.center(), Vec2::splat(7.0)), CornerRadius::same(2), acento());
+        ui.label(RichText::new(t).font(titulo(13.0)).color(texto()));
+    });
+    ui.add_space(6.0);
     let y = ui.cursor().top();
     ui.painter().line_segment([Pos2::new(ui.max_rect().left(), y), Pos2::new(ui.max_rect().right(), y)], Stroke::new(1.0, morado()));
     ui.add_space(8.0);
@@ -2164,27 +2202,35 @@ fn aplicar_visuals(ctx: &egui::Context) {
 
 /// Icono generado por código: hexágono naranja con núcleo verde sobre morado.
 fn icono() -> egui::IconData {
-    let n = 64usize;
+    // Logo: pila isométrica de 3 capas en naranja de marca (independiente del tema).
+    let n = 128usize;
     let mut rgba = vec![0u8; n * n * 4];
-    let c = n as f32 / 2.0;
-    let dentro = |x: f32, y: f32, r: f32| {
-        let (dx, dy) = ((x - c).abs(), (y - c).abs());
-        dy <= r * 0.866 && dx * 0.866 + dy * 0.5 <= r * 0.866
-    };
+    let base = Color32::from_rgb(0xDE, 0x92, 0x33);
+    let (w, h, t, gap) = (34.0f32, 18.0f32, 15.0f32, 21.0f32);
+    let cx = n as f32 / 2.0;
+    let cy0 = n as f32 / 2.0 + 6.0;
+    // Prueba punto-en-rombo (cara superior) y banda de grosor por capa.
+    let en_rombo = |x: f32, y: f32, ccx: f32, ccy: f32| (x - ccx).abs() / w + (y - ccy).abs() / h <= 1.0;
+    let tope = [base, base.gamma_multiply(0.80), base.gamma_multiply(0.63)];
+    let lado = [base.gamma_multiply(0.5), base.gamma_multiply(0.4), base.gamma_multiply(0.32)];
     for y in 0..n {
         for x in 0..n {
             let (fx, fy) = (x as f32 + 0.5, y as f32 + 0.5);
-            let px = if dentro(fx, fy, 12.0) {
-                verde()
-            } else if dentro(fx, fy, 21.0) {
-                morado()
-            } else if dentro(fx, fy, 30.0) {
-                naranja()
-            } else {
-                Color32::TRANSPARENT
-            };
-            let i = (y * n + x) * 4;
-            rgba[i..i + 4].copy_from_slice(&px.to_array());
+            let mut px = Color32::TRANSPARENT;
+            // De atrás (arriba, k=0) hacia delante (abajo, k=2): el último pintado manda.
+            for k in 0..3 {
+                let extra = if k == 0 { 11.0 } else { 0.0 };
+                let ccy = cy0 + (k as f32 - 1.0) * gap - extra;
+                if en_rombo(fx, fy, cx, ccy) {
+                    px = tope[k];
+                } else if fx >= cx - w && fx <= cx + w && en_rombo(fx, fy - t, cx, ccy) && fy > ccy {
+                    px = lado[k];
+                }
+            }
+            if px != Color32::TRANSPARENT {
+                let i = (y * n + x) * 4;
+                rgba[i..i + 4].copy_from_slice(&px.to_array());
+            }
         }
     }
     egui::IconData { rgba, width: n as u32, height: n as u32 }

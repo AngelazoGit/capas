@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 460 120" width="460" height="120" role="img" aria-label="CAPAS — layered decomposition">
+  <title>CAPAS — layered decomposition</title>
+  <!-- Marca: pila isométrica de 3 capas (la superior separada). -->
+  <g stroke="#15171e" stroke-width="1.6" stroke-linejoin="round" transform="translate(4,0)">
+    <polygon points="26,28 56,44 56,58 26,42" fill="#8a5a22"/>
+    <polygon points="56,44 86,28 86,42 56,58" fill="#754b1c"/>
+    <polygon points="56,12 86,28 56,44 26,28" fill="#ecae57"/>
+    <polygon points="26,60 56,76 56,90 26,74" fill="#774d1d"/>
+    <polygon points="56,76 86,60 86,74 56,90" fill="#654117"/>
+    <polygon points="56,44 86,60 56,76 26,60" fill="#d38b36"/>
+    <polygon points="26,82 56,98 56,112 26,96" fill="#654117"/>
+    <polygon points="56,98 86,82 86,96 56,112" fill="#573913"/>
+    <polygon points="56,66 86,82 56,98 26,82" fill="#b4762c"/>
+  </g>
+  <!-- Wordmark -->
+  <text x="128" y="74" font-family="'Zilla Slab', Georgia, 'Times New Roman', serif" font-weight="700" font-size="66" letter-spacing="1" fill="#de9233">CAPAS</text>
+  <text x="130" y="96" font-family="'IBM Plex Mono', ui-monospace, monospace" font-size="13" letter-spacing="3" fill="#8a6a3a">LAYERED DECOMPOSITION</text>
+</svg>
