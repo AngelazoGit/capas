@@ -38,6 +38,7 @@ struct Paleta {
     morado_claro: Color32,
     verde: Color32,
     verde_oscuro: Color32,
+    acento: Color32,
     naranja: Color32,
     naranja_oscuro: Color32,
     rojo: Color32,
@@ -53,6 +54,7 @@ const SERENO: Paleta = Paleta {
     morado_medio: Color32::from_rgb(0x5b, 0x4c, 0x85),
     morado_claro: Color32::from_rgb(0xb6, 0xa4, 0xe2),
     verde: Color32::from_rgb(0x86, 0xc9, 0x6e),
+    acento: Color32::from_rgb(0x86, 0xc9, 0x6e),
     verde_oscuro: Color32::from_rgb(0x3c, 0x5b, 0x34),
     naranja: Color32::from_rgb(0xe6, 0xa1, 0x5a),
     naranja_oscuro: Color32::from_rgb(0x7e, 0x56, 0x2e),
@@ -69,6 +71,7 @@ const MANDO: Paleta = Paleta {
     morado_medio: Color32::from_rgb(0x55, 0x2a, 0x93),
     morado_claro: Color32::from_rgb(0x9b, 0x6b, 0xe3),
     verde: Color32::from_rgb(0x8c, 0xff, 0x3c),
+    acento: Color32::from_rgb(0x8c, 0xff, 0x3c),
     verde_oscuro: Color32::from_rgb(0x2b, 0x6e, 0x1e),
     naranja: Color32::from_rgb(0xff, 0x8a, 0x1c),
     naranja_oscuro: Color32::from_rgb(0x8a, 0x3a, 0x05),
@@ -85,6 +88,7 @@ const NEUTRO: Paleta = Paleta {
     morado_medio: Color32::from_rgb(0x5a, 0x5a, 0x66),
     morado_claro: Color32::from_rgb(0xb8, 0xb8, 0xc4),
     verde: Color32::from_rgb(0x8f, 0xb9, 0x8a),
+    acento: Color32::from_rgb(0x8f, 0xb9, 0x8a),
     verde_oscuro: Color32::from_rgb(0x44, 0x53, 0x3f),
     naranja: Color32::from_rgb(0xcf, 0xa8, 0x78),
     naranja_oscuro: Color32::from_rgb(0x6b, 0x5a, 0x42),
@@ -103,6 +107,7 @@ const LIMPIO: Paleta = Paleta {
     morado_medio: Color32::from_rgb(0xbf, 0xbf, 0xc8),
     morado_claro: Color32::from_rgb(0x44, 0x47, 0x4f),
     verde: Color32::from_rgb(0x2f, 0x8f, 0x52),
+    acento: Color32::from_rgb(0x2f, 0x8f, 0x52),
     verde_oscuro: Color32::from_rgb(0xd6, 0xea, 0xd9),
     naranja: Color32::from_rgb(0xb0, 0x71, 0x16),
     naranja_oscuro: Color32::from_rgb(0xf0, 0xe1, 0xc6),
@@ -112,21 +117,41 @@ const LIMPIO: Paleta = Paleta {
     rejilla_bg: Color32::from_rgb(0xee, 0xee, 0xf1),
 };
 
-// 0 = Sereno, 1 = Mando, 2 = Neutro, 3 = Limpio (por defecto).
-static TEMA: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(3);
+// Serio: oscuro de producto, acento morado del concepto; el verde queda para "éxito".
+const SERIO: Paleta = Paleta {
+    fondo: Color32::from_rgb(0x15, 0x17, 0x1e),
+    morado_oscuro: Color32::from_rgb(0x1e, 0x20, 0x29),
+    morado: Color32::from_rgb(0x27, 0x2a, 0x35),
+    morado_medio: Color32::from_rgb(0x3a, 0x3e, 0x4c),
+    morado_claro: Color32::from_rgb(0xa6, 0xad, 0xbd),
+    verde: Color32::from_rgb(0x3e, 0xcf, 0x8e),
+    acento: Color32::from_rgb(0x7b, 0x61, 0xff),
+    verde_oscuro: Color32::from_rgb(0x1f, 0x3a, 0x2d),
+    naranja: Color32::from_rgb(0xe0, 0xa6, 0x5a),
+    naranja_oscuro: Color32::from_rgb(0x3f, 0x33, 0x1c),
+    rojo: Color32::from_rgb(0xe0, 0x6c, 0x75),
+    texto: Color32::from_rgb(0xe8, 0xea, 0xf1),
+    hondo: Color32::from_rgb(0x10, 0x12, 0x18),
+    rejilla_bg: Color32::from_rgb(0x1a, 0x1c, 0x24),
+};
+
+// 0 = Sereno, 1 = Mando, 2 = Neutro, 3 = Limpio, 4 = Serio (por defecto).
+static TEMA: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(4);
 
 fn pal() -> Paleta {
     match TEMA.load(Ordering::Relaxed) {
         0 => SERENO,
         1 => MANDO,
         2 => NEUTRO,
-        _ => LIMPIO,
+        3 => LIMPIO,
+        _ => SERIO,
     }
 }
 
-/// Índice de máscara a partir de su nombre (CAPAS_TEMA): limpio/sereno/neutro/mando.
+/// Índice de máscara a partir de su nombre (CAPAS_TEMA): serio/limpio/sereno/neutro/mando.
 fn tema_por_nombre(s: &str) -> Option<u8> {
     match s.trim().to_lowercase().as_str() {
+        "serio" | "serious" | "pro" | "oscuro" | "dark" => Some(4),
         "limpio" | "clean" | "claro" | "light" => Some(3),
         "sereno" | "serene" => Some(0),
         "neutro" | "neutral" | "gris" | "gray" | "grey" => Some(2),
@@ -140,6 +165,7 @@ fn morado() -> Color32 { pal().morado }
 fn morado_medio() -> Color32 { pal().morado_medio }
 fn morado_claro() -> Color32 { pal().morado_claro }
 fn verde() -> Color32 { pal().verde }
+fn acento() -> Color32 { pal().acento }
 fn verde_oscuro() -> Color32 { pal().verde_oscuro }
 fn naranja() -> Color32 { pal().naranja }
 fn naranja_oscuro() -> Color32 { pal().naranja_oscuro }
@@ -349,7 +375,7 @@ impl App {
             seleccion: None,
             visor: None,
             auto_iniciar: false,
-            tema: 3,
+            tema: 4,
             clave_entrada: String::new(),
             clave_lic: String::new(),
             lic_estado: None,
@@ -372,7 +398,7 @@ impl App {
                 humano(app.sis.memoria_libre),
                 app.herr.rutas.len()
             ),
-            verde(),
+            acento(),
         );
         app.log(0.0, tr("WAITING FOR SAMPLES. DRAG FILES ONTO THE WINDOW.", "EN ESPERA DE MUESTRAS. ARRASTRA ARCHIVOS A LA VENTANA.").into(), morado_claro());
         app
@@ -635,8 +661,8 @@ impl eframe::App for App {
             let r = ctx.content_rect();
             let p = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("soltar")));
             p.rect_filled(r, 0.0, Color32::from_black_alpha(170));
-            p.rect_stroke(r.shrink(12.0), 0.0, Stroke::new(4.0, verde()), StrokeKind::Inside);
-            p.text(r.center(), Align2::CENTER_CENTER, tr("DROP THE SAMPLE", "SUELTA LA MUESTRA"), titulo(64.0), verde());
+            p.rect_stroke(r.shrink(12.0), 0.0, Stroke::new(4.0, acento()), StrokeKind::Inside);
+            p.text(r.center(), Align2::CENTER_CENTER, tr("DROP THE SAMPLE", "SUELTA LA MUESTRA"), titulo(64.0), acento());
         }
     }
 }
@@ -651,7 +677,7 @@ impl App {
         let ancho_titulo = g.size().x;
         p.galley(r.left_top() + Vec2::new(0.0, -4.0), g, naranja());
         let x = r.left() + ancho_titulo + 18.0;
-        p.line_segment([Pos2::new(x - 9.0, r.top() + 6.0), Pos2::new(x - 9.0, r.top() + 72.0)], Stroke::new(2.0, verde()));
+        p.line_segment([Pos2::new(x - 9.0, r.top() + 6.0), Pos2::new(x - 9.0, r.top() + 72.0)], Stroke::new(2.0, acento()));
         p.text(Pos2::new(x, r.top() + 4.0), Align2::LEFT_TOP, tr("LAYERED DECOMPOSITION", "SISTEMA DE DESCOMPOSICIÓN"), titulo(20.0), texto());
         p.text(Pos2::new(x, r.top() + 27.0), Align2::LEFT_TOP, tr("SYSTEM FOR FILES", "ESTRATIFICADA DE ARCHIVOS"), titulo(20.0), texto());
         p.text(
@@ -659,7 +685,7 @@ impl App {
             Align2::LEFT_TOP,
             tfmt(tr("v{}  ·  OPERATOR {}","v{}  ·  OPERADOR {}"), &[VERSION.to_string(), AUTOR.to_string()]),
             mono(12.0),
-            verde(),
+            acento(),
         );
 
         // Reloj T+ y estado.
@@ -686,7 +712,7 @@ impl App {
             Align2::RIGHT_CENTER,
             tfmt(tr("{} BLOCKS","{} BLOQUES"), &[self.bloques.to_string()]),
             mono(14.0),
-            verde(),
+            acento(),
         );
 
         // Franja inferior: rayas de alerta animadas mientras trabaja.
@@ -701,7 +727,7 @@ impl App {
 
     fn recursos_ui(&mut self, ui: &mut Ui, ahora: f64) {
         egui::ScrollArea::vertical().show(ui, |ui| {
-            seccion(ui, "01", tr("PROCESSING CORES", "NÚCLEOS DE PROCESO"), verde(), |ui| {
+            seccion(ui, "01", tr("PROCESSING CORES", "NÚCLEOS DE PROCESO"), acento(), |ui| {
                 let n = self.sis.nucleos.min(64);
                 let activos = if self.analizando() { self.op.hilos.min(n) } else { 0 };
                 let radio = 20.0;
@@ -716,17 +742,17 @@ impl App {
                     let centro = o + Vec2::new(c as f32 * paso_x, f as f32 * radio * 1.75 + if c % 2 == 1 { radio * 0.87 } else { 0.0 });
                     let fase = ((ahora * 4.0 + i as f64 * 0.7).sin() * 0.5 + 0.5) as f32;
                     let (relleno, borde) = if i < activos {
-                        (mezclar(verde_oscuro(), verde(), fase * 0.7), verde())
+                        (mezclar(verde_oscuro(), acento(), fase * 0.7), acento())
                     } else {
                         (morado_oscuro(), morado_medio())
                     };
                     hexagono(&p, centro, radio, relleno, Stroke::new(1.5, borde));
                     p.text(centro, Align2::CENTER_CENTER, format!("{:02}", i + 1), mono(10.0), if i < activos { fondo() } else { morado_claro() });
                 }
-                ui.label(RichText::new(tfmt(tr("{} LOGICAL · {} ASSIGNED","{} LÓGICOS · {} ASIGNADOS"), &[self.sis.nucleos.to_string(), self.op.hilos.to_string()])).font(mono(11.0)).color(verde()));
+                ui.label(RichText::new(tfmt(tr("{} LOGICAL · {} ASSIGNED","{} LÓGICOS · {} ASIGNADOS"), &[self.sis.nucleos.to_string(), self.op.hilos.to_string()])).font(mono(11.0)).color(acento()));
             });
 
-            seccion(ui, "02", tr("MEMORY", "MEMORIA"), verde(), |ui| {
+            seccion(ui, "02", tr("MEMORY", "MEMORIA"), acento(), |ui| {
                 let total = self.sis.memoria_total.max(1);
                 let usada = total.saturating_sub(self.sis.memoria_libre);
                 barra_segmentada(ui, usada as f32 / total as f32, morado_claro());
@@ -745,7 +771,7 @@ impl App {
                         let (r, p) = ui.allocate_painter(Vec2::splat(12.0), Sense::hover());
                         let c = r.rect.center();
                         if ok {
-                            p.rect_filled(Rect::from_center_size(c, Vec2::splat(9.0)), 0.0, verde());
+                            p.rect_filled(Rect::from_center_size(c, Vec2::splat(9.0)), 0.0, acento());
                         } else {
                             p.rect_stroke(Rect::from_center_size(c, Vec2::splat(9.0)), 0.0, Stroke::new(1.0, morado_medio()), StrokeKind::Inside);
                         }
@@ -790,8 +816,9 @@ impl App {
                     ui.separator();
                     let mut tema = self.tema;
                     egui::ComboBox::from_id_salt("tema")
-                        .selected_text(match tema { 0 => tr("THEME: SERENE", "TEMA: SERENO"), 1 => tr("THEME: COMMAND", "TEMA: MANDO"), 2 => tr("THEME: NEUTRAL", "TEMA: NEUTRO"), _ => tr("THEME: CLEAN", "TEMA: LIMPIO") })
+                        .selected_text(match tema { 0 => tr("THEME: SERENE", "TEMA: SERENO"), 1 => tr("THEME: COMMAND", "TEMA: MANDO"), 2 => tr("THEME: NEUTRAL", "TEMA: NEUTRO"), 3 => tr("THEME: CLEAN", "TEMA: LIMPIO"), _ => tr("THEME: SERIOUS", "TEMA: SERIO") })
                         .show_ui(ui, |ui| {
+                            ui.selectable_value(&mut tema, 4u8, tr("SERIOUS (dark, product)", "SERIO (oscuro, producto)"));
                             ui.selectable_value(&mut tema, 3u8, tr("CLEAN (light, business)", "LIMPIO (claro, business)"));
                             ui.selectable_value(&mut tema, 0u8, tr("SERENE (soft dark)", "SERENO (oscuro suave)"));
                             ui.selectable_value(&mut tema, 2u8, tr("NEUTRAL (grayscale)", "NEUTRO (grises)"));
@@ -818,7 +845,7 @@ impl App {
                         ui.label(RichText::new(tr("ACTIVATE WITH KEY (paste CAPAS-...):", "ACTIVAR CON CLAVE (pega CAPAS-...):")).font(mono(10.0)).color(morado_claro()));
                         ui.horizontal(|ui| {
                             ui.add(egui::TextEdit::singleline(&mut self.clave_lic).font(mono(11.0)).desired_width(240.0).hint_text("CAPAS-..."));
-                            if ui.add(boton(tr("ACTIVATE", "ACTIVAR"), verde())).clicked() {
+                            if ui.add(boton(tr("ACTIVATE", "ACTIVAR"), acento())).clicked() {
                                 match crate::licencia::verificar_clave(self.clave_lic.trim()) {
                                     Ok(e) => {
                                         crate::edicion::set(e);
@@ -886,8 +913,8 @@ impl App {
         // Fila de instrumentos.
         ui.columns(3, |c| {
             seccion(&mut c[0], "A", tr("CLASSIFICATION", "CLASIFICACIÓN"), naranja(), |ui| self.clasificacion(ui, ahora));
-            seccion(&mut c[1], "B", tr("DEPTH", "PROFUNDIDAD"), verde(), |ui| self.profundidad(ui));
-            seccion(&mut c[2], "C", tr("PERFORMANCE", "RENDIMIENTO"), verde(), |ui| self.senal_ui(ui, ahora));
+            seccion(&mut c[1], "B", tr("DEPTH", "PROFUNDIDAD"), acento(), |ui| self.profundidad(ui));
+            seccion(&mut c[2], "C", tr("PERFORMANCE", "RENDIMIENTO"), acento(), |ui| self.senal_ui(ui, ahora));
         });
         ui.add_space(6.0);
 
@@ -940,7 +967,7 @@ impl App {
             let h = (v as f32 / max) * (r.height() - 36.0);
             let x0 = r.left() + i as f32 * ancho + 3.0;
             let b = Rect::from_min_max(Pos2::new(x0, r.bottom() - 16.0 - h), Pos2::new(x0 + ancho - 6.0, r.bottom() - 16.0));
-            let c = mezclar(verde(), naranja(), i as f32 / (n - 1).max(1) as f32);
+            let c = mezclar(acento(), naranja(), i as f32 / (n - 1).max(1) as f32);
             if v > 0 {
                 p.rect_filled(b, 0.0, c.gamma_multiply(0.85));
                 p.text(b.center_top() - Vec2::new(0.0, 2.0), Align2::CENTER_BOTTOM, v.to_string(), mono(10.0), c);
@@ -950,7 +977,7 @@ impl App {
         ui.label(
             RichText::new(tfmt(tr("LAYERS: {} · VOLUME: {}","ESTRATOS: {} · VOLUMEN: {}"), &[self.por_capa.len().to_string(), humano(self.bytes_vistos)]))
                 .font(mono(10.0))
-                .color(verde()),
+                .color(acento()),
         );
     }
 
@@ -978,9 +1005,9 @@ impl App {
             .enumerate()
             .map(|(i, v)| Pos2::new(r.left() + i as f32 / (n - 1) as f32 * r.width(), r.bottom() - 4.0 - v / max * (r.height() - 12.0)))
             .collect();
-        p.add(Shape::line(pts, Stroke::new(2.0, verde())));
+        p.add(Shape::line(pts, Stroke::new(2.0, acento())));
         let actual = self.senal.back().copied().unwrap_or(0.0);
-        ui.label(RichText::new(format!("{actual:.0} {} · {} {max:.0}", tr("BLOCKS/s","BLOQUES/s"), tr("PEAK","PICO"))).font(mono(10.0)).color(verde()));
+        ui.label(RichText::new(format!("{actual:.0} {} · {} {max:.0}", tr("BLOCKS/s","BLOQUES/s"), tr("PEAK","PICO"))).font(mono(10.0)).color(acento()));
     }
 
     fn cola_ui(&mut self, ui: &mut Ui, ctx: &egui::Context, ahora: f64) {
@@ -994,8 +1021,8 @@ impl App {
                 let pulso = ((ahora * 2.0).sin() * 0.5 + 0.5) as f32;
                 let rad = (r.height() * 0.46).min(r.width() * 0.3).max(40.0);
                 hexagono(&p, r.center(), rad + 10.0 * pulso, Color32::TRANSPARENT, Stroke::new(1.0, morado_medio()));
-                hexagono(&p, r.center(), rad, morado_oscuro(), Stroke::new(3.0, mezclar(morado_claro(), verde(), pulso)));
-                p.text(r.center() - Vec2::new(0.0, 16.0), Align2::CENTER_CENTER, tr("DROP HERE", "ARRASTRA AQUÍ"), titulo(24.0), verde());
+                hexagono(&p, r.center(), rad, morado_oscuro(), Stroke::new(3.0, mezclar(morado_claro(), acento(), pulso)));
+                p.text(r.center() - Vec2::new(0.0, 16.0), Align2::CENTER_CENTER, tr("DROP HERE", "ARRASTRA AQUÍ"), titulo(24.0), acento());
                 p.text(r.center() + Vec2::new(0.0, 18.0), Align2::CENTER_CENTER, tr("FILES OR FOLDERS", "ARCHIVOS O CARPETAS"), titulo(15.0), texto());
                 p.text(r.center() + Vec2::new(0.0, 42.0), Align2::CENTER_CENTER, tr("or click to choose", "o haz clic para elegir"), mono(11.0), morado_claro());
                 if resp.clicked() {
@@ -1044,7 +1071,7 @@ impl App {
                     self.archivos.clear();
                 }
                 if ui
-                    .add_enabled(libre, boton(&tfmt(tr("OUTPUT: {}","SALIDA: {}"), &[acortar(&self.salida.display().to_string(), 26)]), verde()))
+                    .add_enabled(libre, boton(&tfmt(tr("OUTPUT: {}","SALIDA: {}"), &[acortar(&self.salida.display().to_string(), 26)]), acento()))
                     .on_hover_text(tfmt(tr("Folder where extracted layers are saved:\n{}","Carpeta donde se guardan las capas extraídas:\n{}"), &[self.salida.display().to_string()]))
                     .clicked()
                 {
@@ -1070,7 +1097,7 @@ impl App {
                             self.iniciar(ctx, ahora);
                         }
                         if let Some(r) = &self.raiz {
-                            if ui.add(boton(tr("OPEN OUTPUT", "ABRIR SALIDA"), verde()).min_size(Vec2::new(120.0, 40.0))).clicked() {
+                            if ui.add(boton(tr("OPEN OUTPUT", "ABRIR SALIDA"), acento()).min_size(Vec2::new(120.0, 40.0))).clicked() {
                                 abrir_en_sistema(r);
                             }
                         }
@@ -1137,7 +1164,7 @@ impl App {
             let mut conf: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
             cuenta_conf(&self.arbol, &mut conf);
             let total: usize = conf.values().sum();
-            seccion(ui, "I", tr("CONFIDENCE", "CONFIANZA"), verde(), |ui| {
+            seccion(ui, "I", tr("CONFIDENCE", "CONFIANZA"), acento(), |ui| {
                 for c in Confianza::TODAS {
                     let n = conf.get(c.clave()).copied().unwrap_or(0);
                     if n == 0 {
@@ -1172,7 +1199,7 @@ impl App {
                         ui.label(RichText::new(format!("   {marca} {texto}")).font(mono(10.0)).color(if *nivel == Nivel::Rechazo { rojo() } else { naranja() }));
                     }
                 }
-                if ui.add(boton(tr("▸ OPEN auditoria.md", "▸ ABRIR auditoria.md"), verde())).clicked() {
+                if ui.add(boton(tr("▸ OPEN auditoria.md", "▸ ABRIR auditoria.md"), acento())).clicked() {
                     self.abrir_resultado("auditoria.md");
                 }
             });
@@ -1193,7 +1220,7 @@ impl App {
                     });
                 }
                 ui.add_space(2.0);
-                if ui.add(boton(&tfmt(tr("▸ OPEN extraidos/ ({} files)","▸ ABRIR extraidos/ ({} archivos)"), &[total.to_string()]), verde())).clicked() {
+                if ui.add(boton(&tfmt(tr("▸ OPEN extraidos/ ({} files)","▸ ABRIR extraidos/ ({} archivos)"), &[total.to_string()]), acento())).clicked() {
                     if let Some(raiz) = &self.raiz {
                         abrir_en_sistema(&raiz.join("extraidos"));
                     }
@@ -1201,7 +1228,7 @@ impl App {
             });
         }
         let alto_arbol = (ui.available_height() * 0.55).max(180.0);
-        seccion(ui, "E", tr("LAYER TREE", "ÁRBOL DE ESTRATOS"), verde(), |ui| {
+        seccion(ui, "E", tr("LAYER TREE", "ÁRBOL DE ESTRATOS"), acento(), |ui| {
             if self.arbol.is_empty() {
                 ui.add_space(20.0);
                 ui.vertical_centered(|ui| {
@@ -1262,7 +1289,7 @@ impl App {
                     ui.label(RichText::new(tr("RESULTS", "RESULTADOS")).font(mono(11.0)).color(naranja()));
                     for r in &n.resultados {
                         let corto = r.rsplit('/').next().unwrap_or(r);
-                        if ui.add(boton(&format!("▸ {corto}"), verde())).on_hover_text(r).clicked() {
+                        if ui.add(boton(&format!("▸ {corto}"), acento())).on_hover_text(r).clicked() {
                             abrir = Some(r.clone());
                         }
                     }
@@ -1287,7 +1314,7 @@ impl App {
     }
 
     fn registro_ui(&mut self, ui: &mut Ui) {
-        seccion(ui, ">", tr("OPERATIONS LOG", "REGISTRO DE OPERACIONES"), verde(), |ui| {
+        seccion(ui, ">", tr("OPERATIONS LOG", "REGISTRO DE OPERACIONES"), acento(), |ui| {
             egui::Frame::new().fill(hondo()).inner_margin(Margin::same(6)).show(ui, |ui| {
                 egui::ScrollArea::vertical()
                     .id_salt("log")
@@ -1558,14 +1585,14 @@ fn aplicar_visuals(ctx: &egui::Context) {
     v.extreme_bg_color = hondo();
     v.faint_bg_color = morado_oscuro();
     v.selection.bg_fill = verde_oscuro();
-    v.selection.stroke = Stroke::new(1.0, verde());
-    v.hyperlink_color = verde();
+    v.selection.stroke = Stroke::new(1.0, acento());
+    v.hyperlink_color = acento();
     v.window_corner_radius = CornerRadius::ZERO;
     v.window_stroke = Stroke::new(1.5, naranja());
     for (w, fondo, borde) in [
         (&mut v.widgets.noninteractive, morado_oscuro(), morado()),
         (&mut v.widgets.inactive, morado(), morado_medio()),
-        (&mut v.widgets.hovered, morado_medio(), verde()),
+        (&mut v.widgets.hovered, morado_medio(), acento()),
         (&mut v.widgets.active, naranja_oscuro(), naranja()),
         (&mut v.widgets.open, morado_medio(), naranja()),
     ] {
@@ -1574,7 +1601,7 @@ fn aplicar_visuals(ctx: &egui::Context) {
         w.bg_stroke = Stroke::new(1.0, borde);
         w.corner_radius = CornerRadius::ZERO;
     }
-    v.widgets.hovered.fg_stroke = Stroke::new(1.5, verde());
+    v.widgets.hovered.fg_stroke = Stroke::new(1.5, acento());
     v.widgets.active.fg_stroke = Stroke::new(1.5, naranja());
     v.slider_trailing_fill = true;
     ctx.set_visuals(v);
