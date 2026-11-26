@@ -73,7 +73,7 @@ The binary lands at `target/release/capas` (`capas.exe` on Windows).
 
 `capas.exe` (x64) is **portable**: a single file, no install, no external DLLs.
 Double-click it for the GUI, or run `capas.exe file.zip` from a terminal for the
-console mode. **Direct download:** [`dist/capas.exe`](https://github.com/AngelazoGit/capas/raw/main/dist/capas.exe)
+console mode. **Direct download:** [capas.dev/capas.exe](https://capas.dev/capas.exe)
 (SmartScreen may warn because it is unsigned → *More info → Run anyway*).
 
 Cross-compile the `.exe` from Linux:

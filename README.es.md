@@ -70,7 +70,7 @@ protegidos cuya contraseña estuviera entre las candidatas.
 `capas.exe` (x64) es **portable**: un único archivo, sin instalación ni DLLs
 externas (solo usa las de Windows).
 
-**Descarga directa:** [`dist/capas.exe`](https://github.com/AngelazoGit/capas/raw/main/dist/capas.exe)
+**Descarga directa:** [capas.dev/capas.exe](https://capas.dev/capas.exe)
 
 Descárgalo y:
 
