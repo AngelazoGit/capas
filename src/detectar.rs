@@ -21,6 +21,7 @@ pub enum Tipo {
     SieteZ,
     Rar,
     Cab,
+    Ole,
     ArUnix,
     Elf,
     Pe,
@@ -59,6 +60,7 @@ impl Tipo {
             Tipo::SieteZ => "7-Zip",
             Tipo::Rar => "RAR",
             Tipo::Cab => "CAB",
+            Tipo::Ole => tr("OLE compound file (MSI/DOC/XLS)","archivo compuesto OLE (MSI/DOC/XLS)"),
             Tipo::ArUnix => "AR (.a/.deb)",
             Tipo::Elf => tr("ELF executable","ELF ejecutable"),
             Tipo::Pe => tr("PE executable (Windows)","PE ejecutable (Windows)"),
@@ -97,6 +99,7 @@ impl Tipo {
             Tipo::SieteZ => "7z",
             Tipo::Rar => "rar",
             Tipo::Cab => "cab",
+            Tipo::Ole => "msi",
             Tipo::ArUnix => "a",
             Tipo::Elf => "elf",
             Tipo::Pe => "exe",
@@ -136,6 +139,7 @@ impl Tipo {
                 | Tipo::SieteZ
                 | Tipo::Rar
                 | Tipo::Cab
+                | Tipo::Ole
                 | Tipo::ArUnix
                 | Tipo::MachOFat
                 | Tipo::Pdf
@@ -222,6 +226,10 @@ pub fn detectar(d: &[u8]) -> Tipo {
     }
     if d.starts_with(b"MSCF\0\0\0\0") {
         return Tipo::Cab;
+    }
+    // Compound File Binary (OLE2): MSI/MSP/MST, Office 97-2003, thumbs.db…
+    if d.starts_with(&[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]) {
+        return Tipo::Ole;
     }
     if d.starts_with(b"!<arch>\n") {
         return Tipo::ArUnix;

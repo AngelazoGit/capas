@@ -17,6 +17,7 @@ use sha2::{Digest, Sha256};
 use crate::idioma::{tfmt, tr};
 use crate::detectar::{self, Tipo};
 use crate::ejecutables;
+use crate::{codigo, nativo};
 use crate::extraer::{self, Hijo};
 use crate::recursos::{self, Herramientas};
 
@@ -242,47 +243,81 @@ impl Motor {
             Tipo::ArUnix => extraer::ar(d),
             Tipo::MachOFat => extraer::macho_fat(d),
             Tipo::Pdf => Ok(extraer::pdf(d, lim)),
-            Tipo::SieteZ | Tipo::Rar | Tipo::Cab => self.con_7z(ruta, an, nodo),
-            Tipo::Chd => self.con_chdman(ruta, an, nodo),
+            // Contenedores: motor NATIVO primero; 7-Zip/chdman solo si el nativo falla.
+            Tipo::SieteZ => {
+                let cand = self.cfg.claves.candidatas_externas();
+                self.con_nativo(nativo::siete_z(d, lim, &cand), ruta, an, nodo)
+            }
+            Tipo::Rar => {
+                let cand = self.cfg.claves.candidatas_externas();
+                self.con_nativo(nativo::rar(ruta, lim, &cand), ruta, an, nodo)
+            }
+            Tipo::Cab => self.con_nativo(nativo::cab(d, lim).map(|h| nativo::Abierto { hijos: h, clave: None }), ruta, an, nodo),
+            Tipo::Ole => nativo::ole(d, lim),
+            Tipo::Chd => match nativo::chd(ruta, lim) {
+                Ok(h) => Ok(h),
+                Err(e) if self.herr.get("chdman").is_some() => {
+                    nodo.notas.push(tfmt(tr("native CHD reader: {} — using chdman", "lector CHD nativo: {} — se usa chdman"), &[e.to_string()]));
+                    self.con_chdman(ruta, an, nodo)
+                }
+                Err(e) => Err(e),
+            },
             Tipo::Disco => extraer::particiones(d, lim),
             Tipo::Elf | Tipo::Pe | Tipo::MachO => {
                 self.nativo(d, r, an, tipo, nodo);
                 Ok(Vec::new())
             }
             Tipo::ClaseJava => {
-                let ok = self.externa("javap", &[OsStr::new("-c"), OsStr::new("-p"), OsStr::new("-v"), r], an, "javap.txt", nodo);
-                let fuente = self.externa("cfr", &[r], an, "decompilado.java", nodo)
-                    || self.externa("procyon", &[r], an, "decompilado.java", nodo);
-                if !ok && !fuente {
-                    nodo.notas.push(tr("install a JDK (javap) or CFR/Procyon to decompile","instala un JDK (javap) o CFR/Procyon para decompilar").into());
+                // Listado nativo (equivale a javap -c -p): no necesita JDK.
+                match codigo::clase_java(d) {
+                    Ok(t) => self.guardar(an, "clase.javap.txt", t.as_bytes(), nodo),
+                    Err(e) => nodo.notas.push(tfmt(tr("native class reader: {}", "lector nativo de clases: {}"), &[e.to_string()])),
                 }
+                if let Ok(t) = crate::decompilar::java(d) {
+                    self.guardar(an, "decompilado.capas.java", t.as_bytes(), nodo);
+                }
+                // Decompilación a fuente de máxima fidelidad si hay motor instalado (opcional).
+                let _ = self.externa("cfr", &[r], an, "decompilado.java", nodo)
+                    || self.externa("procyon", &[r], an, "decompilado.java", nodo);
                 Ok(Vec::new())
             }
             Tipo::Dex => {
+                // Listado nativo: clases, campos, métodos y bytecode Dalvik.
+                match codigo::dex(d) {
+                    Ok(t) => self.guardar(an, "dex_smali.txt", t.as_bytes(), nodo),
+                    Err(e) => nodo.notas.push(tfmt(tr("native DEX reader: {}", "lector DEX nativo: {}"), &[e.to_string()])),
+                }
                 if self.herr.get("jadx").is_some() {
                     let out = an.join("jadx");
                     self.externa("jadx", &[OsStr::new("-d"), out.as_os_str(), r], an, "jadx.log", nodo);
                     nodo.resultados.push(format!("{}/jadx/", nodo.directorio));
-                } else {
-                    nodo.notas.push(tr("install jadx to decompile DEX to Java","instala jadx para decompilar DEX a Java").into());
                 }
                 Ok(Vec::new())
             }
             Tipo::Pyc => {
-                let ok = self.externa("pycdc", &[r], an, "decompilado.py", nodo)
+                // Desensamblado nativo exacto (Python 3.6–3.14), sin Python instalado.
+                match codigo::pyc(d) {
+                    Ok(t) => self.guardar(an, "pyc_dis.txt", t.as_bytes(), nodo),
+                    Err(e) => nodo.notas.push(tfmt(tr("native .pyc reader: {}", "lector .pyc nativo: {}"), &[e.to_string()])),
+                }
+                if let Ok(t) = crate::decompilar::python(d) {
+                    self.guardar(an, "decompilado.capas.py", t.as_bytes(), nodo);
+                }
+                let _ = self.externa("pycdc", &[r], an, "decompilado.py", nodo)
                     || self.externa("decompyle3", &[r], an, "decompilado.py", nodo)
                     || self.externa("uncompyle6", &[r], an, "decompilado.py", nodo);
-                if !ok {
-                    nodo.notas.push(tr("install pycdc/uncompyle6 to decompile .pyc","instala pycdc/uncompyle6 para decompilar .pyc").into());
-                }
                 Ok(Vec::new())
             }
             Tipo::Wasm => {
-                let a = self.externa("wasm2wat", &[r], an, "modulo.wat", nodo);
-                let b = self.externa("wasm-decompile", &[r], an, "decompilado.dcmp", nodo);
-                if !a && !b {
-                    nodo.notas.push(tr("install wabt (wasm2wat / wasm-decompile)","instala wabt (wasm2wat / wasm-decompile)").into());
+                // WAT nativo (equivale a wasm2wat).
+                match codigo::wasm_a_wat(d) {
+                    Ok(t) => self.guardar(an, "modulo.wat", t.as_bytes(), nodo),
+                    Err(e) => {
+                        nodo.notas.push(tfmt(tr("native WASM reader: {}", "lector WASM nativo: {}"), &[e.to_string()]));
+                        self.externa("wasm2wat", &[r], an, "modulo.wat", nodo);
+                    }
                 }
+                self.externa("wasm-decompile", &[r], an, "decompilado.dcmp", nodo);
                 Ok(Vec::new())
             }
             Tipo::Texto => Ok(extraer::base64_embebido(d)),
@@ -352,10 +387,10 @@ impl Motor {
             }
             Err(e) => nodo.notas.push(tfmt(tr("internal analysis: {}","análisis interno: {}"), &[e.to_string()])),
         }
-        if tipo == Tipo::Elf {
-            self.externa("readelf", &[OsStr::new("-a"), OsStr::new("-W"), r], an, "readelf.txt", nodo);
-        }
-        if !interno_x86 || self.herr.get("r2").is_none() {
+        // readelf ya no hace falta: las cabeceras completas (segmentos, sección
+        // dinámica, reubicaciones, build-id) salen del análisis interno.
+        // objdump solo si la arquitectura no tiene desensamblador integrado.
+        if !interno_x86 {
             self.externa(
                 "objdump",
                 &[OsStr::new("-d"), OsStr::new("-C"), OsStr::new("--no-show-raw-insn"), r],
@@ -419,6 +454,28 @@ impl Motor {
         let _ = fs::remove_dir_all(&proy);
         if salida.exists() {
             nodo.resultados.push(salida.strip_prefix(&self.raiz).unwrap_or(&salida).display().to_string());
+        }
+    }
+
+    /// Usa el resultado del extractor nativo; si falló y hay 7-Zip, lo intenta con él.
+    fn con_nativo(&self, r: anyhow::Result<nativo::Abierto>, ruta: &Path, an: &Path, nodo: &mut Nodo) -> anyhow::Result<Vec<Hijo>> {
+        match r {
+            Ok(a) => {
+                if let Some(c) = &a.clave {
+                    self.emitir(Evento::Aviso(format!("contraseña hallada para '{}': {}", nodo.nombre, c)));
+                }
+                Ok(a.hijos)
+            }
+            Err(e) if self.herr.get("7z").is_some() => {
+                nodo.notas.push(tfmt(tr("native extractor: {} — retrying with 7-Zip", "extractor nativo: {} — se reintenta con 7-Zip"), &[e.to_string()]));
+                self.con_7z(ruta, an, nodo)
+            }
+            Err(e) => {
+                if e.to_string().to_lowercase().contains("contrase") {
+                    nodo.incompleto = true;
+                }
+                Err(e)
+            }
         }
     }
 

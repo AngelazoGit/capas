@@ -1,6 +1,6 @@
 [package]
 name = "capas"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 authors = ["@angelazo"]
 description = "Desmonta y decompila archivos por capas usando los recursos del ordenador"
@@ -34,7 +34,22 @@ sha2 = "0.11.1"
 sysinfo = "0.40.3"
 tar = "0.4.46"
 ureq = "2"
+sevenz-rust2 = { version = "0.27", default-features = false, features = ["aes256", "bzip2", "ppmd", "deflate", "lz4", "brotli", "util"] }
+unrar = "0.5"
+cab = "0.6"
+cfb = "0.16"
+chd = "0.4"
+cafebabe = "0.9"
+dex = "0.5"
+yaxpeax-arch = "0.3"
+yaxpeax-arm = "0.5"
+yaxpeax-mips = "0.1"
+yaxpeax-arch02 = { package = "yaxpeax-arch", version = "0.2" }
+wasmprinter = "0.263"
 zip = { version = "2", default-features = false, features = ["deflate", "bzip2", "aes-crypto"] }
+
+[build-dependencies]
+cc = "1"
 
 [profile.release]
 opt-level = 3
