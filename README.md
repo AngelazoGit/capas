@@ -28,15 +28,17 @@ understand a file.
 - 🤖 **MCP bridge** (`capas --mcp`): let a local or cloud AI (Claude Desktop, Ollama, OpenAI clients) use CAPAS's analysis as tools — CAPAS stays offline — *Studio*. See [MCP.md](MCP.md)
 
 Take files (or folders) apart **layer by layer** and decompile them using your
-computer's resources: every CPU core, a memory budget tuned to the free RAM, and
-whatever reverse-engineering tools you have installed.
+computer's resources: every CPU core and a memory budget tuned to the free RAM.
+**The whole engine is built in** — RAR, 7z, CAB, ISO, CHD and MSI, Java, Python
+`.pyc`, Android DEX, WebAssembly and x86/ARM/MIPS binaries need **nothing installed**.
+Heavy-weight engines (Ghidra, RetDec, radare2…) plug in optionally, one click away.
 
 ```
 sample.tar.gz  (GZIP)
 └─ sample.tar  (TAR)
    └─ inner.zip  (ZIP)
-      ├─ app.jar (ZIP) ─ Main.class ─> javap / CFR
-      ├─ app (ELF x86-64) ─> headers, symbols, disassembly, objdump, Ghidra…
+      ├─ app.jar (ZIP) ─ Main.class ─> listing + decompiled Java (built in)
+      ├─ app (ELF x86-64 / ARM64) ─> headers, symbols, disassembly (built in), Ghidra…
       ├─ sfx (ELF) ─ carved_0x3e78.zip ─ main.c   ← zip hidden after the binary
       └─ install.sh (text) ─ base64_0x13.gz ─ secret.txt   ← embedded payload
 ```
@@ -103,17 +105,19 @@ capas --help               # all options
 |---|---|---|
 | gzip, bzip2, xz, lzma, zlib, zip/jar/apk, tar, ar/.deb, Mach-O fat | extraction | — |
 | ISO 9660 disc image (CD/DVD, PS2…) | lists and extracts files, including nested folders | — |
-| 7z, RAR, CAB | — | `7z` |
+| 7z (incl. AES + encrypted headers), RAR v2–v5 (incl. encrypted/solid), CAB | extraction, tries your passwords from the Keys module | `7z` (fallback only) |
+| MSI / MSP / Office 97-2003 / any OLE compound file | every stream, MSI names decoded; embedded CABs go to the next layer | — |
+| CHD (MAME) | decodes CD/DVD/HDD images; CD data tracks become an ISO for the next layer | `chdman` (fallback only) |
 | PDF | extracts and inflates its streams | — |
-| ELF / PE / Mach-O | headers, sections, imports, symbols, x86/x64 disassembly with symbol labels | `readelf`, `objdump`, `r2`, `retdec-decompiler`, Ghidra → C |
-| Java class | — | `javap`, `cfr`, `procyon` |
-| DEX | — | `jadx` |
-| .pyc | — | `pycdc`, `decompyle3`, `uncompyle6` |
-| WebAssembly | — | `wasm2wat`, `wasm-decompile` |
+| ELF / PE / Mach-O | headers, segments, dynamic section, relocations, build-id, imports, symbols; disassembly of **x86/x64, ARM64, ARM/Thumb and MIPS** with symbol labels and branch targets | `objdump` (other archs), `r2`, `retdec-decompiler`, Ghidra → C |
+| Java class | `javap -c -p`-style listing **and a native decompiler** to readable Java (real variable names, `if/else`, loops, lambdas, string concat, ternaries) | `cfr`, `procyon` (recompilable output) |
+| DEX | classes, fields, methods and Dalvik bytecode with resolved strings/types/members | `jadx` (full Java source) |
+| .pyc (Python **3.6 – 3.14**) | exact disassembly (matches `dis`) **and a native decompiler**: classes, decorators, comprehensions, `try/except/finally`, chained comparisons, f-strings, `async` | `pycdc`, `decompyle3`, `uncompyle6` |
+| WebAssembly | binary → WAT text | `wasm-decompile` |
 | audio/video/fonts/DB | OGG, WAV, MP3, FLAC, AIFF, MIDI, MP4, WebM, AVI, FLV, HEIC/AVIF, SQLite, Access, HDF5, TTF/OTF/WOFF… by content | — |
 | game / 3D assets | Unity bundles, glTF, FBX, Blender, Godot packs, Valve VTF/VPK, KTX, Wwise/FMOD banks… by content | — |
 | text/scripts | detects embedded base64 payloads | — |
-| any binary | ASCII/UTF-16 strings, entropy, signature carving of embedded files | `file` |
+| any binary | ASCII/UTF-16 strings, entropy, signature carving of embedded files | — |
 
 Classification isn't limited to the formats detected by content: it also maps **hundreds
 of extensions across every platform** — Windows, macOS, Linux, Android/iOS, game consoles —

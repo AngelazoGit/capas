@@ -32,6 +32,7 @@ salida de diagnóstico va a *stderr*; *stdout* es solo el protocolo.
 | `capas_analyze_file` | Analiza un archivo/carpeta capa a capa y devuelve el árbol de bloques (tipo, confianza, tamaño, incompletos) + rutas de informe. Args: `path` (obligatorio), `max_depth`, `classify`, `audit`, `use_external_tools`. |
 | `capas_list_formats` | Las 729 extensiones en 11 categorías y qué hace CAPAS con cada una. |
 | `capas_inspect_output` | Resume un análisis previo (lee su `informe.json`). Arg: `folder`. |
+| `capas_decompile_file` | Decompila o desensambla UN archivo de código con el motor integrado (sin herramientas externas): `.class` y `.pyc` (3.6–3.14) a pseudo-fuente legible, `.dex` a clases + bytecode Dalvik, `.wasm` a WAT, ELF/PE/Mach-O a cabeceras + desensamblado x86/ARM64/ARM/MIPS. Args: `path`, `mode` (`source` o `listing`), `max_chars`. |
 
 ---
 

@@ -1,5 +1,30 @@
 # Plan nativo-primero — recortar dependencias de terceros
 
+> **Estado (v0.1.3): Tier 1 y Tier 2 COMPLETADOS, y además decompiladores
+> nativos de Java y Python.** Verificado con 37 tests automáticos, 114 módulos
+> reales de la stdlib de Python (3.8/3.11/3.12/3.14) y 400 clases reales del
+> JDK sin un solo fallo.
+
+| Herramienta | Sustituto nativo | Estado |
+| --- | --- | --- |
+| 7z (7z) | `sevenz-rust2` (AES + cabeceras cifradas) | ✅ hecho |
+| 7z (RAR) | `unrar` (librería UnRAR enlazada; su licencia permite extraer en software propio) | ✅ hecho |
+| 7z (CAB) | `cab` | ✅ hecho |
+| 7z (MSI) | `cfb` (OLE/Compound File, nombres MSI decodificados) | ✅ hecho |
+| 7z (ISO) | ya era nativo | ✅ |
+| chdman | `chd` (CD → ISO, DVD/HDD → imagen) | ✅ hecho |
+| readelf | `goblin` ampliado (segmentos, dinámica, reubicaciones, build-id) | ✅ hecho |
+| objdump | `iced-x86` + `yaxpeax-arm` (ARM64/ARM/Thumb) + `yaxpeax-mips` | ✅ hecho (otras arquitecturas siguen usando objdump si está) |
+| file | detección nativa | ✅ hecho |
+| javap | `cafebabe` + formateador propio | ✅ hecho |
+| cfr / procyon | **decompilador Java propio** (pseudo-fuente legible) | ✅ hecho · externos solo para salida recompilable |
+| jadx | `dex` + desensamblador Dalvik propio | ✅ listado · jadx opcional para fuente Java |
+| pycdc / decompyle3 / uncompyle6 | lector `marshal` + tablas de opcodes generadas de CPython 3.6–3.14 + **decompilador propio** | ✅ hecho |
+| wasm2wat | `wasmprinter` | ✅ hecho |
+| wasm-decompile, retdec, r2, Ghidra | — | opcionales (investigación; Tier 3) |
+
+---
+
 Objetivo: que CAPAS cubra en **Rust puro** todo lo razonable (extracción,
 detección, desensamblado, listado de bytecode) y deje como **motores
 opcionales** solo lo que es investigación pura (decompilación a fuente y

@@ -30,15 +30,17 @@ equipo/automatización, pero nunca te chocas con un muro solo por querer entende
 - 🤖 **Puente MCP** (`capas --mcp`): deja que una IA local o en la nube (Claude Desktop, Ollama, clientes con OpenAI) use el análisis de CAPAS como herramientas — CAPAS sigue sin conexión — *Studio*. Ver [MCP.md](MCP.md)
 
 Desmonta y decompila archivos **capa a capa** usando los recursos del ordenador:
-todos los núcleos de la CPU, un límite de memoria ajustado a la RAM libre y las
-herramientas de ingeniería inversa que tengas instaladas.
+todos los núcleos de la CPU y un límite de memoria ajustado a la RAM libre.
+**Todo el motor va integrado**: RAR, 7z, CAB, ISO, CHD y MSI, Java, `.pyc` de Python,
+DEX de Android, WebAssembly y binarios x86/ARM/MIPS **no necesitan instalar nada**.
+Los motores pesados (Ghidra, RetDec, radare2…) se conectan opcionalmente, con un clic.
 
 ```
 prueba.tar.gz  (GZIP)
 └─ prueba.tar  (TAR)
    └─ interno.zip  (ZIP)
-      ├─ app.jar (ZIP) ─ Hola.class ─> javap / CFR
-      ├─ hola (ELF x86-64) ─> cabeceras, símbolos, desensamblado, objdump, Ghidra...
+      ├─ app.jar (ZIP) ─ Hola.class ─> listado + Java decompilado (integrado)
+      ├─ hola (ELF x86-64 / ARM64) ─> cabeceras, símbolos, desensamblado (integrado), Ghidra...
       ├─ autoextraible (ELF) ─ tallado_0x3e78.zip ─ h.c      ← zip escondido tras el binario
       └─ instalar.sh (texto) ─ base64_0x13.gz ─ secreto.txt   ← payload en base64
 ```
@@ -147,16 +149,18 @@ herramienta, `--max-archivo-mb`, `--max-total-mb`, `--sin-tallado`,
 | Formato | Interno (Rust) | Externo si está instalado |
 |---|---|---|
 | gzip, bzip2, xz, lzma, zlib, zip/jar/apk/docx, tar, ar/.deb, Mach-O fat | extracción | — |
-| 7z, RAR, CAB | — | `7z` |
+| 7z (incl. AES y cabeceras cifradas), RAR v2–v5 (incl. cifrado/sólido), CAB | extracción; prueba tus contraseñas del módulo de Claves | `7z` (solo respaldo) |
+| MSI / MSP / Office 97-2003 / cualquier archivo compuesto OLE | todos los flujos, nombres MSI decodificados; los CAB incrustados siguen a la siguiente capa | — |
+| CHD (MAME) | decodifica imágenes CD/DVD/HDD; las pistas de datos de CD pasan a ISO | `chdman` (solo respaldo) |
 | PDF | extrae y descomprime los flujos | — |
-| ELF / PE / Mach-O | cabeceras, secciones, importaciones, símbolos, desensamblado x86/x64 con etiquetas | `readelf`, `objdump`, `r2`, `retdec-decompiler`, Ghidra (`analyzeHeadless` o `GHIDRA_HOME`) → C |
-| Clase Java | — | `javap`, `cfr`, `procyon` |
-| DEX | — | `jadx` |
-| .pyc | — | `pycdc`, `decompyle3`, `uncompyle6` |
-| WebAssembly | — | `wasm2wat`, `wasm-decompile` |
+| ELF / PE / Mach-O | cabeceras, segmentos, sección dinámica, reubicaciones, build-id, importaciones, símbolos; desensamblado **x86/x64, ARM64, ARM/Thumb y MIPS** con etiquetas y destinos de salto | `objdump` (otras arquitecturas), `r2`, `retdec-decompiler`, Ghidra (`analyzeHeadless` o `GHIDRA_HOME`) → C |
+| Clase Java | listado tipo `javap -c -p` **y decompilador nativo** a Java legible (nombres reales, `if/else`, bucles, lambdas, concatenación, ternarios) | `cfr`, `procyon` (salida recompilable) |
+| DEX | clases, campos, métodos y bytecode Dalvik con cadenas/tipos/miembros resueltos | `jadx` (fuente Java completa) |
+| .pyc (Python **3.6 – 3.14**) | desensamblado exacto (igual que `dis`) **y decompilador nativo**: clases, decoradores, comprensiones, `try/except/finally`, comparaciones encadenadas, f-strings, `async` | `pycdc`, `decompyle3`, `uncompyle6` |
+| WebAssembly | binario → texto WAT | `wasm-decompile` |
 | Texto/scripts | detecta cargas base64 embebidas | — |
 | Audio/vídeo/fuentes/BD | OGG, WAV, MP3, FLAC, MP4, WebM, AVI, SQLite, TTF/OTF/WOFF… por contenido | — |
-| Cualquier binario | cadenas ASCII/UTF-16, entropía y búsqueda de archivos incrustados por firma | `file` |
+| Cualquier binario | cadenas ASCII/UTF-16, entropía y búsqueda de archivos incrustados por firma | — |
 
 Lo que no se reconoce por contenido se recoge en **`desconocidos.txt`**: agrupa los
 archivos por sus bytes mágicos y extensión, para poder ampliar la detección con los
