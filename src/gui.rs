@@ -312,6 +312,14 @@ pub struct App {
     // Puente MCP (Studio): configuración y mensaje de estado.
     mcp_externas: bool,
     mcp_estado: Option<String>,
+    // Autoactualización: comprobación al inicio, popup y descarga.
+    buscar_al_iniciar: bool,
+    auto_comprobado: bool,
+    act_popup: bool,
+    act_descartado: bool,
+    act_descargando: bool,
+    act_error: Option<String>,
+    act_descarga: std::sync::Arc<std::sync::Mutex<Option<Result<String, String>>>>,
     // Módulo de claves (interfaz).
     clave_entrada: String,
     clave_lic: String,
@@ -406,6 +414,10 @@ pub fn lanzar(sis: Sistema, archivos: Vec<PathBuf>, salida: PathBuf, auto_inicia
                     _ => Vista::Analisis,
                 };
             }
+            // Previsualizar el popup de actualización (pruebas/capturas).
+            if let Ok(v) = std::env::var("CAPAS_FAKE_UPDATE") {
+                *app.actualizacion.lock().unwrap() = Some(Act::Disponible(v));
+            }
             app.auto_iniciar = auto_iniciar && !app.archivos.is_empty();
             Ok(Box::new(app))
         }),
@@ -448,6 +460,13 @@ impl App {
             actualizacion: std::sync::Arc::new(std::sync::Mutex::new(None)),
             mcp_externas: true,
             mcp_estado: None,
+            buscar_al_iniciar: leer_buscar_al_iniciar(),
+            auto_comprobado: false,
+            act_popup: false,
+            act_descartado: false,
+            act_descargando: false,
+            act_error: None,
+            act_descarga: std::sync::Arc::new(std::sync::Mutex::new(None)),
             clave_entrada: String::new(),
             clave_lic: String::new(),
             lic_estado: None,
@@ -711,6 +730,7 @@ impl eframe::App for App {
             self.iniciar(&ctx, ahora);
         }
         self.sondear(ahora);
+        self.gestionar_actualizacion(&ctx);
         // Animaciones continuas (suaves cuando está en espera).
         ctx.request_repaint_after(if self.analizando() { Duration::from_millis(16) } else { Duration::from_millis(50) });
 
@@ -2076,8 +2096,11 @@ impl App {
                             ui.label(RichText::new(tr("Checking…", "Comprobando…")).font(FontId::proportional(12.0)).color(morado_claro()));
                         }
                         Some(Act::Disponible(v)) => {
-                            if ui.add(boton_pri(&tfmt(tr("↓ Download v{}", "↓ Descargar v{}"), &[v.clone()]), verde())).clicked() {
-                                abrir_en_sistema(Path::new(URL_RELEASES));
+                            if self.act_descargando {
+                                ui.add(egui::Spinner::new());
+                                ui.label(RichText::new(tr("Downloading…", "Descargando…")).font(FontId::proportional(12.0)).color(morado_claro()));
+                            } else if ui.add(boton_pri(&tfmt(tr("▶ Update to v{}", "▶ Actualizar a v{}"), &[v.clone()]), acento())).clicked() {
+                                self.iniciar_descarga();
                             }
                         }
                         Some(Act::AlDia) => {
@@ -2091,10 +2114,16 @@ impl App {
                 });
                 if let Some(Act::Disponible(v)) = &estado {
                     ui.add_space(4.0);
-                    ui.label(RichText::new(tfmt(tr("Update available: v{}", "Actualización disponible: v{}"), &[v.clone()])).font(titulo(13.0)).color(acento()));
+                    ui.label(RichText::new(tfmt(tr("Update available: v{} — the app will close and reopen.", "Actualización disponible: v{} — la app se cerrará y se reabrirá."), &[v.clone()])).font(titulo(13.0)).color(acento()));
                 }
-                ui.add_space(4.0);
-                ui.label(RichText::new(tr("Checks GitHub once, only when you press the button.", "Consulta GitHub una vez, solo al pulsar el botón.")).font(FontId::proportional(10.5)).color(morado_medio()));
+                if let Some(e) = &self.act_error {
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(e).font(FontId::proportional(11.5)).color(rojo()));
+                }
+                ui.add_space(6.0);
+                if ui.checkbox(&mut self.buscar_al_iniciar, tr("Check for updates on startup", "Buscar actualizaciones al iniciar")).changed() {
+                    guardar_buscar_al_iniciar(self.buscar_al_iniciar);
+                }
             });
             ui.add_space(12.0);
             // IA · Puente MCP.
@@ -2333,6 +2362,109 @@ impl App {
         });
         if let Some(r) = abrir {
             self.abrir_resultado(&r);
+        }
+    }
+
+    fn iniciar_descarga(&mut self) {
+        if self.act_descargando {
+            return;
+        }
+        self.act_descargando = true;
+        self.act_error = None;
+        let arc = self.act_descarga.clone();
+        *arc.lock().unwrap() = None;
+        std::thread::spawn(move || {
+            let r = descargar_exe().map(|p| p.display().to_string());
+            *arc.lock().unwrap() = Some(r);
+        });
+    }
+
+    /// Autoactualización: comprobación al iniciar, popup y descarga+reinicio.
+    fn gestionar_actualizacion(&mut self, ctx: &egui::Context) {
+        // 1) Comprobación automática al iniciar (una vez, en segundo plano).
+        if !self.auto_comprobado {
+            self.auto_comprobado = true;
+            if self.buscar_al_iniciar {
+                let arc = self.actualizacion.clone();
+                if arc.lock().unwrap().is_none() {
+                    *arc.lock().unwrap() = Some(Act::Comprobando);
+                    std::thread::spawn(move || {
+                        let r = comprobar_actualizacion();
+                        *arc.lock().unwrap() = Some(r);
+                    });
+                }
+            }
+        }
+        // 2) ¿Terminó la descarga? → reiniciar (cierra y reabre) o error.
+        if self.act_descargando {
+            let res = self.act_descarga.lock().unwrap().take();
+            if let Some(r) = res {
+                match r {
+                    Ok(path) => match reiniciar_con(Path::new(&path)) {
+                        Ok(()) => std::process::exit(0),
+                        Err(e) => {
+                            self.act_descargando = false;
+                            self.act_error = Some(e);
+                        }
+                    },
+                    Err(e) => {
+                        self.act_descargando = false;
+                        self.act_error = Some(e);
+                    }
+                }
+            }
+            ctx.request_repaint();
+        }
+        // 3) Popup de "actualización disponible" (salvo que se haya descartado).
+        let nueva = if let Some(Act::Disponible(v)) = &*self.actualizacion.lock().unwrap() { Some(v.clone()) } else { None };
+        if nueva.is_some() && !self.act_descartado {
+            self.act_popup = true;
+        }
+        if self.act_popup {
+            let Some(v) = nueva else {
+                self.act_popup = false;
+                return;
+            };
+            let (mut actualizar, mut mas_tarde) = (false, false);
+            egui::Window::new(tr("Update available", "Actualización disponible"))
+                .collapsible(false)
+                .resizable(false)
+                .movable(false)
+                .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+                .frame(egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, acento())).corner_radius(CornerRadius::same(12)).inner_margin(Margin::same(18)))
+                .show(ctx, |ui| {
+                    ui.set_max_width(360.0);
+                    ui.label(RichText::new(tfmt(tr("CAPAS v{} is available.", "CAPAS v{} está disponible."), &[v.clone()])).font(titulo(16.0)).color(texto()));
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(tr("Updating will close the app and reopen it automatically.", "Al actualizar, la app se cerrará y se volverá a abrir sola.")).font(FontId::proportional(12.5)).color(morado_claro()));
+                    if let Some(e) = &self.act_error {
+                        ui.add_space(4.0);
+                        ui.label(RichText::new(e).font(FontId::proportional(11.5)).color(rojo()));
+                    }
+                    ui.add_space(12.0);
+                    if self.act_descargando {
+                        ui.horizontal(|ui| {
+                            ui.add(egui::Spinner::new());
+                            ui.label(RichText::new(tr("Downloading…", "Descargando…")).font(FontId::proportional(12.5)).color(morado_claro()));
+                        });
+                    } else {
+                        ui.horizontal(|ui| {
+                            if ui.add(boton_pri(tr("▶ Update now", "▶ Actualizar ahora"), acento())).clicked() {
+                                actualizar = true;
+                            }
+                            if ui.add(boton_sec(tr("Later", "Más tarde"))).clicked() {
+                                mas_tarde = true;
+                            }
+                        });
+                    }
+                });
+            if actualizar {
+                self.iniciar_descarga();
+            }
+            if mas_tarde {
+                self.act_popup = false;
+                self.act_descartado = true;
+            }
         }
     }
 
@@ -2985,6 +3117,99 @@ fn comprobar_actualizacion() -> Act {
         Some(_) => Act::AlDia,
         None => Act::Error,
     }
+}
+
+/// Preferencia "buscar actualizaciones al iniciar" (persistida en ~/.capas).
+fn leer_buscar_al_iniciar() -> bool {
+    dir_capas()
+        .and_then(|d| fs::read_to_string(d.join("config.json")).ok())
+        .and_then(|t| serde_json::from_str::<serde_json::Value>(&t).ok())
+        .and_then(|v| v.get("buscar_al_iniciar").and_then(|x| x.as_bool()))
+        .unwrap_or(true)
+}
+fn guardar_buscar_al_iniciar(valor: bool) {
+    if let Some(d) = dir_capas() {
+        let _ = fs::write(d.join("config.json"), serde_json::json!({ "buscar_al_iniciar": valor }).to_string());
+    }
+}
+
+/// Descarga la última release y extrae capas.exe junto al ejecutable actual.
+/// Devuelve la ruta del nuevo binario descargado.
+fn descargar_exe() -> Result<PathBuf, String> {
+    use std::io::Read;
+    let agente = ureq::AgentBuilder::new().timeout(Duration::from_secs(120)).build();
+    let url = format!("https://api.github.com/repos/{REPO}/releases/latest");
+    let cuerpo = agente
+        .get(&url)
+        .set("User-Agent", "capas-updater")
+        .set("Accept", "application/vnd.github+json")
+        .call()
+        .map_err(|e| e.to_string())?
+        .into_string()
+        .map_err(|e| e.to_string())?;
+    let v: serde_json::Value = serde_json::from_str(&cuerpo).map_err(|e| e.to_string())?;
+    let asset = v
+        .get("assets")
+        .and_then(|a| a.as_array())
+        .and_then(|a| a.iter().find(|x| x.get("name").and_then(|n| n.as_str()).is_some_and(|n| n.ends_with("windows-x64.zip"))))
+        .and_then(|x| x.get("browser_download_url").and_then(|u| u.as_str()))
+        .ok_or("la release no tiene el zip de Windows")?;
+    let mut bytes = Vec::new();
+    agente
+        .get(asset)
+        .set("User-Agent", "capas-updater")
+        .call()
+        .map_err(|e| e.to_string())?
+        .into_reader()
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).map_err(|e| e.to_string())?;
+    let mut exe_bytes: Option<Vec<u8>> = None;
+    for i in 0..zip.len() {
+        let mut f = zip.by_index(i).map_err(|e| e.to_string())?;
+        if f.name().to_lowercase().ends_with("capas.exe") || (cfg!(not(windows)) && f.name().ends_with("capas")) {
+            let mut b = Vec::new();
+            f.read_to_end(&mut b).map_err(|e| e.to_string())?;
+            exe_bytes = Some(b);
+            break;
+        }
+    }
+    let exe_bytes = exe_bytes.ok_or("el zip no contiene el ejecutable")?;
+    let actual = std::env::current_exe().map_err(|e| e.to_string())?;
+    let nuevo = actual.with_file_name(if cfg!(windows) { "capas-update.exe" } else { "capas-update" });
+    fs::write(&nuevo, &exe_bytes).map_err(|e| e.to_string())?;
+    Ok(nuevo)
+}
+
+/// Reemplaza el ejecutable en marcha por `nuevo`, cierra la app y la reabre.
+#[cfg(windows)]
+fn reiniciar_con(nuevo: &Path) -> Result<(), String> {
+    let actual = std::env::current_exe().map_err(|e| e.to_string())?;
+    let bat = actual.with_file_name("capas-update.bat");
+    // Espera a que este proceso cierre, intercambia el .exe y lo relanza.
+    let script = format!(
+        "@echo off\r\nping 127.0.0.1 -n 2 >nul\r\n:loop\r\ndel \"{old}\" >nul 2>&1\r\nif exist \"{old}\" ( ping 127.0.0.1 -n 2 >nul & goto loop )\r\nmove /y \"{new}\" \"{old}\" >nul\r\nstart \"\" \"{old}\"\r\ndel \"%~f0\"\r\n",
+        old = actual.display(),
+        new = nuevo.display()
+    );
+    fs::write(&bat, script).map_err(|e| e.to_string())?;
+    std::process::Command::new("cmd")
+        .args([std::ffi::OsStr::new("/C"), std::ffi::OsStr::new("start"), std::ffi::OsStr::new(""), bat.as_os_str()])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+#[cfg(not(windows))]
+fn reiniciar_con(nuevo: &Path) -> Result<(), String> {
+    let actual = std::env::current_exe().map_err(|e| e.to_string())?;
+    fs::rename(nuevo, &actual).map_err(|e| e.to_string())?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = fs::set_permissions(&actual, fs::Permissions::from_mode(0o755));
+    }
+    std::process::Command::new(&actual).spawn().map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 // ── Puente MCP (Studio): configurar y activar en clientes de IA ──────────
