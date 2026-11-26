@@ -312,6 +312,8 @@ pub struct App {
     // Puente MCP (Studio): configuración y mensaje de estado.
     mcp_externas: bool,
     mcp_estado: Option<String>,
+    // Instalación de subsistemas externos: mensaje de estado.
+    tool_estado: Option<String>,
     // Autoactualización: comprobación al inicio, popup y descarga.
     buscar_al_iniciar: bool,
     auto_comprobado: bool,
@@ -460,6 +462,7 @@ impl App {
             actualizacion: std::sync::Arc::new(std::sync::Mutex::new(None)),
             mcp_externas: true,
             mcp_estado: None,
+            tool_estado: None,
             buscar_al_iniciar: leer_buscar_al_iniciar(),
             auto_comprobado: false,
             act_popup: false,
@@ -870,7 +873,22 @@ impl App {
                 ui.label(RichText::new(tfmt(tr("PER-BLOCK LIMIT: {}","LÍMITE POR BLOQUE: {}"), &[humano(self.op.max_archivo)])).font(mono(11.0)).color(naranja()));
             });
 
+            let mut rescan = false;
+            let mut accion: Option<&'static str> = None;
             seccion(ui, "03", tr("EXTERNAL SUBSYSTEMS", "SUBSISTEMAS EXTERNOS"), naranja(), |ui| {
+                let activos = HERRAMIENTAS_CONOCIDAS.iter().filter(|(n, _)| self.herr.get(n).is_some()).count();
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(tfmt(tr("{}/{} installed", "{}/{} instaladas"), &[activos.to_string(), HERRAMIENTAS_CONOCIDAS.len().to_string()])).font(mono(10.5)).color(morado_claro()));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if ui.add(boton_sec(tr("Rescan", "Reescanear"))).clicked() {
+                            rescan = true;
+                        }
+                    });
+                });
+                if let Some(msg) = &self.tool_estado {
+                    ui.label(RichText::new(msg).font(FontId::proportional(10.5)).color(verde()));
+                }
+                ui.add_space(2.0);
                 for (n, desc) in HERRAMIENTAS_CONOCIDAS {
                     let ok = self.herr.get(n).is_some() && self.externas;
                     ui.horizontal(|ui| {
@@ -884,11 +902,31 @@ impl App {
                         ui.label(RichText::new(*n).font(mono(12.0)).color(if ok { verde() } else { morado_medio() }))
                             .on_hover_text(*desc);
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.label(RichText::new(if ok { tr("ACTIVE","ACTIVO") } else { tr("ABSENT","AUSENTE") }).font(mono(10.0)).color(if ok { verde() } else { morado_medio() }));
+                            if ok {
+                                ui.label(RichText::new(tr("ACTIVE", "ACTIVO")).font(mono(10.0)).color(verde()));
+                            } else {
+                                let pk = paquete(n);
+                                if pk.web.is_some() && ui.add(boton_sec(tr("Web", "Web"))).clicked() {
+                                    abrir_en_sistema(Path::new(pk.web.unwrap()));
+                                }
+                                if tiene_instalador(n) && ui.add(boton_sec(tr("Install", "Instalar"))).clicked() {
+                                    accion = Some(n);
+                                }
+                            }
                         });
                     });
                 }
             });
+            if let Some(n) = accion {
+                self.tool_estado = Some(match instalar_paquete(n) {
+                    Ok(m) => m,
+                    Err(e) => e,
+                });
+            }
+            if rescan {
+                self.herr = Herramientas::detectar(false);
+                self.tool_estado = Some(tfmt(tr("Rescanned — {} tools installed.", "Reescaneado — {} herramientas instaladas."), &[HERRAMIENTAS_CONOCIDAS.iter().filter(|(n, _)| self.herr.get(n).is_some()).count().to_string()]));
+            }
 
             let bloqueado = self.analizando();
             seccion(ui, "04", tr("PARAMETERS", "PARÁMETROS"), morado_claro(), |ui| {
@@ -1896,6 +1934,23 @@ impl App {
     // ── Formatos compatibles ─────────────────────────────────────────────
     fn vista_formatos(&mut self, ui: &mut Ui) {
         titulo_vista(ui, "informe", tr("Supported formats", "Formatos compatibles"), tr("What CAPAS can do with each type. Support depends on the format — not every action applies to every file.", "Qué puede hacer CAPAS con cada tipo. El soporte depende del formato — no todas las acciones aplican a todos los archivos."));
+        // Aviso: comprimidos e imágenes de disco necesitan 7-Zip.
+        if self.herr.get("7z").is_none() {
+            egui::Frame::new().fill(naranja_oscuro()).stroke(Stroke::new(1.0, naranja())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(12)).outer_margin(Margin { left: 0, right: 0, top: 0, bottom: 10 }).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(tr("RAR, 7z, ISO, CAB and MSI need 7-Zip installed.", "RAR, 7z, ISO, CAB y MSI necesitan 7-Zip instalado.")).font(FontId::proportional(12.5)).color(texto()));
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        if ui.add(boton_pri(tr("Install 7-Zip", "Instalar 7-Zip"), naranja())).clicked() {
+                            self.tool_estado = Some(instalar_paquete("7z").unwrap_or_else(|e| e));
+                        }
+                    });
+                });
+                if let Some(msg) = &self.tool_estado {
+                    ui.label(RichText::new(msg).font(FontId::proportional(11.0)).color(verde()));
+                }
+            });
+        }
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             // Leyenda de verbos.
             egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, morado())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(12)).show(ui, |ui| {
@@ -3210,6 +3265,56 @@ fn reiniciar_con(nuevo: &Path) -> Result<(), String> {
     }
     std::process::Command::new(&actual).spawn().map_err(|e| e.to_string())?;
     Ok(())
+}
+
+// ── Instalación de subsistemas externos (gestor del sistema / web) ───────
+struct Paquete {
+    winget: Option<&'static str>,
+    web: Option<&'static str>,
+}
+fn paquete(n: &str) -> Paquete {
+    let p = |winget, web| Paquete { winget, web };
+    match n {
+        "7z" => p(Some("7zip.7zip"), Some("https://www.7-zip.org/download.html")),
+        "javap" => p(Some("EclipseAdoptium.Temurin.21.JDK"), Some("https://adoptium.net/")),
+        "r2" => p(Some("radareorg.radare2"), Some("https://rada.re/n/")),
+        "objdump" | "readelf" => p(None, Some("https://www.msys2.org/")),
+        "file" => p(None, Some("https://gnuwin32.sourceforge.net/packages/file.htm")),
+        "jadx" => p(None, Some("https://github.com/skylot/jadx/releases")),
+        "wasm2wat" | "wasm-decompile" => p(None, Some("https://github.com/WebAssembly/wabt/releases")),
+        "chdman" => p(None, Some("https://www.mamedev.org/release.html")),
+        "cfr" => p(None, Some("https://www.benf.org/other/cfr/")),
+        "procyon" => p(None, Some("https://github.com/mstrobel/procyon/releases")),
+        "pycdc" => p(None, Some("https://github.com/zrax/pycdc")),
+        "uncompyle6" => p(None, Some("https://pypi.org/project/uncompyle6/")),
+        "decompyle3" => p(None, Some("https://pypi.org/project/decompyle3/")),
+        "retdec-decompiler" => p(None, Some("https://github.com/avast/retdec/releases")),
+        "analyzeHeadless" => p(None, Some("https://ghidra-sre.org/")),
+        _ => p(None, None),
+    }
+}
+/// ¿Hay instalación automática (winget en Windows) para esta herramienta?
+fn tiene_instalador(n: &str) -> bool {
+    cfg!(windows) && paquete(n).winget.is_some()
+}
+/// Instala la herramienta con el gestor del sistema (Windows: winget en una
+/// consola visible) o, si no hay, abre su página oficial de descarga.
+fn instalar_paquete(n: &str) -> Result<String, String> {
+    let pk = paquete(n);
+    #[cfg(windows)]
+    if let Some(id) = pk.winget {
+        let cmd = format!("winget install --id {id} -e --accept-source-agreements --accept-package-agreements");
+        std::process::Command::new("cmd")
+            .args([std::ffi::OsStr::new("/C"), std::ffi::OsStr::new("start"), std::ffi::OsStr::new(""), std::ffi::OsStr::new("cmd"), std::ffi::OsStr::new("/K"), std::ffi::OsStr::new(&cmd)])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        return Ok(tfmt(tr("Installing {} — follow the console, then press Rescan.", "Instalando {} — sigue la consola y luego pulsa Reescanear."), &[n.to_string()]));
+    }
+    if let Some(w) = pk.web {
+        abrir_en_sistema(Path::new(w));
+        return Ok(tfmt(tr("Opened the download page for {}.", "Abrí la página de descarga de {}."), &[n.to_string()]));
+    }
+    Err(tr("No installer available for this tool.", "Sin instalador disponible para esta herramienta.").to_string())
 }
 
 // ── Puente MCP (Studio): configurar y activar en clientes de IA ──────────
