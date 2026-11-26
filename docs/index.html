@@ -238,6 +238,7 @@ summary{font-family:"Inter",sans-serif;font-weight:700}
       <a class="nl" href="#caps" data-es="CAPACIDADES">CAPABILITIES</a>
       <a class="nl" href="#pipe" data-es="PROCESO">PIPELINE</a>
       <a class="nl" href="#formats" data-es="FORMATOS">FORMATS</a>
+      <a class="nl" href="#news" data-es="NOVEDADES">WHAT'S NEW</a>
       <a class="nl" href="#pricing" data-es="EDICIONES">EDITIONS</a>
       <a class="nl" href="https://github.com/AngelazoGit/capas" data-es="CÓDIGO">SOURCE</a>
       <button class="tbtn lang" id="langBtn" title="English / Español"><span data-l="en" class="on">EN</span>/<span data-l="es">ES</span></button>
@@ -291,6 +292,23 @@ summary{font-family:"Inter",sans-serif;font-weight:700}
       <div class="panel fp"><div class="phead"><span class="badge am">07</span><span class="t" data-es="Desempaquetar">Unpack</span><span class="rule"></span></div><div class="body"><div class="ti" data-es-html="Bundles de motor <span class=&quot;pro&quot;>Pro</span>">Engine bundles <span class="pro">Pro</span></div><p data-es="Abre bundles de Unity (UnityFS, LZ4/LZ4HC) y Godot (.pck) y reinyecta sus archivos en el proceso.">Opens Unity (UnityFS, LZ4/LZ4HC) and Godot (.pck) bundles and sends their inner files back through the pipeline.</p></div></div>
       <div class="panel fp"><div class="phead"><span class="badge">08</span><span class="t" data-es="Claves">Keys</span><span class="rule"></span></div><div class="body"><div class="ti" data-es="ZIP protegidos">Protected ZIPs</div><p data-es="Abre archivos ZipCrypto y AES que tengas derecho a abrir, con tope de intentos, así sigue abriendo capas. No rompe cifrado fuerte.">Opens ZipCrypto and AES archives you're entitled to open, with an attempt cap, so it keeps peeling. It does not break strong crypto.</p></div></div>
     </div>
+  </div>
+</section>
+
+<section id="news">
+  <div class="wrap">
+    <div class="lead">
+      <span class="kick" data-es="// novedades · v0.1.2">// what's new · v0.1.2</span>
+      <h2 data-es="Más capas, menos fricción.">More layers, less friction.</h2>
+      <p data-es="La última versión añade los motores con un clic, el puente con la IA, la autoactualización dentro de la app y los archivos protegidos con contraseña. Todo sin salir del programa.">The latest build adds one-click engines, the AI bridge, in-app auto-update and password-protected archives. All without leaving the program.</p>
+    </div>
+    <div class="grid">
+      <div class="panel fp"><div class="phead"><span class="badge am">NEW</span><span class="t" data-es="Motores con un clic">One-click engines</span><span class="rule"></span></div><div class="body"><div class="ti" data-es="Instala lo que falta">Install what's missing</div><p data-es="CAPAS usa motores externos (7-Zip, jadx, radare2, CFR, pycdc, Ghidra…) cuando están. Si falta alguno, la vista de Herramientas muestra un botón que lo instala solo —con winget en Windows— o abre su página oficial. Pulsa «Rescan» y pasa a verde. Ningún formato se queda sin abrir por una herramienta que faltaba.">CAPAS uses external engines (7-Zip, jadx, radare2, CFR, pycdc, Ghidra…) when present. If one is missing, the Tools view shows a button that installs it for you — via winget on Windows — or opens its official page. Hit "Rescan" and it turns green. No format left unopened because a tool wasn't there.</p></div></div>
+      <div class="panel fp"><div class="phead"><span class="badge">NEW</span><span class="t" data-es="Puente MCP para IA">MCP bridge for AI</span><span class="rule"></span></div><div class="body"><div class="ti" data-es-html="Conecta tu IA <span class=&quot;pro&quot;>Studio</span>">Connect your AI <span class="pro">Studio</span></div><p data-es="Activa el puente MCP desde Ajustes y deja que Claude Desktop, un modelo local (Ollama) o la nube analice archivos a través de CAPAS: identificar, listar formatos e inspeccionar la salida, con tus reglas y sin conexión. Se configura con un botón.">Turn on the MCP bridge from Settings and let Claude Desktop, a local model (Ollama) or the cloud analyze files through CAPAS: identify, list formats and inspect output — on your rules, offline. One button to configure.</p></div></div>
+      <div class="panel fp"><div class="phead"><span class="badge">NEW</span><span class="t" data-es="Autoactualización">Auto-update</span><span class="rule"></span></div><div class="body"><div class="ti" data-es="Dentro de la app">Inside the app</div><p data-es="Cuando hay una versión nueva, aparece un aviso. Aceptas, el programa se cierra, se reemplaza solo y se vuelve a abrir. Sin ir a GitHub, sin instaladores, sin perder lo que estabas mirando.">When there's a new version, a notice appears. You accept, the program closes, swaps itself and reopens. No trip to GitHub, no installers, no losing what you were looking at.</p></div></div>
+      <div class="panel fp"><div class="phead"><span class="badge">NEW</span><span class="t" data-es="Archivos con contraseña">Password archives</span><span class="rule"></span></div><div class="body"><div class="ti" data-es="RAR · 7z · CAB · ISO">RAR · 7z · CAB · ISO</div><p data-es="Abre contenedores protegidos que tengas derecho a abrir probando la contraseña que indiques y las habituales, con tope de intentos, para seguir leyendo capas sin descomprimir a mano. No rompe cifrado fuerte.">Opens protected containers you're entitled to open by trying the password you give it plus common ones, with an attempt cap, so it keeps peeling layers without manual extraction. It does not break strong crypto.</p></div></div>
+    </div>
+    <p class="pnote" style="margin-top:1.4rem" data-es-html="Historial completo en <a href=&quot;https://github.com/AngelazoGit/capas/blob/main/CHANGELOG.md&quot;>CHANGELOG.md</a>."><b>// log</b> — full history in <a href="https://github.com/AngelazoGit/capas/blob/main/CHANGELOG.md">CHANGELOG.md</a>.</p>
   </div>
 </section>
 
