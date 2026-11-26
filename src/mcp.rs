@@ -88,6 +88,19 @@ fn definicion_tools() -> Value {
             "inputSchema": { "type": "object", "properties": {} }
         },
         {
+            "name": "capas_decompile_file",
+            "description": "Decompile or disassemble ONE code file with CAPAS's built-in engine (no external tools): Java .class and Python .pyc (3.6-3.14) to readable pseudo-source, Android .dex to classes + Dalvik bytecode, .wasm to WAT, ELF/PE/Mach-O to headers + x86/ARM64/ARM/MIPS disassembly. Never executes the file.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "Absolute path to the code file." },
+                    "mode": { "type": "string", "enum": ["source", "listing"], "description": "source = decompiled pseudo-source when possible (default); listing = exact low-level listing (javap / dis / smali-like / WAT / disassembly)." },
+                    "max_chars": { "type": "integer", "description": "Truncate the answer to this many characters (default 60000)." }
+                },
+                "required": ["path"]
+            }
+        },
+        {
             "name": "capas_inspect_output",
             "description": "Read a previous analysis output folder (its informe.json) and return a summary: block count and top-level items.",
             "inputSchema": {
@@ -108,6 +121,7 @@ fn llamar_tool(params: Option<&Value>, sis: &Sistema, herr: &Herramientas) -> Re
         "capas_analyze_file" => tool_analizar(&args, sis, herr),
         "capas_list_formats" => Ok(tool_formatos()),
         "capas_inspect_output" => tool_inspeccionar(&args),
+        "capas_decompile_file" => tool_decompilar(&args),
         otro => return Err((-32602, format!("unknown tool: {otro}"))),
     };
 
@@ -115,6 +129,36 @@ fn llamar_tool(params: Option<&Value>, sis: &Sistema, herr: &Herramientas) -> Re
         Ok(texto) => json!({ "content": [ { "type": "text", "text": texto } ] }),
         Err(e) => json!({ "content": [ { "type": "text", "text": format!("Error: {e}") } ], "isError": true }),
     })
+}
+
+fn tool_decompilar(args: &Value) -> Result<String, String> {
+    use crate::detectar::Tipo;
+    let ruta = args.get("path").and_then(|v| v.as_str()).ok_or("missing 'path'")?;
+    let listado = args.get("mode").and_then(|v| v.as_str()) == Some("listing");
+    let max = args.get("max_chars").and_then(|v| v.as_u64()).unwrap_or(60_000) as usize;
+    let d = std::fs::read(ruta).map_err(|e| format!("{ruta}: {e}"))?;
+    if d.len() > 256 << 20 {
+        return Err("file larger than 256 MiB".into());
+    }
+    let r = match crate::detectar::detectar(&d) {
+        Tipo::ClaseJava if !listado => crate::decompilar::java(&d),
+        Tipo::ClaseJava => crate::codigo::clase_java(&d),
+        Tipo::Pyc if !listado => crate::decompilar::python(&d),
+        Tipo::Pyc => crate::codigo::pyc(&d),
+        Tipo::Dex => crate::codigo::dex(&d),
+        Tipo::Wasm => crate::codigo::wasm_a_wat(&d),
+        Tipo::Elf | Tipo::Pe | Tipo::MachO => crate::ejecutables::analizar(&d, 50_000).map(|i| format!("{}\n{}", i.cabeceras, i.desensamblado.unwrap_or_default())),
+        otro => return Err(format!("not a supported code file ({}); use capas_analyze_file for containers", otro.nombre())),
+    }
+    .map_err(|e| e.to_string())?;
+    if r.len() > max {
+        let mut corte = max;
+        while !r.is_char_boundary(corte) {
+            corte -= 1;
+        }
+        return Ok(format!("{}\n\n[... truncated: {} of {} characters shown]", &r[..corte], corte, r.len()));
+    }
+    Ok(r)
 }
 
 fn tool_analizar(args: &Value, sis: &Sistema, herr: &Herramientas) -> Result<String, String> {
@@ -238,6 +282,7 @@ mod pruebas {
         let lista = responder(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#, &s, &h).unwrap();
         assert!(lista.contains("capas_analyze_file"));
         assert!(lista.contains("capas_list_formats"));
+        assert!(lista.contains("capas_decompile_file"));
     }
 
     #[test]

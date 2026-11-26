@@ -235,6 +235,7 @@ fn codigo_tipo(tp: Tipo) -> &'static str {
         Tipo::SieteZ => "7Z",
         Tipo::Rar => "RAR",
         Tipo::Cab => "CAB",
+        Tipo::Ole => "OLE",
         Tipo::ArUnix => "AR",
         Tipo::Elf => "ELF",
         Tipo::Pe => "PE",
@@ -875,10 +876,11 @@ impl App {
 
             let mut rescan = false;
             let mut accion: Option<&'static str> = None;
-            seccion(ui, "03", tr("EXTERNAL SUBSYSTEMS", "SUBSISTEMAS EXTERNOS"), naranja(), |ui| {
-                let activos = HERRAMIENTAS_CONOCIDAS.iter().filter(|(n, _)| self.herr.get(n).is_some()).count();
+            seccion(ui, "03", tr("ANALYSIS ENGINES", "MOTORES DE ANÁLISIS"), naranja(), |ui| {
+                let activos = HERRAMIENTAS_CONOCIDAS.iter().filter(|(n, _)| self.herr.get(n).is_some() || integrado(n).is_some()).count();
+                let nativos = HERRAMIENTAS_CONOCIDAS.iter().filter(|(n, _)| integrado(n).is_some()).count();
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(tfmt(tr("{}/{} installed", "{}/{} instaladas"), &[activos.to_string(), HERRAMIENTAS_CONOCIDAS.len().to_string()])).font(mono(10.5)).color(morado_claro()));
+                    ui.label(RichText::new(tfmt(tr("{}/{} available · {} built into CAPAS", "{}/{} disponibles · {} integradas en CAPAS"), &[activos.to_string(), HERRAMIENTAS_CONOCIDAS.len().to_string(), nativos.to_string()])).font(mono(10.5)).color(morado_claro()));
                     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                         if ui.add(boton_sec(tr("Rescan", "Reescanear"))).clicked() {
                             rescan = true;
@@ -890,7 +892,9 @@ impl App {
                 }
                 ui.add_space(2.0);
                 for (n, desc) in HERRAMIENTAS_CONOCIDAS {
-                    let ok = self.herr.get(n).is_some() && self.externas;
+                    let instalada = self.herr.get(n).is_some() && self.externas;
+                    let nativo = integrado(n);
+                    let ok = instalada || nativo.is_some();
                     ui.horizontal(|ui| {
                         let (r, p) = ui.allocate_painter(Vec2::splat(12.0), Sense::hover());
                         let c = r.rect.center();
@@ -899,11 +903,17 @@ impl App {
                         } else {
                             p.rect_stroke(Rect::from_center_size(c, Vec2::splat(9.0)), 0.0, Stroke::new(1.0, morado_medio()), StrokeKind::Inside);
                         }
+                        let ayuda = match nativo {
+                            Some(t) => format!("{desc}\n\n{}", tr(t.0, t.1)),
+                            None => desc.to_string(),
+                        };
                         ui.label(RichText::new(*n).font(mono(12.0)).color(if ok { verde() } else { morado_medio() }))
-                            .on_hover_text(*desc);
+                            .on_hover_text(ayuda);
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if ok {
+                            if instalada {
                                 ui.label(RichText::new(tr("ACTIVE", "ACTIVO")).font(mono(10.0)).color(verde()));
+                            } else if nativo.is_some() {
+                                ui.label(RichText::new(tr("BUILT-IN", "INTEGRADO")).font(mono(10.0)).color(acento()));
                             } else {
                                 let pk = paquete(n);
                                 if pk.web.is_some() && ui.add(boton_sec(tr("Web", "Web"))).clicked() {
@@ -1934,23 +1944,14 @@ impl App {
     // ── Formatos compatibles ─────────────────────────────────────────────
     fn vista_formatos(&mut self, ui: &mut Ui) {
         titulo_vista(ui, "informe", tr("Supported formats", "Formatos compatibles"), tr("What CAPAS can do with each type. Support depends on the format — not every action applies to every file.", "Qué puede hacer CAPAS con cada tipo. El soporte depende del formato — no todas las acciones aplican a todos los archivos."));
-        // Aviso: comprimidos e imágenes de disco necesitan 7-Zip.
-        if self.herr.get("7z").is_none() {
-            egui::Frame::new().fill(naranja_oscuro()).stroke(Stroke::new(1.0, naranja())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(12)).outer_margin(Margin { left: 0, right: 0, top: 0, bottom: 10 }).show(ui, |ui| {
-                ui.set_width(ui.available_width());
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new(tr("RAR, 7z, ISO, CAB and MSI need 7-Zip installed.", "RAR, 7z, ISO, CAB y MSI necesitan 7-Zip instalado.")).font(FontId::proportional(12.5)).color(texto()));
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if ui.add(boton_pri(tr("Install 7-Zip", "Instalar 7-Zip"), naranja())).clicked() {
-                            self.tool_estado = Some(instalar_paquete("7z").unwrap_or_else(|e| e));
-                        }
-                    });
-                });
-                if let Some(msg) = &self.tool_estado {
-                    ui.label(RichText::new(msg).font(FontId::proportional(11.0)).color(verde()));
-                }
-            });
-        }
+        // Motor nativo: estos formatos ya no necesitan herramientas externas.
+        egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, verde())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(12)).outer_margin(Margin { left: 0, right: 0, top: 0, bottom: 10 }).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(RichText::new(tr(
+                "Built-in engine: RAR, 7z, CAB, ISO, CHD and MSI open without installing anything. Java, Python .pyc, Android DEX, WebAssembly and x86/ARM/MIPS binaries are decompiled or disassembled natively.",
+                "Motor integrado: RAR, 7z, CAB, ISO, CHD y MSI se abren sin instalar nada. Java, Python .pyc, Android DEX, WebAssembly y binarios x86/ARM/MIPS se decompilan o desensamblan de forma nativa.",
+            )).font(FontId::proportional(12.5)).color(texto()));
+        });
         egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
             // Leyenda de verbos.
             egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, morado())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(12)).show(ui, |ui| {
@@ -3267,6 +3268,23 @@ fn reiniciar_con(nuevo: &Path) -> Result<(), String> {
     Ok(())
 }
 
+/// ¿Lo cubre el motor nativo de CAPAS? Devuelve la explicación (en, es).
+fn integrado(n: &str) -> Option<(&'static str, &'static str)> {
+    Some(match n {
+        "7z" => ("Built in: 7z, RAR (v2–v5), CAB, ISO, CHD and MSI open natively, including password-protected ones.", "Integrado: 7z, RAR (v2–v5), CAB, ISO, CHD y MSI se abren de forma nativa, también con contraseña."),
+        "readelf" => ("Built in: full ELF headers, segments, dynamic section, relocations and build-id.", "Integrado: cabeceras ELF completas, segmentos, sección dinámica, reubicaciones y build-id."),
+        "objdump" => ("Built in: x86/x86-64, ARM64, ARM/Thumb and MIPS disassembly. objdump is only used for other architectures.", "Integrado: desensamblado x86/x86-64, ARM64, ARM/Thumb y MIPS. objdump solo se usa para otras arquitecturas."),
+        "file" => ("Built in: content-based detection of 729 formats.", "Integrado: detección por contenido de 729 formatos."),
+        "javap" => ("Built in: native class listing equivalent to javap -c -p.", "Integrado: listado nativo de clases equivalente a javap -c -p."),
+        "cfr" | "procyon" => ("Built in: native Java decompiler to readable pseudo-source. Install it only if you need recompilable output.", "Integrado: decompilador Java nativo a pseudo-fuente legible. Instálalo solo si necesitas salida recompilable."),
+        "jadx" => ("Built in: native DEX reader (classes, methods, Dalvik bytecode). jadx adds full Java source.", "Integrado: lector DEX nativo (clases, métodos, bytecode Dalvik). jadx añade fuente Java completa."),
+        "pycdc" | "uncompyle6" | "decompyle3" => ("Built in: exact .pyc disassembly and native decompiler for Python 3.6–3.14.", "Integrado: desensamblado exacto de .pyc y decompilador nativo para Python 3.6–3.14."),
+        "wasm2wat" => ("Built in: native WebAssembly to WAT text.", "Integrado: WebAssembly a texto WAT de forma nativa."),
+        "chdman" => ("Built in: native CHD (MAME) reader; the disc goes on to the ISO layer.", "Integrado: lector CHD (MAME) nativo; el disco sigue a la capa ISO."),
+        _ => return None,
+    })
+}
+
 // ── Instalación de subsistemas externos (gestor del sistema / web) ───────
 struct Paquete {
     winget: Option<&'static str>,
@@ -3394,7 +3412,7 @@ fn icono_tipo(t: Tipo) -> &'static str {
     match t {
         Tipo::Iso | Tipo::Disco | Tipo::Chd => "disco",
         Tipo::Imagen => "imagen",
-        Tipo::Zip | Tipo::Tar | Tipo::SieteZ | Tipo::Rar | Tipo::Cab | Tipo::RecursoJuego | Tipo::Gzip | Tipo::Zstd | Tipo::Lz4 => "carpeta",
+        Tipo::Zip | Tipo::Tar | Tipo::SieteZ | Tipo::Rar | Tipo::Cab | Tipo::Ole | Tipo::RecursoJuego | Tipo::Gzip | Tipo::Zstd | Tipo::Lz4 => "carpeta",
         Tipo::Texto => "informe",
         _ => "archivo",
     }

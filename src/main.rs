@@ -14,7 +14,9 @@ mod analisis;
 mod api;
 mod auditar;
 mod comparar;
+mod decompilar;
 mod clasificar;
+mod codigo;
 mod claves;
 mod detectar;
 mod edicion;
@@ -27,11 +29,15 @@ mod licencia;
 mod localizar;
 mod mcp;
 mod motor;
+mod nativo;
+mod pyc_tablas;
 mod plugins;
 mod politica;
 mod recursos;
 mod relaciones;
 mod vigilar;
+#[cfg(test)]
+mod pruebas_nativo;
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -240,6 +246,14 @@ struct Args {
     #[arg(long, value_name = "KEY")]
     licencia_clave: Option<String>,
 
+    /// Print the native listing of a code file (.class, .dex, .pyc, .wasm, ELF/PE/Mach-O) and exit
+    #[arg(long, value_name = "FILE")]
+    listar_codigo: Option<PathBuf>,
+
+    /// Decompile a .class or .pyc to readable pseudo-source with the native engine and exit
+    #[arg(long, value_name = "FILE")]
+    decompilar: Option<PathBuf>,
+
     /// [Vendor] Sign a BATCH of compact keys (--clave-privada, --edicion, --cantidad, --dias)
     #[arg(long)]
     firmar_lote: bool,
@@ -321,6 +335,44 @@ fn main() -> Result<()> {
     match a.idioma.as_deref() {
         Some(l) => idioma::set_es(l.eq_ignore_ascii_case("es")),
         None => idioma::autodetectar(),
+    }
+    // Listado nativo de código (sin herramientas externas) y salir.
+    if let Some(p) = &a.listar_codigo {
+        let d = std::fs::read(p)?;
+        let r = match detectar::detectar(&d) {
+            detectar::Tipo::ClaseJava => codigo::clase_java(&d),
+            detectar::Tipo::Dex => codigo::dex(&d),
+            detectar::Tipo::Pyc => codigo::pyc(&d),
+            detectar::Tipo::Wasm => codigo::wasm_a_wat(&d),
+            detectar::Tipo::Elf | detectar::Tipo::Pe | detectar::Tipo::MachO => {
+                ejecutables::analizar(&d, 200_000).map(|i| format!("{}\n{}", i.cabeceras, i.desensamblado.unwrap_or_default()))
+            }
+            otro => Err(anyhow::anyhow!("{}: {}", idioma::tr("not a code file", "no es un archivo de código"), otro.nombre())),
+        };
+        match r {
+            Ok(t) => println!("{t}"),
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(2);
+            }
+        }
+        return Ok(());
+    }
+    if let Some(p) = &a.decompilar {
+        let d = std::fs::read(p)?;
+        let r = match detectar::detectar(&d) {
+            detectar::Tipo::ClaseJava => decompilar::java(&d),
+            detectar::Tipo::Pyc => decompilar::python(&d),
+            otro => Err(anyhow::anyhow!("{}: {}", idioma::tr("cannot decompile", "no se puede decompilar"), otro.nombre())),
+        };
+        match r {
+            Ok(t) => println!("{t}"),
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(2);
+            }
+        }
+        return Ok(());
     }
     // El nombre por defecto de la carpeta de salida sigue el idioma activo.
     let salida = a
