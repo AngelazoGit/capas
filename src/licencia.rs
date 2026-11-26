@@ -73,15 +73,45 @@ pub fn verificar(lic: &Licencia) -> Result<Edicion, String> {
     edicion::desde_str(&lic.edicion).ok_or_else(|| tr("unknown edition in license", "edición desconocida en la licencia").to_string())
 }
 
-/// Rutas por defecto donde buscar la licencia.
+/// Archivo de licencia del usuario: `~/.capas/licencia.lic`. Vive fuera de la
+/// carpeta del programa, así sobrevive a actualizaciones, reinstalaciones y a
+/// mover o renombrar el .exe.
+pub fn ruta_usuario() -> Option<PathBuf> {
+    let h = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE"))?;
+    Some(PathBuf::from(h).join(".capas").join("licencia.lic"))
+}
+
+/// Guarda una clave ya verificada en el archivo del usuario (y, si se puede,
+/// también junto al .exe). Devuelve dónde quedó guardada.
+pub fn guardar_clave(token: &str) -> Result<PathBuf, String> {
+    let token = token.trim();
+    verificar_clave(token)?;
+    let ruta = ruta_usuario().ok_or_else(|| tr("no user folder", "sin carpeta de usuario").to_string())?;
+    if let Some(d) = ruta.parent() {
+        std::fs::create_dir_all(d).map_err(|e| e.to_string())?;
+    }
+    std::fs::write(&ruta, format!("{token}\n")).map_err(|e| e.to_string())?;
+    // Copia de cortesía junto al ejecutable (portable); si no hay permiso, no pasa nada.
+    if let Some(dir) = std::env::current_exe().ok().and_then(|e| e.parent().map(|p| p.to_path_buf())) {
+        let _ = std::fs::write(dir.join("capas.lic"), format!("{token}\n"));
+    }
+    Ok(ruta)
+}
+
+/// Rutas por defecto donde buscar la licencia, en orden.
 fn rutas_defecto() -> Vec<PathBuf> {
     let mut v = Vec::new();
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
             v.push(dir.join("capas.lic"));
+            // El Bloc de notas añade ".txt" si no se elige "Todos los archivos".
+            v.push(dir.join("capas.lic.txt"));
         }
     }
     v.push(PathBuf::from("capas.lic"));
+    if let Some(u) = ruta_usuario() {
+        v.push(u);
+    }
     if let Some(h) = std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")) {
         v.push(PathBuf::from(h).join(".config").join("capas").join("licencia.lic"));
     }
@@ -90,31 +120,50 @@ fn rutas_defecto() -> Vec<PathBuf> {
 
 /// Carga y aplica la licencia (bandera, variable CAPAS_LICENCIA, o rutas por
 /// defecto). Si es válida, activa la edición. Imprime una línea con el resultado.
+/// Con las rutas por defecto prueba TODAS hasta encontrar una válida.
 pub fn aplicar(bandera: Option<PathBuf>) {
-    let ruta = bandera
-        .or_else(|| std::env::var_os("CAPAS_LICENCIA").map(PathBuf::from))
-        .or_else(|| rutas_defecto().into_iter().find(|p| p.is_file()));
-    let Some(ruta) = ruta else { return };
-    let Ok(datos) = std::fs::read_to_string(&ruta) else { return };
-    // Un archivo que contiene una clave compacta "CAPAS-..." también vale.
-    if datos.trim_start().starts_with("CAPAS-") {
-        aplicar_clave(Some(datos.trim().to_string()));
-        return;
-    }
-    let lic: Licencia = match serde_json::from_str(&datos) {
-        Ok(l) => l,
-        Err(_) => {
-            eprintln!("{}", tfmt(tr("license: not readable ({})", "licencia: no legible ({})"), &[ruta.display().to_string()]));
-            return;
-        }
+    let explicita = bandera.or_else(|| std::env::var_os("CAPAS_LICENCIA").map(PathBuf::from));
+    let candidatas = match explicita {
+        Some(p) => vec![p],
+        None => rutas_defecto().into_iter().filter(|p| p.is_file()).collect(),
     };
+    let mut ultimo_error = None;
+    for ruta in candidatas {
+        match aplicar_archivo(&ruta) {
+            Ok(()) => return,
+            Err(e) => ultimo_error = Some(e),
+        }
+    }
+    if let Some(e) = ultimo_error {
+        eprintln!("{e}");
+    }
+}
+
+/// Aplica un archivo de licencia (JSON firmado o clave compacta CAPAS-...).
+fn aplicar_archivo(ruta: &std::path::Path) -> Result<(), String> {
+    let datos = std::fs::read_to_string(ruta).map_err(|e| format!("{}: {e}", ruta.display()))?;
+    // Quita el BOM que algunos editores añaden al guardar en UTF-8.
+    let datos = datos.trim_start_matches('\u{feff}').trim();
+    if datos.starts_with("CAPAS-") {
+        let token = datos.split_whitespace().next().unwrap_or(datos);
+        return match verificar_clave(token) {
+            Ok(ed) => {
+                edicion::set(ed);
+                eprintln!("{}", tfmt(tr("key: CAPAS {} activated", "clave: CAPAS {} activada"), &[ed.nombre().to_string()]));
+                Ok(())
+            }
+            Err(e) => Err(tfmt(tr("key rejected: {} ({})", "clave rechazada: {} ({})"), &[e, ruta.display().to_string()])),
+        };
+    }
+    let lic: Licencia = serde_json::from_str(datos).map_err(|_| tfmt(tr("license: not readable ({})", "licencia: no legible ({})"), &[ruta.display().to_string()]))?;
     match verificar(&lic) {
         Ok(ed) => {
             edicion::set(ed);
             let cad = if lic.expira == 0 { tr("no expiry", "sin caducidad").to_string() } else { tfmt(tr("expires {}", "caduca {}"), &[lic.expira.to_string()]) };
             eprintln!("{}", tfmt(tr("license: CAPAS {} · {} · {}", "licencia: CAPAS {} · {} · {}"), &[ed.nombre().to_string(), lic.titular.clone(), cad]));
+            Ok(())
         }
-        Err(e) => eprintln!("{}", tfmt(tr("license rejected: {} ({})", "licencia rechazada: {} ({})"), &[e, ruta.display().to_string()])),
+        Err(e) => Err(tfmt(tr("license rejected: {} ({})", "licencia rechazada: {} ({})"), &[e, ruta.display().to_string()])),
     }
 }
 
@@ -285,6 +334,29 @@ mod pruebas_clave {
             let v: Vec<u8> = (0..n).map(|i| (i as u8).wrapping_mul(37)).collect();
             assert_eq!(b64_decode(&b64_encode(&v)).unwrap(), v, "n={n}");
         }
+    }
+
+    #[test]
+    fn archivo_con_bom_y_crlf_se_lee_como_clave() {
+        // Una clave inválida con BOM y CRLF debe llegar a verificarse como clave
+        // (rechazada por firma), no fallar como "no legible".
+        let d = std::env::temp_dir().join(format!("capas_lic_{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        let f = d.join("capas.lic");
+        std::fs::write(&f, "\u{feff}CAPAS-AAAA\r\n").unwrap();
+        let e = aplicar_archivo(&f).unwrap_err();
+        assert!(e.contains("clave") || e.contains("key"), "{e}");
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn la_licencia_del_usuario_esta_entre_las_rutas() {
+        let r = rutas_defecto();
+        if let Some(u) = ruta_usuario() {
+            assert!(r.contains(&u));
+            assert!(u.ends_with(".capas/licencia.lic") || u.ends_with(".capas\\licencia.lic"));
+        }
+        assert!(r.iter().any(|p| p.to_string_lossy().ends_with("capas.lic.txt")));
     }
 
     #[test]

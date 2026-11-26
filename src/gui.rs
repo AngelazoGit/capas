@@ -2119,7 +2119,11 @@ impl App {
                             match crate::licencia::verificar_clave(self.clave_lic.trim()) {
                                 Ok(e) => {
                                     crate::edicion::set(e);
-                                    self.lic_estado = Some(tfmt(tr("Activated: CAPAS {}", "Activado: CAPAS {}"), &[e.nombre().to_string()]));
+                                    // Se guarda en ~/.capas/licencia.lic: sobrevive a actualizaciones y reinicios.
+                                    self.lic_estado = Some(match crate::licencia::guardar_clave(self.clave_lic.trim()) {
+                                        Ok(r) => tfmt(tr("Activated: CAPAS {} — saved to {}", "Activado: CAPAS {} — guardada en {}"), &[e.nombre().to_string(), r.display().to_string()]),
+                                        Err(m) => tfmt(tr("Activated: CAPAS {} (could not save it: {})", "Activado: CAPAS {} (no se pudo guardar: {})"), &[e.nombre().to_string(), m]),
+                                    });
                                 }
                                 Err(m) => self.lic_estado = Some(tfmt(tr("Rejected: {}", "Rechazada: {}"), &[m])),
                             }
