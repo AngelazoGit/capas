@@ -41,11 +41,16 @@ pub struct FuerzaBruta {
 }
 
 impl FuerzaBruta {
-    pub fn nuevo(alfabeto: &str, long_max: usize) -> Self {
+    /// Crea una fuerza bruta SOLO si hay alfabeto y una longitud máxima válida.
+    /// Sin abecedario (o con longitud 0) devuelve `None`: no se puede activar.
+    pub fn nuevo(alfabeto: &str, long_max: usize) -> Option<Self> {
         let mut a: Vec<u8> = alfabeto.bytes().collect();
         a.sort_unstable();
         a.dedup();
-        FuerzaBruta { alfabeto: a, long_max }
+        if a.is_empty() || long_max == 0 {
+            return None;
+        }
+        Some(FuerzaBruta { alfabeto: a, long_max })
     }
     /// Alfabetos predefinidos por nombre corto.
     pub fn alfabeto_por_nombre(nombre: &str) -> String {
@@ -328,3 +333,20 @@ const COMUNES: &[&str] = &[
     "ninja", "shadow", "michael", "jordan", "trustno1", "batman", "access", "google",
     "mustang", "pokemon", "starwars", "minecraft", "roblox", "fortnite", "unlock",
 ];
+
+#[cfg(test)]
+mod pruebas_fuerza {
+    use super::*;
+    #[test]
+    fn fuerza_bruta_no_se_activa_sin_abecedario() {
+        assert!(FuerzaBruta::nuevo("", 4).is_none());
+        assert!(FuerzaBruta::nuevo("abc", 0).is_none());
+        assert!(FuerzaBruta::nuevo("abc", 2).is_some());
+    }
+    #[test]
+    fn candidatas_externas_nunca_usan_fuerza_bruta() {
+        let c = Claves { explicitas: vec!["hola".into()], comunes: false, diccionario: None, fuerza: FuerzaBruta::nuevo("ab", 3), max_intentos: 1000 };
+        assert!(c.fuerza.is_some());
+        assert_eq!(c.candidatas_externas(), vec!["hola".to_string()]);
+    }
+}

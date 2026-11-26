@@ -521,10 +521,12 @@ impl App {
             explicitas,
             comunes: self.usar_comunes,
             diccionario: self.diccionario.clone(),
+            // La fuerza bruta solo se arma si está marcada Y hay alfabeto y longitud:
+            // nunca se activa sola ni con el abecedario vacío.
             fuerza: self.fuerza_bruta.then(|| {
                 let alf = ALFABETOS[self.fuerza_alfabeto].1;
                 FuerzaBruta::nuevo(&FuerzaBruta::alfabeto_por_nombre(alf), self.fuerza_long)
-            }),
+            }).flatten(),
             max_intentos: 2_000_000,
         }
     }
@@ -997,17 +999,23 @@ impl App {
                     if let Some(d) = &self.diccionario {
                         ui.label(RichText::new(acortar(&d.display().to_string(), 36)).font(mono(10.0)).color(verde()));
                     }
-                    ui.checkbox(&mut self.fuerza_bruta, tr("BRUTE FORCE (bounded)", "FUERZA BRUTA (acotada)"));
+                    ui.checkbox(&mut self.fuerza_bruta, tr("BRUTE FORCE — only ZIP, off by default", "FUERZA BRUTA — solo ZIP, desactivada por defecto"));
                     if self.fuerza_bruta {
-                        egui::ComboBox::from_id_salt("alf")
-                            .selected_text(ALFABETOS[self.fuerza_alfabeto].0)
-                            .show_ui(ui, |ui| {
-                                for (i, (n, _)) in ALFABETOS.iter().enumerate() {
-                                    ui.selectable_value(&mut self.fuerza_alfabeto, i, *n);
-                                }
-                            });
+                        ui.horizontal(|ui| {
+                            ui.label(RichText::new(tr("Alphabet", "Abecedario")).font(mono(10.0)).color(morado_claro()));
+                            egui::ComboBox::from_id_salt("alf")
+                                .selected_text(ALFABETOS[self.fuerza_alfabeto].0)
+                                .show_ui(ui, |ui| {
+                                    for (i, (n, _)) in ALFABETOS.iter().enumerate() {
+                                        ui.selectable_value(&mut self.fuerza_alfabeto, i, *n);
+                                    }
+                                });
+                        });
                         ui.add(egui::Slider::new(&mut self.fuerza_long, 1..=8).text(tr("MAX LEN", "LONG. MÁX")));
-                        ui.label(RichText::new(tr("⚠ long brute force can take a while", "⚠ la fuerza bruta larga puede tardar mucho")).font(mono(9.0)).color(naranja()));
+                        // Cuántas combinaciones supone, para que el usuario sepa el coste.
+                        let base = crate::claves::FuerzaBruta::alfabeto_por_nombre(ALFABETOS[self.fuerza_alfabeto].1).chars().count() as u128;
+                        let combos: u128 = (1..=self.fuerza_long as u32).map(|k| base.saturating_pow(k)).fold(0u128, |a, b| a.saturating_add(b));
+                        ui.label(RichText::new(tfmt(tr("up to {} combinations · needs an alphabet · never used on RAR/7z", "hasta {} combinaciones · necesita abecedario · nunca se usa en RAR/7z"), &[humano_entero(combos)])).font(mono(9.5)).color(naranja()));
                     }
                     let estado = if self.claves_activas() { (tr("MODULE ACTIVE", "MÓDULO ACTIVO"), verde()) } else { (tr("INACTIVE (encrypted archives skipped)", "INACTIVO (cifrados se omiten)"), morado_medio()) };
                     ui.label(RichText::new(estado.0).font(mono(10.0)).color(estado.1));
@@ -3654,6 +3662,20 @@ fn color_linea(l: &str) -> Color32 {
     } else {
         texto()
     }
+}
+
+/// Entero con separadores de miles (1234567 -> "1.234.567").
+fn humano_entero(n: u128) -> String {
+    let s = n.to_string();
+    let b = s.as_bytes();
+    let mut out = String::new();
+    for (i, c) in b.iter().enumerate() {
+        if i > 0 && (b.len() - i) % 3 == 0 {
+            out.push('.');
+        }
+        out.push(*c as char);
+    }
+    out
 }
 
 fn abrir_en_sistema(p: &Path) {

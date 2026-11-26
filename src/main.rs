@@ -306,7 +306,7 @@ fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
         explicitas: a.claves.clone(),
         comunes: a.comunes,
         diccionario: a.diccionario.clone(),
-        fuerza: a.fuerza_bruta.as_ref().map(|al| {
+        fuerza: a.fuerza_bruta.as_ref().and_then(|al| {
             claves::FuerzaBruta::nuevo(&claves::FuerzaBruta::alfabeto_por_nombre(al), a.fuerza_long)
         }),
         max_intentos: a.max_intentos,
@@ -335,6 +335,17 @@ fn main() -> Result<()> {
     match a.idioma.as_deref() {
         Some(l) => idioma::set_es(l.eq_ignore_ascii_case("es")),
         None => idioma::autodetectar(),
+    }
+    // La fuerza bruta NO puede activarse sin un abecedario: si se pide con un
+    // alfabeto vacío (o longitud 0), se avisa y no se ejecuta ningún intento.
+    if let Some(al) = &a.fuerza_bruta {
+        if claves::FuerzaBruta::nuevo(&claves::FuerzaBruta::alfabeto_por_nombre(al), a.fuerza_long).is_none() {
+            eprintln!("{}", idioma::tr(
+                "--fuerza-bruta needs a non-empty alphabet and --fuerza-long >= 1 (d=digits, l=lowercase, a=alphanumeric, A=full, or your own characters). No attempts were made.",
+                "--fuerza-bruta necesita un abecedario no vacío y --fuerza-long >= 1 (d=dígitos, l=minúsculas, a=alfanumérico, A=completo, o tus propios caracteres). No se hizo ningún intento.",
+            ));
+            std::process::exit(2);
+        }
     }
     // Listado nativo de código (sin herramientas externas) y salir.
     if let Some(p) = &a.listar_codigo {
