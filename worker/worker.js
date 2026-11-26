@@ -1,9 +1,9 @@
 // CAPAS — entrega automática de licencias (Cloudflare Worker).
 //
-// Al recibir el webhook "order_created" de Lemon Squeezy: verifica la firma,
-// decide la edición (Pro/Studio), firma una clave única CAPAS-... con la clave
-// privada Ed25519 (secreto del Worker) y la envía por email al comprador con
-// Resend. Idempotente: cada pedido conserva su misma clave aunque el webhook
+// Al recibir el webhook "checkout.session.completed" de Stripe: verifica la
+// firma, decide la edición (Pro/Studio), firma una clave única CAPAS-... con la
+// clave privada Ed25519 (secreto del Worker) y la envía por email al comprador
+// con Resend. Idempotente: cada pedido conserva su misma clave aunque el webhook
 // se reintente. Nada de esto expone la clave privada: vive solo como secreto.
 //
 // Secretos (Settings → Variables → Encrypt): CAPAS_PRIVATE_KEY, LS_WEBHOOK_SECRET,

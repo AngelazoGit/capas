@@ -20,7 +20,8 @@ Flujo:  Stripe (venta) → webhook `checkout.session.completed` → este Worker 
 ## Edición Pro vs Studio
 El Worker la decide así:
 1. Si el Payment Link lleva **metadata `edition` = `pro` o `studio`** → usa eso (recomendado).
-2. Si no, por el **importe**: `amount_total` ≥ 5000 (50 $) → Studio; si no → Pro.
+2. Si no, por el **importe**: `amount_total` ≥ 3800 (38 $) → Studio; si no → Pro.
+   (Separa Pro de Studio incluso con el 40% de descuento: Studio con descuento = 47,40 $.)
 
 Al crear los Payment Links en Stripe, añade metadata `edition=pro` / `edition=studio`
 para que sea exacto aunque cambies precios.
