@@ -1,5 +1,6 @@
-//! Capa de código nativo: cabeceras, secciones, símbolos, importaciones y
-//! desensamblado x86/x86-64 integrado (iced-x86).
+//! Capa de código nativo: cabeceras, segmentos, secciones, símbolos,
+//! importaciones y desensamblado INTEGRADO de x86/x86-64 (iced-x86),
+//! ARM64, ARM/Thumb (yaxpeax-arm) y MIPS (yaxpeax-mips). Sin objdump/readelf.
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
@@ -15,6 +16,16 @@ pub struct Informe {
     pub notas: Vec<String>,
 }
 
+/// Conjunto de instrucciones a desensamblar.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Isa {
+    X86(u32),
+    A64,
+    Arm,
+    Thumb,
+    Mips { be: bool },
+}
+
 struct Seccion<'a> {
     nombre: String,
     va: u64,
@@ -26,25 +37,73 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
     let mut notas = Vec::new();
     let mut ejec: Vec<Seccion> = Vec::new();
     let mut simbolos: HashMap<u64, String> = HashMap::new();
-    let bits: Option<u32>;
+    let isa: Option<Isa>;
+    // Regiones ARM/Thumb/datos según los símbolos de mapeo $a/$t/$d del ELF.
+    let mut modos: Vec<(u64, u8)> = Vec::new();
     let arquitectura: String;
     let entrada: u64;
 
     match Object::parse(d)? {
         Object::Elf(e) => {
             arquitectura = elf::header::machine_to_str(e.header.e_machine).to_string();
-            bits = match e.header.e_machine {
-                elf::header::EM_X86_64 => Some(64),
-                elf::header::EM_386 => Some(32),
+            isa = match e.header.e_machine {
+                elf::header::EM_X86_64 => Some(Isa::X86(64)),
+                elf::header::EM_386 => Some(Isa::X86(32)),
+                elf::header::EM_AARCH64 => Some(Isa::A64),
+                elf::header::EM_ARM => Some(if e.entry & 1 == 1 { Isa::Thumb } else { Isa::Arm }),
+                elf::header::EM_MIPS => Some(Isa::Mips { be: !e.little_endian }),
                 _ => None,
             };
-            entrada = e.entry;
+            entrada = e.entry & !1;
             writeln!(c, "== ELF ==")?;
             writeln!(c, "{}", tfmt(tr("Architecture : {} ({} bits)","Arquitectura : {} ({} bits)"), &[arquitectura.clone(), (if e.is_64 { 64 } else { 32 }).to_string()]))?;
             writeln!(c, "{}", tfmt(tr("Type         : {}","Tipo         : {}"), &[elf::header::et_to_str(e.header.e_type).to_string()]))?;
             writeln!(c, "{}", tfmt(tr("Entry        : 0x{}","Entrada      : 0x{}"), &[format!("{:x}", e.entry)]))?;
             if let Some(i) = e.interpreter {
                 writeln!(c, "{}", tfmt(tr("Interpreter  : {}","Intérprete   : {}"), &[i.to_string()]))?;
+            }
+            writeln!(c, "{}", tfmt(tr("Endianness   : {}","Endianness   : {}"), &[(if e.little_endian { "little" } else { "big" }).to_string()]))?;
+            writeln!(c, "{}", tfmt(tr("OS/ABI       : {}","OS/ABI       : {}"), &[e.header.e_ident[elf::header::EI_OSABI].to_string()]))?;
+            if let Some(so) = e.soname {
+                writeln!(c, "SONAME       : {so}")?;
+            }
+            writeln!(c, "\n-- {} --", tr("Program headers (segments)","Cabeceras de programa (segmentos)"))?;
+            for ph in &e.program_headers {
+                let fl = format!("{}{}{}", if ph.is_read() { "R" } else { "-" }, if ph.is_write() { "W" } else { "-" }, if ph.is_executable() { "X" } else { "-" });
+                writeln!(
+                    c,
+                    "  {:<14} off=0x{:<8x} va=0x{:<12x} archivo={:<10} memoria={:<10} {fl}",
+                    elf::program_header::pt_to_str(ph.p_type),
+                    ph.p_offset,
+                    ph.p_vaddr,
+                    ph.p_filesz,
+                    ph.p_memsz
+                )?;
+            }
+            if let Some(dy) = &e.dynamic {
+                writeln!(c, "{}", tfmt(tr("\n-- Dynamic section ({} entries) --","\n-- Sección dinámica ({} entradas) --"), &[dy.dyns.len().to_string()]))?;
+                for de in dy.dyns.iter().take(200) {
+                    let etiqueta = elf::dynamic::tag_to_str(de.d_tag);
+                    let val = if matches!(de.d_tag, elf::dynamic::DT_NEEDED | elf::dynamic::DT_SONAME | elf::dynamic::DT_RPATH | elf::dynamic::DT_RUNPATH) {
+                        e.dynstrtab.get_at(de.d_val as usize).unwrap_or("?").to_string()
+                    } else {
+                        format!("0x{:x}", de.d_val)
+                    };
+                    writeln!(c, "  {etiqueta:<20} {val}")?;
+                }
+            }
+            let nrel = e.dynrelas.len() + e.dynrels.len() + e.pltrelocs.len();
+            writeln!(c, "{}", tfmt(tr("\nDynamic relocations: {}","\nReubicaciones dinámicas: {}"), &[nrel.to_string()]))?;
+            for sh in &e.section_headers {
+                if sh.sh_type == elf::section_header::SHT_NOTE {
+                    let n = e.shdr_strtab.get_at(sh.sh_name).unwrap_or("?");
+                    if n == ".note.gnu.build-id" {
+                        if let Some(b) = d.get(sh.sh_offset as usize + 16..(sh.sh_offset + sh.sh_size) as usize) {
+                            let h: String = b.iter().map(|x| format!("{x:02x}")).collect();
+                            writeln!(c, "Build ID: {h}")?;
+                        }
+                    }
+                }
             }
             writeln!(c, "\n-- {} --", tr("Dynamic libraries","Bibliotecas dinámicas"))?;
             for l in &e.libraries {
@@ -83,10 +142,31 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
             }
             for s in e.syms.iter() {
                 let n = e.strtab.get_at(s.st_name).unwrap_or("");
+                if e.header.e_machine == elf::header::EM_ARM && n.starts_with('$') {
+                    let m = match n.as_bytes().get(1) {
+                        Some(b'a') => b'a',
+                        Some(b't') => b't',
+                        Some(b'd') => b'd',
+                        _ => 0,
+                    };
+                    if m != 0 && (n.len() == 2 || n.as_bytes()[2] == b'.') {
+                        modos.push((s.st_value, m));
+                    }
+                    continue;
+                }
                 if !n.is_empty() && s.st_value != 0 && s.is_function() {
-                    simbolos.insert(s.st_value, n.to_string());
+                    simbolos.insert(s.st_value & if e.header.e_machine == elf::header::EM_ARM { !1 } else { !0 }, n.to_string());
+                    if e.header.e_machine == elf::header::EM_ARM && modos.is_empty() {
+                        // sin símbolos de mapeo: la paridad de cada función dice su modo
+                    }
                 }
             }
+            if e.header.e_machine == elf::header::EM_ARM && modos.is_empty() {
+                for s in e.syms.iter().filter(|s| s.is_function() && s.st_value != 0) {
+                    modos.push((s.st_value & !1, if s.st_value & 1 == 1 { b't' } else { b'a' }));
+                }
+            }
+            modos.sort();
             if e.syms.is_empty() {
                 notas.push(tr("binary without symbol table (stripped)","binario sin tabla de símbolos (stripped)").into());
             }
@@ -106,9 +186,11 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
                 pe::header::COFF_MACHINE_ARMNT => "ARM".into(),
                 otra => format!("máquina 0x{otra:x}"),
             };
-            bits = match m {
-                pe::header::COFF_MACHINE_X86_64 => Some(64),
-                pe::header::COFF_MACHINE_X86 => Some(32),
+            isa = match m {
+                pe::header::COFF_MACHINE_X86_64 => Some(Isa::X86(64)),
+                pe::header::COFF_MACHINE_X86 => Some(Isa::X86(32)),
+                pe::header::COFF_MACHINE_ARM64 => Some(Isa::A64),
+                pe::header::COFF_MACHINE_ARMNT => Some(Isa::Thumb),
                 _ => None,
             };
             let base = p.image_base as u64;
@@ -163,9 +245,11 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
             arquitectura = mach::cputype::get_arch_name_from_types(m.header.cputype, m.header.cpusubtype)
                 .unwrap_or("desconocida")
                 .to_string();
-            bits = match m.header.cputype {
-                mach::cputype::CPU_TYPE_X86_64 => Some(64),
-                mach::cputype::CPU_TYPE_X86 => Some(32),
+            isa = match m.header.cputype {
+                mach::cputype::CPU_TYPE_X86_64 => Some(Isa::X86(64)),
+                mach::cputype::CPU_TYPE_X86 => Some(Isa::X86(32)),
+                mach::cputype::CPU_TYPE_ARM64 | mach::cputype::CPU_TYPE_ARM64_32 => Some(Isa::A64),
+                mach::cputype::CPU_TYPE_ARM => Some(Isa::Arm),
                 _ => None,
             };
             entrada = m.entry;
@@ -211,8 +295,9 @@ pub fn analizar(d: &[u8], max_instr: usize) -> anyhow::Result<Informe> {
         writeln!(c, "  0x{a:012x}  {n}")?;
     }
 
-    let desensamblado = match bits {
-        Some(b) if !ejec.is_empty() => Some(desensamblar(b, &ejec, &simbolos, entrada, max_instr)),
+    let desensamblado = match isa {
+        Some(Isa::X86(b)) if !ejec.is_empty() => Some(desensamblar(b, &ejec, &simbolos, entrada, max_instr)),
+        Some(i) if !ejec.is_empty() => Some(desensamblar_yax(i, &ejec, &simbolos, &modos, entrada, max_instr)),
         Some(_) => None,
         None => {
             notas.push(tfmt(tr("architecture {}: no built-in disassembler, objdump is used if installed","arquitectura {}: sin desensamblador interno, se usa objdump si está instalado"), &[arquitectura.clone()]));
@@ -269,4 +354,127 @@ fn desensamblar(
         }
     }
     s
+}
+
+/// Decodifica UNA instrucción no-x86 en `datos`. Devuelve (texto, longitud).
+fn decodificar_yax(isa: Isa, datos: &[u8]) -> (String, usize) {
+    use yaxpeax_arch::{Decoder, Reader, U8Reader};
+    match isa {
+        Isa::A64 => {
+            let dec = yaxpeax_arm::armv8::a64::InstDecoder::default();
+            let mut r = U8Reader::new(datos);
+            match dec.decode(&mut r) {
+                Ok(i) => (i.to_string(), 4),
+                Err(_) => (format!(".word 0x{:08x}", u32::from_le_bytes(datos[..4.min(datos.len())].try_into().unwrap_or([0; 4]))), 4),
+            }
+        }
+        Isa::Arm | Isa::Thumb => {
+            let dec = if isa == Isa::Thumb { yaxpeax_arm::armv7::InstDecoder::default_thumb() } else { yaxpeax_arm::armv7::InstDecoder::default() };
+            let mut r = U8Reader::new(datos);
+            match dec.decode(&mut r) {
+                Ok(i) => {
+                    let n = <U8Reader as Reader<u32, u8>>::total_offset(&mut r) as usize;
+                    (i.to_string(), n.max(2))
+                }
+                Err(_) => (format!(".inst ({})", if isa == Isa::Thumb { "thumb" } else { "arm" }), if isa == Isa::Thumb { 2 } else { 4 }),
+            }
+        }
+        Isa::Mips { be } => {
+            use yaxpeax_arch02::Decoder as _;
+            let mut w = [0u8; 4];
+            w.copy_from_slice(&datos[..4]);
+            if be {
+                w.reverse();
+            }
+            let dec = yaxpeax_mips::MipsDecoder::default();
+            let mut r = yaxpeax_arch02::U8Reader::new(&w);
+            match dec.decode(&mut r) {
+                Ok(i) => (i.to_string(), 4),
+                Err(_) => (format!(".word 0x{:08x}", u32::from_le_bytes(w)), 4),
+            }
+        }
+        Isa::X86(_) => (String::new(), 1),
+    }
+}
+
+/// Desensamblado integrado para ARM64, ARM, Thumb y MIPS.
+fn desensamblar_yax(isa: Isa, secciones: &[Seccion], simbolos: &HashMap<u64, String>, modos: &[(u64, u8)], entrada: u64, max: usize) -> String {
+    let mut s = String::new();
+    let _ = writeln!(s, "; desensamblado integrado ({isa:?}) — CAPAS");
+    let mut total = 0;
+    for sec in secciones {
+        let _ = writeln!(s, "\n; ===== sección {} @ 0x{:x} ({} bytes) =====", sec.nombre, sec.va, sec.datos.len());
+        let mut off = 0usize;
+        while off + 2 <= sec.datos.len() {
+            if total >= max {
+                let _ = writeln!(s, "\n; ... truncado tras {max} instrucciones (usa --max-instrucciones)");
+                return s;
+            }
+            let ip = sec.va + off as u64;
+            if ip == entrada {
+                let _ = writeln!(s, "\n; ---- PUNTO DE ENTRADA ----");
+            }
+            if let Some(n) = simbolos.get(&ip).or_else(|| simbolos.get(&(ip | 1))) {
+                let _ = writeln!(s, "\n{n}:");
+            }
+            // ARM: el modo (ARM/Thumb/datos) lo marca el último símbolo de mapeo.
+            let mut isa_aqui = isa;
+            let mut es_dato = false;
+            if matches!(isa, Isa::Arm | Isa::Thumb) && !modos.is_empty() {
+                let k = modos.partition_point(|(a, _)| *a <= ip);
+                if k > 0 {
+                    match modos[k - 1].1 {
+                        b't' => isa_aqui = Isa::Thumb,
+                        b'a' => isa_aqui = Isa::Arm,
+                        _ => es_dato = true,
+                    }
+                }
+            }
+            let paso_min = if isa_aqui == Isa::Thumb { 2 } else { 4 };
+            let resto = &sec.datos[off..];
+            if resto.len() < paso_min {
+                break;
+            }
+            let (mut txt, n) = if es_dato {
+                (format!(".word 0x{:08x}", u32::from_le_bytes(resto[..4.min(resto.len())].try_into().unwrap_or([0; 4]))), 4)
+            } else {
+                decodificar_yax(isa_aqui, resto)
+            };
+            let n = n.clamp(paso_min, 4).min(resto.len());
+            // Destino absoluto de los saltos (ARM64: "$±0x…"; MIPS: desde la palabra).
+            if let Some(dest) = destino_salto(isa_aqui, ip, &resto[..n], &txt) {
+                let nom = simbolos.get(&dest).map(|x| format!(" <{x}>")).unwrap_or_default();
+                txt = format!("{txt}   ; -> 0x{dest:x}{nom}");
+            }
+            let hex: String = resto[..n].iter().map(|b| format!("{b:02x}")).collect();
+            let _ = writeln!(s, "  {ip:012x}  {hex:<10} {txt}");
+            off += n;
+            total += 1;
+        }
+    }
+    s
+}
+
+/// Dirección absoluta de destino de un salto relativo, si se puede calcular.
+fn destino_salto(isa: Isa, ip: u64, bytes: &[u8], txt: &str) -> Option<u64> {
+    match isa {
+        Isa::A64 | Isa::Arm => {
+            let i = txt.find("$+0x").map(|i| (i, 1i64)).or_else(|| txt.find("$-0x").map(|i| (i, -1i64)))?;
+            let hex: String = txt[i.0 + 4..].chars().take_while(|c| c.is_ascii_hexdigit()).collect();
+            let v = i64::from_str_radix(&hex, 16).ok()?;
+            Some((ip as i64 + i.1 * v) as u64)
+        }
+        Isa::Mips { be } => {
+            let mut w = [0u8; 4];
+            w.copy_from_slice(bytes.get(..4)?);
+            let p = if be { u32::from_be_bytes(w) } else { u32::from_le_bytes(w) };
+            let op = p >> 26;
+            match op {
+                1 | 4..=7 | 20..=23 => Some((ip as i64 + 4 + (((p & 0xffff) as u16 as i16 as i64) << 2)) as u64),
+                2 | 3 => Some(((ip + 4) & 0xffff_ffff_f000_0000) | ((p & 0x03ff_ffff) as u64) << 2),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
 }
