@@ -735,6 +735,7 @@ impl eframe::App for App {
         }
         self.sondear(ahora);
         self.gestionar_actualizacion(&ctx);
+        self.ventana_visor(&ctx);
         // Animaciones continuas (suaves cuando está en espera).
         ctx.request_repaint_after(if self.analizando() { Duration::from_millis(16) } else { Duration::from_millis(50) });
 
@@ -1670,6 +1671,12 @@ impl App {
                 p.rect_filled(chip_rect, CornerRadius::same(9), ec.gamma_multiply(0.18));
                 p.circle_filled(Pos2::new(chip_rect.left() + 9.0, chip_rect.center().y), 2.6, ec);
                 p.galley(Pos2::new(chip_rect.left() + 15.0, chip_rect.center().y - g.size().y / 2.0), g, ec);
+                if h.incompleto {
+                    resp.clone().on_hover_text(tr(
+                        "Not fully opened (for example, password-protected). Select it to see why in the block card.",
+                        "No se pudo abrir del todo (por ejemplo, tiene contraseña). Selecciónalo para ver el motivo en la ficha.",
+                    ));
+                }
                 if resp.clicked() {
                     nueva = Some(ruta.clone());
                 }
@@ -1698,6 +1705,26 @@ impl App {
                     chip(ui, tr("PENDING", "PENDIENTE"), rojo());
                 }
             });
+            if n.incompleto || !n.notas.is_empty() {
+                ui.add_space(8.0);
+                let titulo = if n.incompleto { tr("WHY IT IS PENDING", "POR QUÉ ESTÁ PENDIENTE") } else { tr("NOTES", "NOTAS") };
+                egui::Frame::new()
+                    .fill(naranja_oscuro())
+                    .stroke(Stroke::new(1.0, naranja()))
+                    .corner_radius(CornerRadius::same(6))
+                    .inner_margin(Margin::same(10))
+                    .show(ui, |ui| {
+                        ui.set_width(ui.available_width());
+                        ui.label(RichText::new(titulo).font(mono(10.0)).color(naranja()));
+                        for nota in &n.notas {
+                            ui.label(RichText::new(format!("• {nota}")).font(FontId::proportional(12.0)).color(texto()));
+                        }
+                        if n.notas.is_empty() {
+                            ui.label(RichText::new(tr("This layer could not be opened completely.", "Esta capa no se pudo abrir del todo.")).font(FontId::proportional(12.0)).color(texto()));
+                        }
+                    });
+            }
+
             ui.add_space(8.0);
             egui::Grid::new("detalle_grid").num_columns(2).spacing([10.0, 3.0]).show(ui, |ui| {
                 for (k, v) in [
@@ -2227,6 +2254,32 @@ impl App {
                 ui.label(RichText::new(tr("Tools: analyze a file, list formats, inspect an output. Works before or after scanning.", "Herramientas: analizar un archivo, listar formatos, inspeccionar una salida. Funciona antes o después de escanear.")).font(FontId::proportional(10.5)).color(morado_medio()));
             });
         });
+    }
+
+    /// El visor (informe, registros, resultados) como ventana sobre cualquier vista.
+    fn ventana_visor(&mut self, ctx: &egui::Context) {
+        if self.visor.is_none() || self.vista_es_clasica() {
+            return;
+        }
+        let mut abierta = true;
+        let titulo = self.visor.as_ref().map(|v| v.titulo.clone()).unwrap_or_default();
+        let r = ctx.content_rect();
+        egui::Window::new(RichText::new(acortar(&titulo, 60)).font(FontId::proportional(13.0)).color(texto()))
+            .id(egui::Id::new("ventana_visor"))
+            .open(&mut abierta)
+            .collapsible(false)
+            .resizable(true)
+            .default_size(Vec2::new((r.width() * 0.72).min(1100.0), r.height() * 0.72))
+            .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+            .show(ctx, |ui| self.visor_ui(ui));
+        if !abierta {
+            self.visor = None;
+        }
+    }
+
+    /// El diseño clásico (panel de instrumentos) ya dibuja el visor en su sitio.
+    fn vista_es_clasica(&self) -> bool {
+        false
     }
 
     fn visor_ui(&mut self, ui: &mut Ui) {
@@ -3401,7 +3454,7 @@ fn pastilla(ui: &mut Ui, icono: &str, txt: &str, fg: Color32, bg: Color32) {
 /// Etiqueta y color del estado de un bloque para la columna "Estado".
 fn estado_etiqueta(c: Confianza, incompleto: bool) -> (&'static str, Color32) {
     if incompleto {
-        (tr("Warning", "Con avisos"), naranja())
+        (tr("Pending", "Pendiente"), naranja())
     } else {
         match c {
             Confianza::Confirmado | Confianza::Compatible => (tr("Identified", "Identificado"), verde()),

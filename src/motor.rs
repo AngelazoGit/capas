@@ -463,20 +463,57 @@ impl Motor {
             Ok(a) => {
                 if let Some(c) = &a.clave {
                     self.emitir(Evento::Aviso(format!("contraseña hallada para '{}': {}", nodo.nombre, c)));
+                    nodo.notas.push(tfmt(
+                        tr("Opened with the password «{}» from the Keys module (no brute force).", "Abierto con la contraseña «{}» del módulo de Claves (sin fuerza bruta)."),
+                        &[c.clone()],
+                    ));
                 }
                 Ok(a.hijos)
+            }
+            Err(e) if es_error_de_clave(&e) => {
+                // Cifrado y ninguna contraseña conocida lo abre: no se reintenta con 7-Zip
+                // (probaría lo mismo) y se explica exactamente qué se ha intentado.
+                nodo.incompleto = true;
+                nodo.notas.push(self.nota_cifrado());
+                Ok(Vec::new())
             }
             Err(e) if self.herr.get("7z").is_some() => {
                 nodo.notas.push(tfmt(tr("native extractor: {} — retrying with 7-Zip", "extractor nativo: {} — se reintenta con 7-Zip"), &[e.to_string()]));
                 self.con_7z(ruta, an, nodo)
             }
-            Err(e) => {
-                if e.to_string().to_lowercase().contains("contrase") {
-                    nodo.incompleto = true;
-                }
-                Err(e)
-            }
+            Err(e) => Err(e),
         }
+    }
+
+    /// Explicación clara para un contenedor cifrado que no se ha podido abrir:
+    /// qué contraseñas se probaron exactamente y que no hay fuerza bruta.
+    fn nota_cifrado(&self) -> String {
+        let k = &self.cfg.claves;
+        let total = k.candidatas_externas().len();
+        if total == 0 {
+            return tr(
+                "Password-protected, and the Keys module has no passwords to try. CAPAS does not guess or brute-force passwords: add this archive's password in the Keys module and analyze again.",
+                "Protegido con contraseña y el módulo de Claves no tiene ninguna que probar. CAPAS no adivina contraseñas ni usa fuerza bruta: añade la contraseña de este archivo en el módulo de Claves y vuelve a analizar.",
+            )
+            .to_string();
+        }
+        let mut fuentes = Vec::new();
+        if !k.explicitas.is_empty() {
+            fuentes.push(tfmt(tr("{} added by you", "{} añadidas por ti"), &[k.explicitas.len().to_string()]));
+        }
+        if k.comunes {
+            fuentes.push(tr("the list of common passwords", "la lista de contraseñas habituales").to_string());
+        }
+        if k.diccionario.is_some() {
+            fuentes.push(tr("your dictionary file", "tu archivo de diccionario").to_string());
+        }
+        tfmt(
+            tr(
+                "Password-protected: {} passwords were tried ({}) and none opened it. No brute force is used. Add the right password in the Keys module and analyze again.",
+                "Protegido con contraseña: se probaron {} contraseñas ({}) y ninguna lo abrió. No se usa fuerza bruta. Añade la contraseña correcta en el módulo de Claves y vuelve a analizar.",
+            ),
+            &[total.to_string(), fuentes.join(", ")],
+        )
     }
 
     fn con_7z(&self, ruta: &Path, an: &Path, nodo: &mut Nodo) -> anyhow::Result<Vec<Hijo>> {
@@ -509,10 +546,7 @@ impl Motor {
         }
         if !ok {
             nodo.incompleto = true;
-            nodo.notas.push(crate::idioma::tr(
-                "protected or unreadable archive — add its password in the Keys module and re-run",
-                "archivo protegido o ilegible — añade su contraseña en el módulo de Claves y reanaliza",
-            ).into());
+            nodo.notas.push(self.nota_cifrado());
         }
         let mut hijos = Vec::new();
         let mut pila = vec![tmp.clone()];
@@ -737,4 +771,10 @@ mod pruebas_ruta {
             assert!(!p.components().any(|c| c.as_os_str() == ".."), "quedó .. con {evil:?}");
         }
     }
+}
+
+/// ¿El fallo del extractor nativo se debe a una contraseña que falta o no encaja?
+fn es_error_de_clave(e: &anyhow::Error) -> bool {
+    let t = e.to_string().to_lowercase();
+    t.contains("contraseña") || t.contains("password") || t.contains("cifrado") || t.contains("encrypt")
 }
