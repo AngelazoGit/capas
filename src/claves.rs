@@ -144,11 +144,14 @@ impl Claves {
     /// Resuelve un ZIP: devuelve sus hijos y, si estaba cifrado y se encontró,
     /// la contraseña usada.
     pub fn abrir_zip(&self, d: &[u8], lim: u64, notas: &mut Vec<String>) -> Result<(Vec<Hijo>, Option<String>)> {
-        if !zip_cifrado(d) {
+        let cifrado = cifrado_zip(d);
+        if cifrado == Cifrado::No {
             return Ok((crate::extraer::zip(d, lim, notas)?, None));
         }
+        // Aviso claro según el tipo de cifrado: recuperable o solo con contraseña.
+        notas.push(aviso_cifrado(cifrado));
         if !self.activa() {
-            notas.push(tr("Password-protected ZIP: enable the key module (--clave / --diccionario / --comunes) to open it","ZIP protegido con contraseña: activa el módulo de claves (--clave / --diccionario / --comunes) para abrirlo").into());
+            notas.push(tr("Enable the Keys module (passwords / dictionary / common list) to open it.","Activa el módulo de Claves (contraseñas / diccionario / lista de habituales) para abrirlo.").into());
             return Ok((crate::extraer::zip(d, lim, notas)?, None));
         }
         let candidatas = self.candidatas();
@@ -165,6 +168,66 @@ impl Claves {
             }
         }
     }
+}
+
+/// Aviso en lenguaje claro según el tipo de cifrado del ZIP.
+pub fn aviso_cifrado(c: Cifrado) -> String {
+    match c {
+        Cifrado::ZipCrypto => tr(
+            "ZipCrypto encryption (legacy, weak): it CAN be recovered WITHOUT the password if a known plaintext is available (an unencrypted copy of one of its files, or a predictable header). Otherwise, passwords from the Keys module are tried.",
+            "Cifrado ZipCrypto (antiguo y débil): SE PUEDE recuperar SIN la contraseña si hay un texto plano conocido (una copia sin cifrar de uno de sus archivos, o una cabecera predecible). Si no, se prueban las contraseñas del módulo de Claves.",
+        ).to_string(),
+        Cifrado::Aes => tr(
+            "AES encryption (strong): it canNOT be broken. The only way in is the password — tried from the Keys module (your passwords, common list, dictionary, or bounded brute force with an alphabet).",
+            "Cifrado AES (fuerte): NO se puede romper. La única vía es la contraseña — se prueba desde el módulo de Claves (tus contraseñas, lista de habituales, diccionario o fuerza bruta acotada con abecedario).",
+        ).to_string(),
+        Cifrado::No => String::new(),
+    }
+}
+
+/// Tipo de cifrado de un ZIP, para saber si se puede recuperar sin contraseña.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Cifrado {
+    /// Sin cifrar.
+    No,
+    /// ZipCrypto clásico: criptografía débil, recuperable con texto plano conocido.
+    ZipCrypto,
+    /// AES (WinZip): fuerte, solo se abre con la contraseña.
+    Aes,
+}
+
+/// Detecta el cifrado de un ZIP leyendo su directorio central. Si hay mezcla,
+/// AES manda (lo más fuerte marca el conjunto).
+pub fn cifrado_zip(d: &[u8]) -> Cifrado {
+    // Localiza el End Of Central Directory (firma PK\x05\x06) desde el final.
+    let eocd = (0..d.len().saturating_sub(21)).rev().find(|&i| &d[i..i + 4] == b"PK\x05\x06");
+    let (mut off, total) = match eocd {
+        Some(e) => {
+            let cd_off = u32::from_le_bytes(d[e + 16..e + 20].try_into().unwrap()) as usize;
+            let n = u16::from_le_bytes(d[e + 10..e + 12].try_into().unwrap()) as usize;
+            (cd_off, n)
+        }
+        None => return Cifrado::No,
+    };
+    let mut res = Cifrado::No;
+    for _ in 0..total {
+        if off + 46 > d.len() || &d[off..off + 4] != b"PK\x01\x02" {
+            break;
+        }
+        let gp = u16::from_le_bytes(d[off + 8..off + 10].try_into().unwrap());
+        let metodo = u16::from_le_bytes(d[off + 10..off + 12].try_into().unwrap());
+        if gp & 1 != 0 {
+            if metodo == 99 {
+                return Cifrado::Aes; // lo más fuerte: no hace falta seguir
+            }
+            res = Cifrado::ZipCrypto;
+        }
+        let nl = u16::from_le_bytes(d[off + 28..off + 30].try_into().unwrap()) as usize;
+        let el = u16::from_le_bytes(d[off + 30..off + 32].try_into().unwrap()) as usize;
+        let cl = u16::from_le_bytes(d[off + 32..off + 34].try_into().unwrap()) as usize;
+        off += 46 + nl + el + cl;
+    }
+    res
 }
 
 /// ¿El ZIP tiene al menos una entrada cifrada?
@@ -337,6 +400,19 @@ const COMUNES: &[&str] = &[
 #[cfg(test)]
 mod pruebas_fuerza {
     use super::*;
+
+    fn fx(n: &str) -> Vec<u8> {
+        std::fs::read(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(n)).unwrap()
+    }
+
+    #[test]
+    fn detecta_zipcrypto_vs_aes() {
+        assert_eq!(cifrado_zip(&fx("zipcrypto.zip")), Cifrado::ZipCrypto);
+        assert_eq!(cifrado_zip(&fx("aes.zip")), Cifrado::Aes);
+        // Un ZIP normal no está cifrado.
+        assert_eq!(cifrado_zip(&fx("plano_zip.zip")), Cifrado::No);
+    }
+
     #[test]
     fn fuerza_bruta_no_se_activa_sin_abecedario() {
         assert!(FuerzaBruta::nuevo("", 4).is_none());
