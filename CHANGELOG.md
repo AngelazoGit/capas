@@ -6,6 +6,13 @@ y el versionado [SemVer](https://semver.org/lang/es/).
 
 ## [0.1.6] — 2026-11-27
 
+### Añadido — más idiomas (中文 / Русский / Português)
+- La interfaz, además de inglés y español, ofrece **chino simplificado, ruso y
+  portugués** en la superficie más visible (menú, títulos, botones, edición,
+  barra de estado); lo no traducido cae a inglés. Selector de idioma en la
+  cabecera y en Ajustes, y `--idioma zh|ru|pt` en consola. Se embebe un
+  subconjunto de fuente CJK (~35 KB) para que el chino se vea bien.
+
 ### Añadido — pulidos
 - **`--buscar TEXTO`** en la línea de comandos: tras analizar, busca texto (o
   bytes con `hex:…`) en toda la salida y lista las coincidencias (lo mismo que el

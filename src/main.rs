@@ -360,7 +360,11 @@ fn main() -> Result<()> {
     adjuntar_consola();
     let a = Args::parse();
     match a.idioma.as_deref() {
-        Some(l) => idioma::set_es(l.eq_ignore_ascii_case("es")),
+        Some(l) => {
+            if !idioma::set_codigo(l) {
+                idioma::autodetectar(); // código desconocido → autodetectar
+            }
+        }
         None => idioma::autodetectar(),
     }
     // La fuerza bruta NO puede activarse sin un abecedario: si se pide con un

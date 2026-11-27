@@ -1473,10 +1473,14 @@ impl App {
                 }
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let es = crate::idioma::es();
-                if ui.add(boton_sec(if es { "ES" } else { "EN" })).on_hover_text(tr("Switch language", "Cambiar idioma")).clicked() {
-                    crate::idioma::set_es(!es);
-                }
+                let actual = crate::idioma::codigo().to_uppercase();
+                ui.menu_button(format!("  {actual} ▾"), |ui| {
+                    for (i, (c, nombre)) in crate::idioma::IDIOMAS.iter().enumerate() {
+                        if ui.button(format!("{nombre}  ({c})")).clicked() {
+                            crate::idioma::set_lang(i as u8);
+                        }
+                    }
+                }).response.on_hover_text(tr("Switch language", "Cambiar idioma"));
                 ui.add_space(6.0);
                 if self.analizando() {
                     let cancelar = if let Fase::Analizando { cancelar, .. } = &self.fase { Some(cancelar.clone()) } else { None };
@@ -2304,16 +2308,16 @@ impl App {
                 ui.add_space(10.0);
                 ui.label(RichText::new(tr("Language", "Idioma")).font(FontId::proportional(12.0)).color(morado_claro()));
                 ui.add_space(4.0);
-                ui.horizontal(|ui| {
-                    let es = crate::idioma::es();
-                    for (lab, val) in [("English", false), ("Español", true)] {
-                        let activo = es == val;
-                        let b = egui::Button::new(RichText::new(lab).font(FontId::proportional(12.5)).color(if activo { Color32::from_rgb(0xf6, 0xf7, 0xfb) } else { morado_claro() }))
+                ui.horizontal_wrapped(|ui| {
+                    let actual = crate::idioma::lang();
+                    for (i, (_c, nombre)) in crate::idioma::IDIOMAS.iter().enumerate() {
+                        let activo = actual == i as u8;
+                        let b = egui::Button::new(RichText::new(*nombre).font(FontId::proportional(12.5)).color(if activo { Color32::from_rgb(0xf6, 0xf7, 0xfb) } else { morado_claro() }))
                             .fill(if activo { acento() } else { morado() })
                             .corner_radius(CornerRadius::same(7))
                             .min_size(Vec2::new(0.0, 32.0));
                         if ui.add(b).clicked() {
-                            crate::idioma::set_es(val);
+                            crate::idioma::set_lang(i as u8);
                         }
                     }
                 });
@@ -3985,29 +3989,33 @@ fn configurar_estilo(ctx: &egui::Context) {
     const INTER_SB: &[u8] = include_bytes!("../assets/fonts/Inter-SemiBold.otf");
     const INTER_BOLD: &[u8] = include_bytes!("../assets/fonts/Inter-Bold.otf");
     const JBMONO: &[u8] = include_bytes!("../assets/fonts/JetBrainsMono-Regular.ttf");
+    // shortcut: subconjunto CJK solo con los caracteres chinos usados hoy (~35 KB).
+    // Si se añaden cadenas chinas nuevas, re-subconjuntar (pyftsubset Noto Sans CJK SC).
+    const CJK: &[u8] = include_bytes!("../assets/fonts/NotoSansCJKsc-subset.otf");
 
     let mut fuentes = FontDefinitions::default();
     fuentes.font_data.insert("inter".into(), Arc::new(FontData::from_static(INTER)));
     fuentes.font_data.insert("inter_sb".into(), Arc::new(FontData::from_static(INTER_SB)));
     fuentes.font_data.insert("inter_bold".into(), Arc::new(FontData::from_static(INTER_BOLD)));
     fuentes.font_data.insert("jbmono".into(), Arc::new(FontData::from_static(JBMONO)));
+    fuentes.font_data.insert("cjk".into(), Arc::new(FontData::from_static(CJK)));
 
     // Respaldo (emoji/CJK) que egui ya trae, para conservarlo tras nuestras fuentes.
     let resp_prop = fuentes.families.get(&FontFamily::Proportional).cloned().unwrap_or_default();
     let resp_mono = fuentes.families.get(&FontFamily::Monospace).cloned().unwrap_or_default();
 
-    // Cuerpo (Proportional) = Inter Regular.
-    let mut prop = vec!["inter".to_string()];
+    // Cuerpo (Proportional) = Inter Regular; CJK para chino.
+    let mut prop = vec!["inter".to_string(), "cjk".to_string()];
     prop.extend(resp_prop.iter().filter(|f| *f != "inter").cloned());
     fuentes.families.insert(FontFamily::Proportional, prop);
 
-    // Títulos ("titulo") = Inter Bold.
-    let mut titulo = vec!["inter_bold".to_string(), "inter_sb".to_string()];
+    // Títulos ("titulo") = Inter Bold; CJK para chino.
+    let mut titulo = vec!["inter_bold".to_string(), "inter_sb".to_string(), "cjk".to_string()];
     titulo.extend(resp_prop.iter().cloned());
     fuentes.families.insert(FontFamily::Name("titulo".into()), titulo);
 
-    // Monoespaciada = JetBrains Mono.
-    let mut mono = vec!["jbmono".to_string()];
+    // Monoespaciada = JetBrains Mono; CJK para chino.
+    let mut mono = vec!["jbmono".to_string(), "cjk".to_string()];
     mono.extend(resp_mono.iter().filter(|f| *f != "jbmono").cloned());
     fuentes.families.insert(FontFamily::Monospace, mono);
 
