@@ -6,6 +6,13 @@ y el versionado [SemVer](https://semver.org/lang/es/).
 
 ## [0.1.6] — 2026-11-27
 
+### Añadido — escáner de secretos/credenciales
+- **Detección de secretos** en cada bloque analizado: claves API conocidas (AWS,
+  Google, Stripe, GitHub, Slack), **claves privadas** PEM, **JWTs** y
+  asignaciones del tipo `password = "..."` con alta entropía. Genera
+  `secretos.txt` y un aviso en la ficha del bloque. Los valores salen **siempre
+  redactados** (prefijo + longitud), nunca el secreto entero.
+
 ### Añadido — fuerza bruta de ZipCrypto mucho más rápida (CPU y GPU)
 - **Chequeo rápido del byte de control.** Al probar contraseñas contra un ZIP
   con ZipCrypto tradicional, ahora se comprueba primero el byte de control de la

@@ -411,6 +411,18 @@ impl Motor {
                 self.guardar(an, "cadenas.txt", c.as_bytes(), nodo);
             }
         }
+        // Escáner de secretos/credenciales (salvo contenedores, que no llevan).
+        if !tipo.es_contenedor() && !matches!(tipo, Tipo::Imagen | Tipo::Audio | Tipo::Video) {
+            let hall = crate::secretos::escanear(d, 200);
+            if !hall.is_empty() {
+                self.guardar(an, "secretos.txt", crate::secretos::informe(&hall).as_bytes(), nodo);
+                nodo.notas.push(tfmt(
+                    tr("⚠ {} possible secret(s)/credential(s) detected (see secretos.txt; values redacted)",
+                       "⚠ {} posible(s) secreto(s)/credencial(es) detectado(s) (ver secretos.txt; valores redactados)"),
+                    &[hall.len().to_string()],
+                ));
+            }
+        }
         // Firmas incrustadas (payloads, instaladores, recursos).
         if self.cfg.tallar && !tipo.es_contenedor() && tipo != Tipo::Texto {
             let t = extraer::tallar(d, lim);

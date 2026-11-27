@@ -40,6 +40,7 @@ mod pyc_tablas;
 mod plugins;
 mod politica;
 mod recursos;
+mod secretos;
 mod relaciones;
 mod vigilar;
 #[cfg(test)]
