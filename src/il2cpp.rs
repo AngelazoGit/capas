@@ -130,4 +130,16 @@ mod pruebas_il2cpp {
         assert!(s.contains("\"HELLO\""), "falta literal HELLO:\n{s}");
         assert!(s.contains("\"YOU WIN!\""), "falta literal:\n{s}");
     }
+
+    #[test]
+    fn no_entra_en_panico_con_basura() {
+        let d = metadata_minimo();
+        for n in 0..d.len() {
+            let _ = listar(&d[..n]); // truncado: nunca debe panic
+        }
+        // Magia válida + offsets/tamaños disparatados.
+        let mut malo = vec![0xafu8, 0x1b, 0xb1, 0xfa];
+        malo.extend_from_slice(&[0xffu8; 60]);
+        let _ = listar(&malo);
+    }
 }

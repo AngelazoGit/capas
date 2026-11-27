@@ -118,7 +118,14 @@ y el versionado [SemVer](https://semver.org/lang/es/).
   espacios de nombres, clases, campos y métodos (con `static`), estilo `ildasm`.
   Muy útil para la lógica de juegos Unity (`Assembly-CSharp.dll`). Además del
   análisis PE habitual. Disponible con `--listar-codigo`/`--decompilar` y en la
-  app. (El pseudo-C# completo y el desensamblado CIL quedan para más adelante.)
+  app.
+- **Cuerpo CIL desensamblado** (fase 2): además de la estructura, se desensambla
+  el bytecode CIL de cada método (opcodes + operandos, estilo ildasm), con los
+  **`ldstr` resueltos a su literal** del heap `#US`. (El pseudo-C# con control de
+  flujo y la resolución de tokens de llamada a nombres quedan para más adelante.)
+- **Robustez**: los lectores nativos (.NET, Lua, IL2CPP) se endurecieron contra
+  archivos malformados (lecturas acotadas, tope de anidamiento) para no provocar
+  pánicos con entrada no confiable.
 
 ### Añadido — decompilador de shaders (SPIR-V → WGSL)
 - **Shaders SPIR-V** (Vulkan/OpenGL/WebGPU) se detectan por contenido y se

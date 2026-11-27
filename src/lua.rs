@@ -103,6 +103,9 @@ fn instr54(i: u32) -> String {
 
 /// Parsea un prototipo (función) recursivamente y lo escribe en `out`.
 fn funcion(l: &mut Lec, out: &mut String, prof: usize, idx: usize) -> Result<()> {
+    if prof > 200 {
+        bail!("anidamiento de funciones excesivo"); // evita desbordar la pila con bytecode malicioso
+    }
     let sangria = "  ".repeat(prof);
     let _fuente = l.cadena()?; // source (suele ser nula salvo en main)
     let _lineini = l.varint()?;
@@ -236,5 +239,17 @@ mod pruebas_lua {
         assert!(s.contains("ADD"), "falta la instrucción ADD:\n{s}");
         // Debe haber una función anidada (la main + la interna).
         assert!(s.contains("function #0"), "falta la función anidada:\n{s}");
+    }
+
+    #[test]
+    fn no_entra_en_panico_con_basura() {
+        let d = fx("lua54_demo.luac");
+        for n in 0..d.len() {
+            let _ = listar(&d[..n]); // truncado: nunca debe panic
+        }
+        // Cabecera válida + basura detrás.
+        let mut malo = d[..16.min(d.len())].to_vec();
+        malo.extend_from_slice(&[0xffu8; 500]);
+        let _ = listar(&malo);
     }
 }
