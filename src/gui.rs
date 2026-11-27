@@ -1899,6 +1899,9 @@ impl App {
                 }
             });
             barra_segmentada(ui, (n.entropia / 8.0) as f32, if n.entropia > 7.5 { rojo() } else { verde() });
+            if ui.add(egui::Label::new(RichText::new(tr("⎘ copy SHA-256", "⎘ copiar SHA-256")).font(mono(9.5)).color(morado_claro())).sense(Sense::click())).clicked() {
+                ui.ctx().copy_text(n.sha256.clone());
+            }
 
             ui.add_space(10.0);
             ui.label(RichText::new(tr("PREVIEW", "VISTA PREVIA")).font(mono(10.0)).color(morado_claro()));

@@ -205,6 +205,10 @@ struct Args {
     #[arg(long)]
     gpu: bool,
 
+    /// After analysis, search all extracted layers for text, or bytes with hex: (e.g. --buscar hex:DEADBEEF)
+    #[arg(long, value_name = "TEXTO")]
+    buscar: Option<String>,
+
     /// Maximum length for brute force
     #[arg(long, default_value_t = 4)]
     fuerza_long: usize,
@@ -581,6 +585,22 @@ fn main() -> Result<()> {
         eprintln!("  {}: {}", idioma::tr("Report","Informe"), r.raiz.join("auditoria.md").display());
     }
     eprintln!("{}: {}", idioma::tr("Report","Informe"), r.raiz.join("informe.md").display());
+
+    // Búsqueda global por contenido en toda la salida (texto o hex:…).
+    if let Some(q) = &a.buscar {
+        match buscar::Consulta::desde(q) {
+            Some(cons) => {
+                let hits = buscar::en_carpeta(&r.raiz, &cons, 500, 16 << 20);
+                eprintln!("\n== {} «{q}» ==", idioma::tr("Search","Búsqueda"));
+                for h in &hits {
+                    let rel = h.ruta.strip_prefix(&r.raiz).unwrap_or(&h.ruta);
+                    println!("{}:{}  {}", rel.display(), h.linea, h.contexto);
+                }
+                eprintln!("  {} {}", hits.len(), idioma::tr("match(es)","coincidencia(s)"));
+            }
+            None => eprintln!("--buscar: {}", idioma::tr("empty query","búsqueda vacía")),
+        }
+    }
 
     // [Pro] Comparación entre versiones.
     if let Some(base) = &a.comparar {

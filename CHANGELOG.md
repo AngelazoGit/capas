@@ -6,6 +6,12 @@ y el versionado [SemVer](https://semver.org/lang/es/).
 
 ## [0.1.6] — 2026-11-27
 
+### Añadido — pulidos
+- **`--buscar TEXTO`** en la línea de comandos: tras analizar, busca texto (o
+  bytes con `hex:…`) en toda la salida y lista las coincidencias (lo mismo que el
+  botón «Buscar en todo», ahora también para terminal/MCP/automatización).
+- **Copiar SHA-256** del bloque con un clic en su ficha.
+
 ### Añadido — visor integrado (hex / cadenas)
 - En la ficha de cada bloque, botones **Hex** y **Cadenas** para ver el
   contenido DENTRO de la app (volcado offset/hex/ASCII y cadenas ASCII+UTF-16),
