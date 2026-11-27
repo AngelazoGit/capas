@@ -698,7 +698,7 @@ fn leer_logico(d: &[u8], f: &FmtIso, lba: u32, len: usize) -> Vec<u8> {
     out
 }
 
-pub fn iso9660(d: &[u8], lim: u64) -> Result<Vec<Hijo>> {
+pub fn iso9660(d: &[u8], lim: u64, notas: &mut Vec<String>, truncado: &mut bool) -> Result<Vec<Hijo>> {
     let fmt = formato_iso(d).ok_or_else(|| anyhow!("{}", tr("not a primary ISO 9660 volume", "no es un volumen ISO 9660 primario")))?;
     // PVD (sector 16): registro de directorio raíz en el offset 156.
     let pvd = leer_logico(d, &fmt, 16, 2048);
@@ -711,6 +711,12 @@ pub fn iso9660(d: &[u8], lim: u64) -> Result<Vec<Hijo>> {
 
     let mut hijos = Vec::new();
     let mut total = 0u64;
+    // Una ISO no está comprimida (ratio 1:1): no es una "bomba". El límite es de
+    // MEMORIA (CAPAS mantiene lo extraído en RAM). Así que no se aborta la imagen
+    // entera: se extrae lo que cabe y se omite el resto con una nota clara.
+    let mut omitidos = 0usize;
+    let mut bytes_omitidos = 0u64;
+    let mut avisos = 0usize;
     let mut visitados = std::collections::HashSet::new();
     let mut pila = vec![(raiz_lba, raiz_len, String::new())];
     let mut registros = 0usize;
@@ -757,17 +763,34 @@ pub fn iso9660(d: &[u8], lim: u64) -> Result<Vec<Hijo>> {
             if flags & 0x02 != 0 {
                 pila.push((ext_lba, ext_len, completo));
             } else {
-                total += ext_len as u64;
-                if total > lim {
-                    bail!("{}", tfmt(tr("exceeds the limit of {} bytes (decompression bomb?)", "supera el límite de {} bytes (¿bomba de descompresión?)"), &[lim.to_string()]));
-                }
-                let datos = leer_logico(d, &fmt, ext_lba, ext_len);
-                if !datos.is_empty() {
-                    hijos.push(Hijo { nombre: completo, datos });
+                let tam = ext_len as u64;
+                if tam > lim || total + tam > lim {
+                    // No cabe en el presupuesto de memoria del bloque: se omite,
+                    // pero se sigue recorriendo para listar y contar el resto.
+                    omitidos += 1;
+                    bytes_omitidos += tam;
+                    if avisos < 8 {
+                        notas.push(tfmt(tr("skipped (does not fit in the per-block memory budget): {} ({})", "omitido (no cabe en el presupuesto de memoria del bloque): {} ({})"), &[completo.clone(), crate::recursos::humano(tam)]));
+                        avisos += 1;
+                    }
+                } else {
+                    total += tam;
+                    let datos = leer_logico(d, &fmt, ext_lba, ext_len);
+                    if !datos.is_empty() {
+                        hijos.push(Hijo { nombre: completo, datos });
+                    }
                 }
             }
             pos += rlen;
         }
+    }
+    if omitidos > 0 {
+        *truncado = true;
+        notas.push(tfmt(
+            tr("ISO larger than the per-block memory limit ({}): extracted {} files ({}), skipped {} ({}). Lower THREADS or free RAM to raise the limit — very large images do not fit in memory whole.",
+               "ISO mayor que el límite de memoria por bloque ({}): extraídos {} ficheros ({}), omitidos {} ({}). Baja HILOS o libera RAM para subir el límite; las imágenes muy grandes no caben enteras en memoria."),
+            &[crate::recursos::humano(lim), hijos.len().to_string(), crate::recursos::humano(total), omitidos.to_string(), crate::recursos::humano(bytes_omitidos)],
+        ));
     }
     Ok(hijos)
 }
@@ -833,19 +856,35 @@ mod pruebas_iso {
     #[test]
     fn lee_iso_minimo() {
         let img = mini_iso(b"HELLO ISO");
-        let hijos = iso9660(&img, 1 << 20).unwrap();
+        let (mut n, mut t) = (Vec::new(), false);
+        let hijos = iso9660(&img, 1 << 20, &mut n, &mut t).unwrap();
         assert_eq!(hijos.len(), 1);
         assert_eq!(hijos[0].nombre, "FILE.TXT"); // sin ";1"
         assert_eq!(hijos[0].datos, b"HELLO ISO");
+        assert!(!t, "no debe marcarse truncado si todo cabe");
     }
 
     #[test]
     fn lee_bin_crudo_2352() {
         let crudo = a_2352(&mini_iso(b"RAW CD TRACK"));
-        let hijos = iso9660(&crudo, 1 << 20).unwrap();
+        let (mut n, mut t) = (Vec::new(), false);
+        let hijos = iso9660(&crudo, 1 << 20, &mut n, &mut t).unwrap();
         assert_eq!(hijos.len(), 1);
         assert_eq!(hijos[0].nombre, "FILE.TXT");
         assert_eq!(hijos[0].datos, b"RAW CD TRACK");
+    }
+
+    #[test]
+    fn iso_que_no_cabe_extrae_parcial_sin_fallar() {
+        // Con un límite por debajo del fichero, NO se aborta la imagen: se omite
+        // el fichero, se marca truncado y se deja una nota. (El fichero del
+        // mini-ISO son 9 bytes; con límite 4 no cabe.)
+        let img = mini_iso(b"HELLO ISO");
+        let (mut n, mut t) = (Vec::new(), false);
+        let hijos = iso9660(&img, 4, &mut n, &mut t).unwrap();
+        assert!(hijos.is_empty(), "el fichero no cabe, se omite");
+        assert!(t, "debe marcarse truncado");
+        assert!(n.iter().any(|m| m.contains("omitid") || m.to_lowercase().contains("skip")));
     }
 }
 

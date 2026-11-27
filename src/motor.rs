@@ -230,15 +230,21 @@ impl Motor {
             Tipo::Zlib => extraer::zlib(d, nombre, lim),
             Tipo::Zstd => extraer::zstd(d, nombre, lim),
             Tipo::Lz4 => extraer::lz4(d, nombre, lim),
-            Tipo::Iso => match extraer::iso9660(d, lim) {
-                Ok(hijos) => {
-                    if let Some(info) = extraer::plataforma_disco(&hijos) {
-                        nodo.resultados.push(info);
+            Tipo::Iso => {
+                let mut truncado = false;
+                match extraer::iso9660(d, lim, &mut notas, &mut truncado) {
+                    Ok(hijos) => {
+                        if truncado {
+                            nodo.incompleto = true;
+                        }
+                        if let Some(info) = extraer::plataforma_disco(&hijos) {
+                            nodo.resultados.push(info);
+                        }
+                        Ok(hijos)
                     }
-                    Ok(hijos)
+                    Err(e) => Err(e),
                 }
-                Err(e) => Err(e),
-            },
+            }
             Tipo::Tar => extraer::tar(d, lim, &mut notas),
             Tipo::ArUnix => extraer::ar(d),
             Tipo::MachOFat => extraer::macho_fat(d),

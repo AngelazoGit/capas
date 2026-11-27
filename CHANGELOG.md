@@ -4,6 +4,18 @@ Todas las novedades relevantes de CAPAS. El formato sigue
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/)
 y el versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.1.6] — 2026-11-27
+
+### Corregido — ISO grandes (imágenes de disco de varios GiB)
+- **Una ISO ya no se descarta entera por el límite de memoria.** Antes, una
+  imagen ISO 9660 mayor que el límite por bloque fallaba con «¿bomba de
+  descompresión?», lo cual era engañoso: una ISO no está comprimida (ratio 1:1),
+  el límite es de MEMORIA (CAPAS mantiene lo extraído en RAM). Ahora extrae los
+  ficheros que caben, **omite** los que no con una nota por fichero, marca la
+  capa como incompleta y añade un resumen («extraídos N, omitidos K») que explica
+  cómo subir el límite (bajar HILOS o liberar RAM). Así se ve el árbol de la
+  imagen y los ficheros pequeños aunque la imagen entera no quepa.
+
 ## [0.1.5] — 2026-11-27
 
 ### Corregido — autoactualización en bucle
@@ -107,6 +119,7 @@ y el versionado [SemVer](https://semver.org/lang/es/).
   packs y mods, módulo de claves e informes. Núcleo gratuito; Pro y Studio
   por licencia firmada (Ed25519) sin conexión.
 
+[0.1.6]: https://github.com/AngelazoGit/capas/releases/tag/v0.1.6
 [0.1.5]: https://github.com/AngelazoGit/capas/releases/tag/v0.1.5
 [0.1.3]: https://github.com/AngelazoGit/capas/releases/tag/v0.1.3
 [0.1.2]: https://github.com/AngelazoGit/capas/releases/tag/v0.1.2
