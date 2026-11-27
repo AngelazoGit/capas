@@ -66,7 +66,12 @@ jobs:
           tag_name: ${{ env.VERSION }}
           name: CAPAS ${{ env.VERSION }}
           make_latest: true
-          files: ${{ env.ZIP }}
+          # El .zip versionado + el .exe suelto con nombre ESTABLE, para que
+          # https://github.com/AngelazoGit/capas/releases/latest/download/capas.exe
+          # sea una descarga directa que siempre apunta a la última versión.
+          files: |
+            ${{ env.ZIP }}
+            target/release/capas.exe
           body: |
             CAPAS ${{ env.VERSION }} — portable Windows build.
 
