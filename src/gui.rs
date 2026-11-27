@@ -365,6 +365,18 @@ impl Vista {
             Vista::Ajustes => tr("Settings", "Ajustes"),
         }
     }
+    /// Explicación en una línea de para qué sirve cada vista (tooltip del menú).
+    fn descripcion(self) -> &'static str {
+        match self {
+            Vista::Inicio => tr("Overview and quick start: drop a file and analyze.", "Resumen y primeros pasos: suelta un archivo y analiza."),
+            Vista::Analisis => tr("Main workspace: analyze files layer by layer (unpack, identify, decompile) and inspect each block.", "Zona principal: analiza archivos capa a capa (desempaqueta, identifica, decompila) e inspecciona cada bloque."),
+            Vista::Explorador => tr("Browse the extracted layers as a file tree, on disk.", "Recorre las capas extraídas como árbol de archivos, en disco."),
+            Vista::Comparar => tr("Compare two analyses to see what changed (Pro).", "Compara dos análisis para ver qué cambió (Pro)."),
+            Vista::Formatos => tr("List of every format CAPAS detects and how it opens it.", "Lista de todos los formatos que CAPAS detecta y cómo los abre."),
+            Vista::Herramientas => tr("Engines, resources (CPU/RAM), parameters and keys for protected archives.", "Motores, recursos (CPU/RAM), parámetros y claves para archivos protegidos."),
+            Vista::Ajustes => tr("Language, appearance, license and the MCP bridge (connect an AI).", "Idioma, apariencia, licencia y el puente MCP (conectar una IA)."),
+        }
+    }
     fn icono(self) -> &'static str {
         match self {
             Vista::Inicio => "home",
@@ -847,6 +859,7 @@ impl App {
     fn recursos_ui(&mut self, ui: &mut Ui, ahora: f64) {
         egui::ScrollArea::vertical().show(ui, |ui| {
             seccion(ui, "01", tr("PROCESSING CORES", "NÚCLEOS DE PROCESO"), acento(), |ui| {
+                subtitulo(ui, tr("Your CPU cores and how many CAPAS is using right now. Lit up = working during an analysis.", "Los núcleos de tu CPU y cuántos usa CAPAS ahora mismo. Encendidos = trabajando durante un análisis."));
                 let n = self.sis.nucleos.min(64);
                 let activos = if self.analizando() { self.op.hilos.min(n) } else { 0 };
                 let radio = 20.0;
@@ -872,6 +885,7 @@ impl App {
             });
 
             seccion(ui, "02", tr("MEMORY", "MEMORIA"), acento(), |ui| {
+                subtitulo(ui, tr("Your RAM, and the per-block limit: the biggest chunk CAPAS loads at once (it keeps extracted data in RAM). Raise it with fewer THREADS or more free RAM.", "Tu RAM, y el límite por bloque: el trozo máximo que CAPAS carga de una vez (mantiene lo extraído en RAM). Súbelo con menos HILOS o más RAM libre."));
                 let total = self.sis.memoria_total.max(1);
                 let usada = total.saturating_sub(self.sis.memoria_libre);
                 barra_segmentada(ui, usada as f32 / total as f32, morado_claro());
@@ -886,6 +900,7 @@ impl App {
             let mut rescan = false;
             let mut accion: Option<&'static str> = None;
             seccion(ui, "03", tr("ANALYSIS ENGINES", "MOTORES DE ANÁLISIS"), naranja(), |ui| {
+                subtitulo(ui, tr("The decoders/decompilers CAPAS can use. 'Built into CAPAS' work with no install; the rest are optional external tools (Install/Web buttons). 'Rescan' re-detects them.", "Los decodificadores/decompiladores que puede usar CAPAS. Los 'integrados en CAPAS' funcionan sin instalar nada; el resto son herramientas externas opcionales (botones Instalar/Web). 'Reescanear' vuelve a detectarlas."));
                 let activos = HERRAMIENTAS_CONOCIDAS.iter().filter(|(n, _)| self.herr.get(n).is_some() || integrado(n).is_some()).count();
                 let nativos = HERRAMIENTAS_CONOCIDAS.iter().filter(|(n, _)| integrado(n).is_some()).count();
                 ui.horizontal(|ui| {
@@ -949,24 +964,36 @@ impl App {
 
             let bloqueado = self.analizando();
             seccion(ui, "04", tr("PARAMETERS", "PARÁMETROS"), morado_claro(), |ui| {
+                subtitulo(ui, tr("How the analysis runs. Hover each option for what it does. Defaults are safe — you don't need to change anything.", "Cómo se ejecuta el análisis. Pasa el ratón por cada opción para ver qué hace. Los valores por defecto son seguros — no necesitas tocar nada."));
                 ui.add_enabled_ui(!bloqueado, |ui| {
                     let max_hilos = (self.sis.nucleos * 2).max(1);
                     let mut h = self.op.hilos;
-                    if ui.add(egui::Slider::new(&mut h, 1..=max_hilos).text("HILOS")).changed() {
+                    if ui.add(egui::Slider::new(&mut h, 1..=max_hilos).text("HILOS"))
+                        .on_hover_text(tr("How many layers are processed at once. More = faster, but each layer gets less RAM (lower per-block limit). Fewer threads raise the per-block memory limit for large files.", "Cuántas capas se procesan a la vez. Más = más rápido, pero cada capa recibe menos RAM (límite por bloque menor). Menos hilos suben el límite de memoria por bloque para archivos grandes."))
+                        .changed() {
                         self.op.hilos = h;
                         self.op.max_archivo = analisis::limite_por_bloque(&self.sis, h);
                     }
-                    ui.add(egui::Slider::new(&mut self.op.profundidad, 1..=32).text(tr("DEPTH", "PROFUNDIDAD")));
+                    ui.add(egui::Slider::new(&mut self.op.profundidad, 1..=32).text(tr("DEPTH", "PROFUNDIDAD")))
+                        .on_hover_text(tr("How many layers deep CAPAS keeps opening (an archive inside an archive inside an image…). Higher digs deeper; lower stops sooner.", "Cuántas capas de profundidad sigue abriendo CAPAS (un comprimido dentro de otro dentro de una imagen…). Más = profundiza más; menos = se detiene antes."));
                     let mut t = self.op.timeout.as_secs();
-                    if ui.add(egui::Slider::new(&mut t, 5..=1800).text("TIMEOUT s")).changed() {
+                    if ui.add(egui::Slider::new(&mut t, 5..=1800).text("TIMEOUT s"))
+                        .on_hover_text(tr("Seconds allowed per external tool before giving up on that step (so one stuck tool doesn't hang the whole analysis).", "Segundos permitidos a cada herramienta externa antes de abandonar ese paso (para que una herramienta colgada no bloquee todo el análisis)."))
+                        .changed() {
                         self.op.timeout = Duration::from_secs(t);
                     }
-                    ui.checkbox(&mut self.op.tallar, tr("FIND EMBEDDED FILES", "BUSCAR ARCHIVOS INCRUSTADOS"));
-                    ui.checkbox(&mut self.externas, tr("USE EXTERNAL SUBSYSTEMS", "USAR SUBSISTEMAS EXTERNOS"));
-                    ui.checkbox(&mut self.op.clasificar, tr("CLASSIFY AND GATHER FILES", "CLASIFICAR Y REUNIR ARCHIVOS"));
-                    ui.checkbox(&mut self.op.agrupar, tr("GROUP RESOURCES (same name → .zip)", "AGRUPAR RECURSOS (mismo nombre → .zip)"));
-                    ui.checkbox(&mut self.op.reconstruir, tr("REBUILD PACKAGES (structure + .zip)", "RECONSTRUIR PAQUETES (estructura + .zip)"));
-                    ui.checkbox(&mut self.op.auditar, tr("AUDIT PACKAGES (ASSET PACKS/MODS)", "AUDITAR PAQUETES (ASSET PACKS/MODS)"));
+                    ui.checkbox(&mut self.op.tallar, tr("FIND EMBEDDED FILES", "BUSCAR ARCHIVOS INCRUSTADOS"))
+                        .on_hover_text(tr("Scan the raw bytes for files hidden inside others (carving): a JPG glued after a ZIP, an EXE inside a dump… Slower, finds more.", "Rastrea los bytes crudos en busca de archivos escondidos dentro de otros (carving): un JPG pegado tras un ZIP, un EXE dentro de un volcado… Más lento, encuentra más."));
+                    ui.checkbox(&mut self.externas, tr("USE EXTERNAL SUBSYSTEMS", "USAR SUBSISTEMAS EXTERNOS"))
+                        .on_hover_text(tr("Let CAPAS also call installed external tools (7-Zip, Ghidra, jadx…) when its built-in engine can't. Off = 100% native only.", "Deja que CAPAS llame también a herramientas externas instaladas (7-Zip, Ghidra, jadx…) cuando su motor integrado no puede. Desactivado = solo motor nativo 100%."));
+                    ui.checkbox(&mut self.op.clasificar, tr("CLASSIFY AND GATHER FILES", "CLASIFICAR Y REUNIR ARCHIVOS"))
+                        .on_hover_text(tr("Sort the extracted files into groups by kind (textures, audio, code, models…) for easier browsing.", "Ordena los archivos extraídos en grupos por tipo (texturas, audio, código, modelos…) para explorarlos más fácil."));
+                    ui.checkbox(&mut self.op.agrupar, tr("GROUP RESOURCES (same name → .zip)", "AGRUPAR RECURSOS (mismo nombre → .zip)"))
+                        .on_hover_text(tr("Bundle resources that share a base name into a single .zip (e.g. model.mesh + model.mtl → model.zip).", "Reúne en un único .zip los recursos que comparten nombre base (p. ej. modelo.mesh + modelo.mtl → modelo.zip)."));
+                    ui.checkbox(&mut self.op.reconstruir, tr("REBUILD PACKAGES (structure + .zip)", "RECONSTRUIR PAQUETES (estructura + .zip)"))
+                        .on_hover_text(tr("Recreate the original folder structure of each package and also save it as a .zip, ready to repack or inspect.", "Recrea la estructura de carpetas original de cada paquete y la guarda también como .zip, lista para reempaquetar o inspeccionar."));
+                    ui.checkbox(&mut self.op.auditar, tr("AUDIT PACKAGES (ASSET PACKS/MODS)", "AUDITAR PAQUETES (ASSET PACKS/MODS)"))
+                        .on_hover_text(tr("Check asset packs and mods for problems (duplicates, suspicious or risky files) and report findings.", "Revisa asset packs y mods en busca de problemas (duplicados, archivos sospechosos o peligrosos) e informa de los hallazgos."));
                     // Desempaquetar bundles de motor: función de pago (Pro).
                     let pro = crate::edicion::permite(crate::edicion::DESEMPAQUETAR);
                     if pro {
@@ -982,6 +1009,7 @@ impl App {
             });
 
             seccion(ui, "05", tr("KEYS (protected ZIP/RAR/7z)", "CLAVES (ZIP/RAR/7z protegidos)"), naranja(), |ui| {
+                subtitulo(ui, tr("For password-protected archives. Give CAPAS passwords to try, or (ZIP only) break weak ZipCrypto without the password using a known file. Strong AES still needs the password.", "Para archivos protegidos con contraseña. Dale a CAPAS contraseñas que probar, o (solo ZIP) rompe el ZipCrypto débil sin la contraseña usando un archivo conocido. El AES fuerte sigue necesitando la contraseña."));
                 ui.add_enabled_ui(!bloqueado, |ui| {
                     ui.label(RichText::new(tr("PASSWORDS TO TRY (one per line):", "CONTRASEÑAS A PROBAR (una por línea):")).font(mono(10.0)).color(morado_claro()));
                     ui.add(
@@ -1049,9 +1077,18 @@ impl App {
     fn central_ui(&mut self, ui: &mut Ui, ctx: &egui::Context, ahora: f64) {
         // Fila de instrumentos.
         ui.columns(3, |c| {
-            seccion(&mut c[0], "A", tr("CLASSIFICATION", "CLASIFICACIÓN"), naranja(), |ui| self.clasificacion(ui, ahora));
-            seccion(&mut c[1], "B", tr("DEPTH", "PROFUNDIDAD"), acento(), |ui| self.profundidad(ui));
-            seccion(&mut c[2], "C", tr("PERFORMANCE", "RENDIMIENTO"), acento(), |ui| self.senal_ui(ui, ahora));
+            seccion(&mut c[0], "A", tr("CLASSIFICATION", "CLASIFICACIÓN"), naranja(), |ui| {
+                subtitulo(ui, tr("What kinds of files appeared (code, images, archives…).", "Qué tipos de archivos han aparecido (código, imágenes, comprimidos…)."));
+                self.clasificacion(ui, ahora)
+            });
+            seccion(&mut c[1], "B", tr("DEPTH", "PROFUNDIDAD"), acento(), |ui| {
+                subtitulo(ui, tr("How deep the layers go (file inside file).", "Hasta qué profundidad llegan las capas (archivo dentro de archivo)."));
+                self.profundidad(ui)
+            });
+            seccion(&mut c[2], "C", tr("PERFORMANCE", "RENDIMIENTO"), acento(), |ui| {
+                subtitulo(ui, tr("Live analysis throughput.", "Rendimiento del análisis en vivo."));
+                self.senal_ui(ui, ahora)
+            });
         });
         ui.add_space(6.0);
 
@@ -1270,7 +1307,7 @@ impl App {
         ui.add_space(12.0);
 
         for v in [Vista::Inicio, Vista::Analisis, Vista::Explorador, Vista::Comparar, Vista::Formatos, Vista::Herramientas, Vista::Ajustes] {
-            if nav_item(ui, v.icono(), v.etiqueta(), self.vista == v) {
+            if nav_item(ui, v.icono(), v.etiqueta(), v.descripcion(), self.vista == v) {
                 self.vista = v;
             }
         }
@@ -1365,18 +1402,24 @@ impl App {
                 ui.add_space(6.0);
                 if self.analizando() {
                     let cancelar = if let Fase::Analizando { cancelar, .. } = &self.fase { Some(cancelar.clone()) } else { None };
-                    if ui.add(boton_pri(tr("■ Abort", "■ Abortar"), rojo())).clicked() {
+                    if ui.add(boton_pri(tr("■ Abort", "■ Abortar"), rojo()))
+                        .on_hover_text(tr("Stop the running analysis. What was already extracted stays.", "Detén el análisis en curso. Lo ya extraído se conserva."))
+                        .clicked() {
                         if let Some(c) = cancelar {
                             c.store(true, Ordering::Relaxed);
                         }
                     }
                 } else {
                     let listo = !self.archivos.is_empty();
-                    if ui.add_enabled(listo, boton_pri(tr("▶ Analyze", "▶ Analizar"), acento())).clicked() {
+                    if ui.add_enabled(listo, boton_pri(tr("▶ Analyze", "▶ Analizar"), acento()))
+                        .on_hover_text(tr("Start: CAPAS opens the chosen file(s) layer by layer — unpacks, identifies each part, decompiles code — and fills the layer tree. The main action.", "Empieza: CAPAS abre los archivos elegidos capa a capa — desempaqueta, identifica cada parte, decompila el código — y rellena el árbol de capas. La acción principal."))
+                        .clicked() {
                         self.iniciar(ctx, ahora);
                     }
                     if let Some(r) = self.raiz.clone() {
-                        if ui.add(boton_sec(tr("Open output", "Abrir salida"))).clicked() {
+                        if ui.add(boton_sec(tr("Open output", "Abrir salida")))
+                            .on_hover_text(tr("Open the output folder on disk with the extracted layers and generated files.", "Abre la carpeta de salida en disco con las capas extraídas y los archivos generados."))
+                            .clicked() {
                             abrir_en_sistema(&r);
                         }
                     }
@@ -1589,6 +1632,7 @@ impl App {
 
     fn panel_arbol(&mut self, ui: &mut Ui) {
         encabezado_panel(ui, if self.solo_pendientes { tr("LAYER TREE · PENDING", "ÁRBOL · PENDIENTES") } else { tr("LAYER TREE", "ÁRBOL DE CAPAS") });
+        subtitulo(ui, tr("Each layer CAPAS opened inside the file (archives, images, code…). Click a layer to see its details on the right.", "Cada capa que CAPAS abrió dentro del archivo (comprimidos, imágenes, código…). Haz clic en una capa para ver su ficha a la derecha."));
         if self.arbol.is_empty() {
             vacio(ui, if self.analizando() { tr("Decomposing…", "Descomponiendo…") } else { tr("No data yet", "Sin datos todavía") });
             return;
@@ -1716,6 +1760,7 @@ impl App {
 
     fn panel_detalle(&mut self, ui: &mut Ui) {
         encabezado_panel(ui, tr("BLOCK DETAILS", "FICHA DEL BLOQUE"));
+        subtitulo(ui, tr("What the selected layer is (type, size, encryption) and what you can do with it: open its extracted files or copy an offline AI prompt.", "Qué es la capa seleccionada (tipo, tamaño, cifrado) y qué puedes hacer con ella: abrir sus archivos extraídos o copiar un prompt para IA sin conexión."));
         let Some(sel) = self.seleccion.clone() else {
             vacio(ui, tr("No block selected", "Ningún bloque seleccionado"));
             return;
@@ -1808,7 +1853,11 @@ impl App {
         ui.add_space(8.0);
         let ancho = ui.available_width();
         ui.horizontal(|ui| {
-            if ui.add(boton_pri(tr("▶ Extract", "▶ Extraer"), acento()).min_size(Vec2::new(ancho * 0.56, 36.0))).clicked() {
+            if ui
+                .add(boton_pri(tr("▶ Extract", "▶ Extraer"), acento()).min_size(Vec2::new(ancho * 0.56, 36.0)))
+                .on_hover_text(tr("Open the folder on disk with everything CAPAS already extracted from this file (all layers). CAPAS extracts automatically while analyzing; this just opens the result.", "Abre la carpeta en disco con todo lo que CAPAS ya extrajo de este archivo (todas las capas). CAPAS extrae solo al analizar; esto únicamente abre el resultado."))
+                .clicked()
+            {
                 if let Some(raiz) = self.raiz.clone() {
                     abrir_en_sistema(&raiz.join("extraidos"));
                 } else if let Some(r) = n.resultados.first() {
@@ -1816,7 +1865,11 @@ impl App {
                 }
             }
             if n.tipo == Tipo::Texto || !n.resultados.is_empty() {
-                if ui.add(boton_sec(tr("Preview", "Vista previa"))).clicked() {
+                if ui
+                    .add(boton_sec(tr("Preview", "Vista previa")))
+                    .on_hover_text(tr("Open the generated file for this layer (decompiled code, disassembly, readable strings…) in your default app.", "Abre el archivo generado para esta capa (código decompilado, desensamblado, cadenas legibles…) en tu aplicación por defecto."))
+                    .clicked()
+                {
                     if let Some(r) = n.resultados.first() {
                         self.abrir_resultado(r);
                     }
@@ -2718,9 +2771,10 @@ fn arbol_nodo(ui: &mut Ui, n: &Nodo, ruta: Vec<usize>, sel: &Option<Vec<usize>>,
 
 // ── Piezas del rediseño "Serio" ─────────────────────────────────────────
 /// Elemento de la barra lateral; devuelve true al hacer clic.
-fn nav_item(ui: &mut Ui, icono: &str, etiqueta: &str, activo: bool) -> bool {
+fn nav_item(ui: &mut Ui, icono: &str, etiqueta: &str, ayuda: &str, activo: bool) -> bool {
     let alto = 42.0;
     let (rect, resp) = ui.allocate_exact_size(Vec2::new(ui.available_width(), alto), Sense::click());
+    let resp = resp.on_hover_text(ayuda);
     let p = ui.painter().clone();
     if activo {
         p.rect_filled(rect, CornerRadius::same(9), acento().gamma_multiply(0.20));
@@ -3604,6 +3658,13 @@ fn boton(texto: &str, color: Color32) -> egui::Button<'static> {
         .fill(morado_oscuro())
         .stroke(Stroke::new(1.5, color))
         .corner_radius(CornerRadius::ZERO)
+}
+
+/// Línea de ayuda, en gris claro, para explicar en una frase qué hace una vista
+/// o una sección. Así ningún botón o apartado queda "suelto" sin explicación.
+fn subtitulo(ui: &mut Ui, texto: &str) {
+    ui.label(RichText::new(texto).font(FontId::proportional(11.5)).color(morado_claro()));
+    ui.add_space(6.0);
 }
 
 /// Texto con tipografía de título que se encoge para caber en `ancho`.
