@@ -725,6 +725,41 @@ impl App {
         }
     }
 
+    /// Visor HEX del fichero de un bloque (volcado offset/hex/ASCII).
+    fn abrir_hex(&mut self, ruta: &Path, titulo: &str) {
+        const MAX: usize = 512 * 1024; // 512 KiB de volcado
+        match fs::read(ruta) {
+            Ok(b) => {
+                let truncado = b.len() > MAX;
+                let bytes = &b[..b.len().min(MAX)];
+                let mut lineas = Vec::with_capacity(bytes.len() / 16 + 1);
+                for (i, chunk) in bytes.chunks(16).enumerate() {
+                    let hex: String = chunk.iter().map(|x| format!("{x:02x} ")).collect();
+                    let asc: String = chunk.iter().map(|&x| if (0x20..0x7f).contains(&x) { x as char } else { '.' }).collect();
+                    lineas.push(format!("{:08x}  {hex:<48} {asc}", i * 16));
+                }
+                self.visor = Some(Visor { titulo: format!("HEX · {titulo}"), lineas, truncado });
+            }
+            Err(e) => self.visor = Some(Visor { titulo: titulo.into(), lineas: vec![tfmt(tr("could not read: {}", "no se pudo leer: {}"), &[e.to_string()])], truncado: false }),
+        }
+    }
+
+    /// Visor de cadenas (ASCII + UTF-16) del fichero de un bloque.
+    fn abrir_cadenas_de(&mut self, ruta: &Path, titulo: &str) {
+        match fs::read(ruta) {
+            Ok(b) => {
+                let s = crate::extraer::cadenas(&b, 4, 2 << 20);
+                let lineas: Vec<String> = if s.is_empty() {
+                    vec![tr("(no printable strings)", "(sin cadenas legibles)").into()]
+                } else {
+                    s.lines().map(|l| l.to_string()).collect()
+                };
+                self.visor = Some(Visor { titulo: format!("STRINGS · {titulo}"), lineas, truncado: false });
+            }
+            Err(e) => self.visor = Some(Visor { titulo: titulo.into(), lineas: vec![tfmt(tr("could not read: {}", "no se pudo leer: {}"), &[e.to_string()])], truncado: false }),
+        }
+    }
+
     fn abrir_resultado(&mut self, rel: &str) {
         let Some(raiz) = &self.raiz else { return };
         let p = raiz.join(rel);
@@ -1927,6 +1962,27 @@ impl App {
                 }
             }
         });
+        // Visor integrado: ver el contenido del bloque DENTRO de la app.
+        ui.add_space(4.0);
+        if n.ruta_fisica.is_file() {
+            let titulo = n.nombre.clone();
+            ui.horizontal(|ui| {
+                if ui.add(boton_sec(tr("Hex", "Hex")))
+                    .on_hover_text(tr("View the raw bytes of this block (offset / hex / ASCII) in the app.", "Ver los bytes crudos de este bloque (offset / hex / ASCII) en la app."))
+                    .clicked()
+                {
+                    let ruta = n.ruta_fisica.clone();
+                    self.abrir_hex(&ruta, &titulo);
+                }
+                if ui.add(boton_sec(tr("Strings", "Cadenas")))
+                    .on_hover_text(tr("View the readable strings (ASCII + UTF-16) of this block in the app.", "Ver las cadenas legibles (ASCII + UTF-16) de este bloque en la app."))
+                    .clicked()
+                {
+                    let ruta = n.ruta_fisica.clone();
+                    self.abrir_cadenas_de(&ruta, &titulo);
+                }
+            });
+        }
         ui.add_space(6.0);
         if ui
             .add(boton_sec(tr("Ask an AI", "Preguntar a una IA")).min_size(Vec2::new(ui.available_width(), 34.0)))

@@ -6,6 +6,11 @@ y el versionado [SemVer](https://semver.org/lang/es/).
 
 ## [0.1.6] — 2026-11-27
 
+### Añadido — visor integrado (hex / cadenas)
+- En la ficha de cada bloque, botones **Hex** y **Cadenas** para ver el
+  contenido DENTRO de la app (volcado offset/hex/ASCII y cadenas ASCII+UTF-16),
+  sin abrir nada fuera. Se suma a la **Vista previa** del decompilado/estructura.
+
 ### Añadido — búsqueda global en todas las capas
 - **Buscar en todo**: botón en la app que busca **texto** (sin distinguir
   mayúsculas) o **bytes** (`hex:DEADBEEF`) en TODOS los archivos extraídos y
