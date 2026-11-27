@@ -6,6 +6,12 @@ y el versionado [SemVer](https://semver.org/lang/es/).
 
 ## [0.1.6] — 2026-11-27
 
+### Añadido — búsqueda global en todas las capas
+- **Buscar en todo**: botón en la app que busca **texto** (sin distinguir
+  mayúsculas) o **bytes** (`hex:DEADBEEF`) en TODOS los archivos extraídos y
+  generados, y lista las coincidencias con su ruta y contexto (clic para abrir).
+  Ideal para saltar directo a la capa donde aparece una cadena.
+
 ### Añadido — escáner de secretos/credenciales
 - **Detección de secretos** en cada bloque analizado: claves API conocidas (AWS,
   Google, Stripe, GitHub, Slack), **claves privadas** PEM, **JWTs** y

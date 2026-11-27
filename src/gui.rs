@@ -312,6 +312,11 @@ pub struct App {
     cmp_resultado: Option<(Vec<String>, Vec<String>, usize)>,
     // Barra de búsqueda del análisis.
     buscar: String,
+    // Búsqueda global por contenido (ventana flotante).
+    bg_abierto: bool,
+    bg_texto: String,
+    bg_hits: Vec<(PathBuf, usize, String)>,
+    bg_mensaje: String,
     // Comprobación de actualización (hilo de fondo → estado compartido).
     actualizacion: std::sync::Arc<std::sync::Mutex<Option<Act>>>,
     // Puente MCP (Studio): configuración y mensaje de estado.
@@ -482,6 +487,10 @@ impl App {
             cmp_b: None,
             cmp_resultado: None,
             buscar: String::new(),
+            bg_abierto: false,
+            bg_texto: String::new(),
+            bg_hits: Vec::new(),
+            bg_mensaje: String::new(),
             actualizacion: std::sync::Arc::new(std::sync::Mutex::new(None)),
             mcp_externas: true,
             mcp_estado: None,
@@ -768,6 +777,7 @@ impl eframe::App for App {
         self.sondear(ahora);
         self.gestionar_actualizacion(&ctx);
         self.ventana_visor(&ctx);
+        self.ventana_busqueda_global(&ctx);
         // Animaciones continuas (suaves cuando está en espera).
         ctx.request_repaint_after(if self.analizando() { Duration::from_millis(16) } else { Duration::from_millis(50) });
 
@@ -1564,6 +1574,14 @@ impl App {
                     p.line_segment([Pos2::new(tg.left() + 10.0, tg.top() + 11.0 + i as f32 * 6.0), Pos2::new(tg.left() + 22.0, tg.top() + 11.0 + i as f32 * 6.0)], Stroke::new(1.6, acento()));
                 }
                 dibujar_icono(&p, Pos2::new(tg.left() + 48.0, tg.center().y), 6.0, "capas", morado_claro());
+                // Búsqueda global por contenido (texto/hex en todas las capas).
+                if self.raiz.is_some()
+                    && ui.add(boton_sec(tr("Search all", "Buscar en todo")))
+                        .on_hover_text(tr("Search text or bytes (hex:…) across ALL extracted layers and generated files.", "Busca texto o bytes (hex:…) en TODAS las capas extraídas y archivos generados."))
+                        .clicked()
+                {
+                    self.bg_abierto = true;
+                }
                 // Filtros.
                 ui.menu_button(tr("  Filters  ", "  Filtros  "), |ui| {
                     if ui.checkbox(&mut self.solo_pendientes, tr("Only pending", "Solo pendientes")).changed() {}
@@ -2370,6 +2388,80 @@ impl App {
     }
 
     /// El visor (informe, registros, resultados) como ventana sobre cualquier vista.
+    /// Ventana de búsqueda global: texto o bytes (hex:…) en toda la salida.
+    fn ventana_busqueda_global(&mut self, ctx: &egui::Context) {
+        if !self.bg_abierto {
+            return;
+        }
+        let mut abierta = true;
+        let r = ctx.content_rect();
+        egui::Window::new(RichText::new(tr("Search all layers", "Buscar en todas las capas")).font(FontId::proportional(13.0)).color(texto()))
+            .id(egui::Id::new("ventana_bg"))
+            .open(&mut abierta)
+            .collapsible(false)
+            .resizable(true)
+            .default_size([640.0, 440.0])
+            .anchor(Align2::CENTER_CENTER, Vec2::ZERO)
+            .frame(egui::Frame::new().fill(morado_oscuro()).stroke(Stroke::new(1.0, acento())).corner_radius(CornerRadius::same(10)).inner_margin(Margin::same(14)))
+            .show(ctx, |ui| {
+                ui.set_width(r.width().min(760.0) - 40.0);
+                let mut lanzar = false;
+                ui.horizontal(|ui| {
+                    let resp = ui.add(egui::TextEdit::singleline(&mut self.bg_texto).font(mono(12.0)).desired_width(ui.available_width() - 90.0).hint_text(tr("text, or hex:DEADBEEF", "texto, o hex:DEADBEEF")));
+                    if resp.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        lanzar = true;
+                    }
+                    if ui.add(boton_pri(tr("Search", "Buscar"), acento())).clicked() {
+                        lanzar = true;
+                    }
+                });
+                ui.label(RichText::new(tr("Searches text (case-insensitive) or bytes in every extracted file. Prefix with hex: for bytes.", "Busca texto (sin distinguir mayúsculas) o bytes en cada archivo extraído. Pon hex: delante para bytes.")).font(FontId::proportional(10.5)).color(morado_claro()));
+                if lanzar {
+                    self.ejecutar_busqueda_global();
+                }
+                if !self.bg_mensaje.is_empty() {
+                    ui.add_space(4.0);
+                    ui.label(RichText::new(&self.bg_mensaje).font(mono(11.0)).color(naranja()));
+                }
+                ui.separator();
+                let mut abrir = None;
+                egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+                    for (ruta, linea, ctx_txt) in &self.bg_hits {
+                        let corto = ruta.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+                        let etiqueta = format!("{corto}:{linea}");
+                        ui.horizontal_wrapped(|ui| {
+                            if ui.add(egui::Label::new(RichText::new(format!("▸ {etiqueta}")).font(mono(11.0)).color(acento())).sense(Sense::click())).on_hover_text(ruta.display().to_string()).clicked() {
+                                abrir = Some(ruta.clone());
+                            }
+                            ui.label(RichText::new(ctx_txt).font(mono(10.5)).color(texto()));
+                        });
+                    }
+                });
+                if let Some(p) = abrir {
+                    abrir_en_sistema(&p);
+                }
+            });
+        if !abierta {
+            self.bg_abierto = false;
+        }
+    }
+
+    /// Ejecuta la búsqueda global sobre la carpeta de salida actual.
+    fn ejecutar_busqueda_global(&mut self) {
+        self.bg_hits.clear();
+        self.bg_mensaje.clear();
+        let Some(raiz) = self.raiz.clone() else {
+            self.bg_mensaje = tr("Analyze something first.", "Analiza algo primero.").into();
+            return;
+        };
+        let Some(q) = crate::buscar::Consulta::desde(&self.bg_texto) else {
+            return;
+        };
+        let hits = crate::buscar::en_carpeta(&raiz, &q, 500, 16 << 20);
+        self.bg_mensaje = tfmt(tr("{} match(es)", "{} coincidencia(s)"), &[hits.len().to_string()]);
+        self.bg_hits = hits.into_iter().map(|c| (c.ruta, c.linea, c.contexto)).collect();
+    }
+
     fn ventana_visor(&mut self, ctx: &egui::Context) {
         if self.visor.is_none() || self.vista_es_clasica() {
             return;

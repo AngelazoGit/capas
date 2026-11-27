@@ -11,6 +11,7 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod analisis;
+mod buscar;
 mod api;
 mod auditar;
 mod comparar;
