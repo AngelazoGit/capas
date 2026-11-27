@@ -331,6 +331,10 @@ pub struct App {
     diccionario: Option<PathBuf>,
     texto_plano: Option<PathBuf>,
     auto_texto_plano: bool,
+    usar_gpu: bool,
+    // Nombre de la GPU detectada (se sondea una vez, perezosamente). None hasta sondear.
+    gpu_nombre: Option<String>,
+    gpu_probada: bool,
     fuerza_bruta: bool,
     fuerza_alfabeto: usize, // índice en ALFABETOS
     fuerza_long: usize,
@@ -492,6 +496,9 @@ impl App {
             diccionario: None,
             texto_plano: None,
             auto_texto_plano: false,
+            usar_gpu: false,
+            gpu_nombre: None,
+            gpu_probada: false,
             fuerza_bruta: false,
             fuerza_alfabeto: 0,
             fuerza_long: 4,
@@ -546,6 +553,7 @@ impl App {
             max_intentos: 2_000_000,
             texto_plano: self.texto_plano.clone(),
             auto_texto_plano: self.auto_texto_plano,
+            usar_gpu: self.usar_gpu,
         }
     }
 
@@ -1063,6 +1071,27 @@ impl App {
                         let base = crate::claves::FuerzaBruta::alfabeto_por_nombre(ALFABETOS[self.fuerza_alfabeto].1).chars().count() as u128;
                         let combos: u128 = (1..=self.fuerza_long as u32).map(|k| base.saturating_pow(k)).fold(0u128, |a, b| a.saturating_add(b));
                         ui.label(RichText::new(tfmt(tr("up to {} combinations · needs an alphabet · never used on RAR/7z", "hasta {} combinaciones · necesita abecedario · nunca se usa en RAR/7z"), &[humano_entero(combos)])).font(mono(9.5)).color(naranja()));
+                        // Aceleración por GPU (solo fuerza bruta ZipCrypto). Se sondea
+                        // la GPU una vez; si no hay, la casilla queda desactivada.
+                        #[cfg(feature = "gpu")]
+                        {
+                            if !self.gpu_probada {
+                                self.gpu_probada = true;
+                                self.gpu_nombre = crate::gpu::nombre_adaptador();
+                            }
+                            match &self.gpu_nombre {
+                                Some(nombre) => {
+                                    ui.checkbox(&mut self.usar_gpu, tr("Use GPU for brute force", "Usar GPU para la fuerza bruta"))
+                                        .on_hover_text(tfmt(tr("Runs the same fast check on the GPU, massively parallel. Only helps ZipCrypto brute force, not decompiling. Falls back to CPU if it fails.\nGPU: {}", "Corre el mismo chequeo rápido en la GPU, masivamente en paralelo. Solo ayuda a la fuerza bruta de ZipCrypto, no a decompilar. Si falla, cae a CPU.\nGPU: {}"), &[nombre.clone()]));
+                                    ui.label(RichText::new(tfmt(tr("GPU: {}", "GPU: {}"), &[acortar(nombre, 40)])).font(mono(9.0)).color(morado_medio()));
+                                }
+                                None => {
+                                    self.usar_gpu = false;
+                                    ui.add_enabled(false, egui::Checkbox::new(&mut false, tr("Use GPU for brute force (no GPU detected)", "Usar GPU para la fuerza bruta (sin GPU detectada)")))
+                                        .on_hover_text(tr("No usable GPU was detected; brute force runs on CPU.", "No se detectó una GPU utilizable; la fuerza bruta corre en CPU."));
+                                }
+                            }
+                        }
                     }
                     let estado = if self.claves_activas() { (tr("MODULE ACTIVE", "MÓDULO ACTIVO"), verde()) } else { (tr("INACTIVE (encrypted archives skipped)", "INACTIVO (cifrados se omiten)"), morado_medio()) };
                     ui.label(RichText::new(estado.0).font(mono(10.0)).color(estado.1));

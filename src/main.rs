@@ -22,6 +22,8 @@ mod detectar;
 mod edicion;
 mod ejecutables;
 mod extraer;
+#[cfg(feature = "gpu")]
+mod gpu;
 mod gui;
 mod idioma;
 mod indice;
@@ -194,6 +196,10 @@ struct Args {
     #[arg(long)]
     auto_texto_plano: bool,
 
+    /// Use the GPU to accelerate ZipCrypto brute force (falls back to CPU if unavailable)
+    #[arg(long)]
+    gpu: bool,
+
     /// Maximum length for brute force
     #[arg(long, default_value_t = 4)]
     fuerza_long: usize,
@@ -321,6 +327,7 @@ fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
         max_intentos: a.max_intentos,
         texto_plano: a.texto_plano.clone(),
         auto_texto_plano: a.auto_texto_plano,
+        usar_gpu: a.gpu,
     };
     op
 }

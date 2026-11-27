@@ -36,6 +36,9 @@ pub struct Claves {
     pub texto_plano: Option<PathBuf>,
     /// Autodetección: intentar romper ZipCrypto con cabeceras conocidas.
     pub auto_texto_plano: bool,
+    /// Usar la GPU para acelerar la fuerza bruta de ZipCrypto (si hay feature y
+    /// GPU utilizable; si no, cae a CPU automáticamente).
+    pub usar_gpu: bool,
 }
 
 #[derive(Clone)]
@@ -77,6 +80,12 @@ impl Claves {
 
     /// Todas las contraseñas candidatas, en orden de prioridad y sin repetir.
     fn candidatas(&self) -> Vec<String> {
+        self.candidatas_con(true)
+    }
+
+    /// Como `candidatas`, pero `incluir_bruta=false` omite la fuerza bruta (p. ej.
+    /// cuando esa parte la hace la GPU).
+    fn candidatas_con(&self, incluir_bruta: bool) -> Vec<String> {
         let mut v = Vec::new();
         let mut vistas = std::collections::HashSet::new();
         let meter = |s: String, v: &mut Vec<String>, vistas: &mut std::collections::HashSet<String>| {
@@ -105,8 +114,10 @@ impl Claves {
                 Err(e) => eprintln!("  ! no se pudo leer el diccionario {}: {e}", d.display()),
             }
         }
-        if let Some(fb) = &self.fuerza {
-            generar_fuerza_bruta(fb, &mut |s| meter(s, &mut v, &mut vistas));
+        if incluir_bruta {
+            if let Some(fb) = &self.fuerza {
+                generar_fuerza_bruta(fb, &mut |s| meter(s, &mut v, &mut vistas));
+            }
         }
         if self.max_intentos > 0 && v.len() as u64 > self.max_intentos {
             v.truncate(self.max_intentos as usize);
@@ -187,7 +198,27 @@ impl Claves {
             notas.push(tr("Enable the Keys module (passwords / dictionary / common list) to open it.","Activa el módulo de Claves (contraseñas / diccionario / lista de habituales) para abrirlo.").into());
             return Ok((crate::extraer::zip(d, lim, notas)?, None));
         }
-        let candidatas = self.candidatas();
+        // Camino GPU (opcional, feature `gpu`): acelera SOLO la fuerza bruta de
+        // ZipCrypto. Si la GPU halla la contraseña, se usa; si corrió pero no la
+        // encontró, la fuerza bruta queda cubierta y en CPU solo se prueban las
+        // demás candidatas (explícitas/comunes/diccionario).
+        #[allow(unused_mut)]
+        let mut bruta_por_gpu = false;
+        #[cfg(feature = "gpu")]
+        if self.usar_gpu {
+            if let Some(fb) = &self.fuerza {
+                match buscar_gpu(d, fb, notas) {
+                    GpuBusqueda::Hallada(clave) => {
+                        notas.push(tfmt(tr("✔ PASSWORD FOUND (GPU): «{}»", "✔ CONTRASEÑA ENCONTRADA (GPU): «{}»"), &[clave.clone()]));
+                        let hijos = extraer_con_clave(d, &clave, lim, notas)?;
+                        return Ok((hijos, Some(clave)));
+                    }
+                    GpuBusqueda::SinExito => bruta_por_gpu = true,
+                    GpuBusqueda::NoDisponible => {}
+                }
+            }
+        }
+        let candidatas = self.candidatas_con(!bruta_por_gpu);
         notas.push(tfmt(tr("Encrypted ZIP: trying {} candidate password(s)…","ZIP cifrado: probando {} contraseña(s) candidata(s)…"), &[candidatas.len().to_string()]));
         match buscar(d, &candidatas) {
             Some(clave) => {
@@ -316,6 +347,44 @@ impl std::io::Write for Sumidero {
 }
 
 /// Busca en paralelo la primera contraseña válida.
+/// Resultado del intento por GPU: hallada, corrió sin éxito (fuerza bruta ya
+/// cubierta) o no disponible (cae a CPU con todo).
+#[cfg(feature = "gpu")]
+enum GpuBusqueda {
+    Hallada(String),
+    SinExito,
+    NoDisponible,
+}
+
+/// Ejecuta la fuerza bruta de ZipCrypto en GPU y confirma los aciertos en CPU.
+#[cfg(feature = "gpu")]
+fn buscar_gpu(d: &[u8], fb: &FuerzaBruta, notas: &mut Vec<String>) -> GpuBusqueda {
+    // Buffer de aciertos holgado: con 1/256 de falsos positivos, 1M cubre de
+    // sobra cualquier espacio razonable de fuerza bruta.
+    let tope = 1usize << 20;
+    match crate::gpu::fuerza_bruta(d, &fb.alfabeto, fb.long_max as u32, tope) {
+        None => {
+            notas.push(tr("GPU requested but no usable GPU was available — brute force runs on CPU.", "GPU solicitada pero no había una GPU utilizable — la fuerza bruta corre en CPU.").into());
+            GpuBusqueda::NoDisponible
+        }
+        Some(paso) => {
+            notas.push(tfmt(
+                tr("GPU brute force: {} — {} candidate(s) passed the fast check, confirming on CPU…",
+                   "Fuerza bruta en GPU: {} — {} candidata(s) pasaron el chequeo rápido, confirmando en CPU…"),
+                &[paso.descripcion.clone(), paso.candidatas.len().to_string()],
+            ));
+            if let Some(idx) = entrada_de_prueba(d) {
+                for c in &paso.candidatas {
+                    if probar(d, idx, c) {
+                        return GpuBusqueda::Hallada(c.clone());
+                    }
+                }
+            }
+            GpuBusqueda::SinExito
+        }
+    }
+}
+
 fn buscar(d: &[u8], candidatas: &[String]) -> Option<String> {
     let idx = entrada_de_prueba(d)?;
     let encontrada = AtomicBool::new(false);
@@ -466,7 +535,7 @@ mod pruebas_fuerza {
     }
     #[test]
     fn candidatas_externas_nunca_usan_fuerza_bruta() {
-        let c = Claves { explicitas: vec!["hola".into()], comunes: false, diccionario: None, fuerza: FuerzaBruta::nuevo("ab", 3), max_intentos: 1000, texto_plano: None, auto_texto_plano: false };
+        let c = Claves { explicitas: vec!["hola".into()], comunes: false, diccionario: None, fuerza: FuerzaBruta::nuevo("ab", 3), max_intentos: 1000, texto_plano: None, auto_texto_plano: false, usar_gpu: false };
         assert!(c.fuerza.is_some());
         assert_eq!(c.candidatas_externas(), vec!["hola".to_string()]);
     }

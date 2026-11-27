@@ -7,10 +7,14 @@ description = "Desmonta y decompila archivos por capas usando los recursos del o
 license = "MIT"
 
 [features]
+default = ["gpu"]
 # Permite que --edicion / CAPAS_EDICION fuercen la edición (solo desarrollo).
 # El binario de producción se compila SIN esta feature: la edición de pago solo
 # se activa con una licencia firmada.
 override-edicion = []
+# Aceleración por GPU (fuerza bruta ZipCrypto). Activada por defecto; se puede
+# desactivar con --no-default-features si un target da problemas.
+gpu = ["dep:wgpu", "dep:pollster", "dep:bytemuck"]
 
 [dependencies]
 anyhow = "1.0.104"
@@ -48,6 +52,12 @@ yaxpeax-mips = "0.1"
 yaxpeax-arch02 = { package = "yaxpeax-arch", version = "0.2" }
 wasmprinter = "0.263"
 zip = { version = "2", default-features = false, features = ["deflate", "bzip2", "aes-crypto"] }
+# Aceleración por GPU (opcional, activada por defecto): fuerza bruta ZipCrypto.
+# Se puede desactivar con --no-default-features si un target da problemas; el
+# camino de CPU sigue siempre disponible.
+wgpu = { version = "22.1.0", optional = true }
+pollster = { version = "0.3.0", optional = true }
+bytemuck = { version = "1.19.0", optional = true, features = ["derive"] }
 
 [build-dependencies]
 cc = "1"

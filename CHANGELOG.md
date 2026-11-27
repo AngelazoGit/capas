@@ -6,13 +6,19 @@ y el versionado [SemVer](https://semver.org/lang/es/).
 
 ## [0.1.6] — 2026-11-27
 
-### Añadido — fuerza bruta de ZipCrypto mucho más rápida
+### Añadido — fuerza bruta de ZipCrypto mucho más rápida (CPU y GPU)
 - **Chequeo rápido del byte de control.** Al probar contraseñas contra un ZIP
   con ZipCrypto tradicional, ahora se comprueba primero el byte de control de la
   cabecera cifrada de 12 bytes (descarta ~255/256 de las erróneas al instante) y
   solo se descifra la entrada entera cuando ese chequeo pasa. En una prueba,
-  ~457.000 candidatas en ~1,2 s con 4 hilos. Es el mismo cómputo que ejecutaría
-  una GPU, así que deja la puerta abierta a acelerarlo por GPU más adelante.
+  ~457.000 candidatas en ~1,2 s con 4 hilos.
+- **Aceleración por GPU (opcional).** La misma comprobación corre en la GPU,
+  masivamente en paralelo: cada hilo genera una contraseña desde su índice,
+  ejecuta el key-schedule de ZipCrypto y comprueba el byte de control; los
+  aciertos se confirman en CPU. Interruptor «Usar GPU» en el módulo de Claves
+  (solo si se detecta una GPU utilizable) y `--gpu` en la línea de comandos; si
+  no hay GPU, cae a CPU automáticamente. La GPU solo acelera esta fuerza bruta,
+  no la decompilación. Se puede compilar sin ella con `--no-default-features`.
 
 ### Añadido — archivos grandes (varios GiB) y claridad de la interfaz
 - **Mapeo en memoria (mmap) del archivo de entrada.** El fichero de nivel 0 ya

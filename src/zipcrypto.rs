@@ -23,6 +23,8 @@ impl Crc32Tab {
         for b in 0..256u32 { let mut crc=b; for _ in 0..8 { crc = if crc&1!=0 {(crc>>1)^0xedb88320} else {crc>>1}; } crctab[b as usize]=crc; crcinvtab[(crc>>24) as usize]=(crc<<8)^b; }
         Crc32Tab{crctab,crcinvtab}
     }
+    /// Tabla CRC32 directa (256 entradas), para alimentar el kernel de GPU.
+    pub fn tabla_directa(&self)->&[u32;256]{ &self.crctab }
     #[inline] pub fn crc32(&self,pval:u32,b:u8)->u32 { (pval>>8) ^ self.crctab[(lsb(pval)^b) as usize] }
     #[inline] pub fn crc32inv(&self,crc:u32,b:u8)->u32 { (crc<<8) ^ self.crcinvtab[msb(crc) as usize] ^ b as u32 }
     #[inline] fn yi_24_32(&self,zi:u32,zim1:u32)->u32 { (self.crc32inv(zi,0) ^ zim1) << 24 }
@@ -348,26 +350,39 @@ pub fn romper_auto(t:&Tablas, zip:&[u8], max_intentos:usize)->Option<(Keys,Strin
 /// el byte de control de la cabecera cifrada de 12 bytes, que descarta ~255/256
 /// de las contraseñas erróneas al instante, sin descifrar la entrada entera.
 /// Es el mismo cómputo que correría una GPU. NO sirve para AES (método 99).
+/// Objetivo del chequeo rápido: la cabecera cifrada de 12 bytes de una entrada
+/// ZipCrypto tradicional y su byte de control esperado. Independiente de las
+/// tablas (datos planos), para pasarlo también al kernel de GPU.
+pub struct ObjetivoZip {
+    pub header: [u8; 12],
+    pub chk: u8,
+}
+impl ObjetivoZip {
+    /// Toma la primera entrada ZipCrypto tradicional (no AES). None si no hay.
+    pub fn nuevo(_t: &Tablas, zip: &[u8]) -> Option<Self> {
+        for e in entradas_locales(zip) {
+            if !e.cifrada || e.metodo == 99 || e.csize < 12 {
+                continue; // 99 = AES; sin 12 bytes de cabecera no se puede.
+            }
+            let header: [u8; 12] = zip.get(e.datos_off..e.datos_off + 12)?.try_into().ok()?;
+            // Byte de control: MSB del CRC, o del mod-time si el bit 3 (data
+            // descriptor) está puesto (ahí el CRC local aún no se conocía).
+            let chk = if e.gp & 0x08 != 0 { (e.modtime >> 8) as u8 } else { (e.crc >> 24) as u8 };
+            return Some(ObjetivoZip { header, chk });
+        }
+        None
+    }
+}
+
 pub struct VerificadorZip<'a> {
     t: &'a Tablas,
-    hdr: [u8; 12],
-    chk: u8,
+    obj: ObjetivoZip,
 }
 impl<'a> VerificadorZip<'a> {
     /// Prepara el verificador con la primera entrada ZipCrypto tradicional.
     /// Devuelve None si el ZIP no tiene ninguna (p. ej. es AES o no está cifrado).
     pub fn nuevo(t: &'a Tablas, zip: &[u8]) -> Option<Self> {
-        for e in entradas_locales(zip) {
-            if !e.cifrada || e.metodo == 99 || e.csize < 12 {
-                continue; // 99 = AES; sin 12 bytes de cabecera no se puede.
-            }
-            let hdr: [u8; 12] = zip.get(e.datos_off..e.datos_off + 12)?.try_into().ok()?;
-            // Byte de control: MSB del CRC, o del mod-time si el bit 3 (data
-            // descriptor) está puesto (ahí el CRC local aún no se conocía).
-            let chk = if e.gp & 0x08 != 0 { (e.modtime >> 8) as u8 } else { (e.crc >> 24) as u8 };
-            return Some(VerificadorZip { t, hdr, chk });
-        }
-        None
+        Some(VerificadorZip { t, obj: ObjetivoZip::nuevo(t, zip)? })
     }
     /// ¿Pasa la contraseña el chequeo rápido? Hay ~1/256 de falsos positivos, así
     /// que un acierto debe confirmarse con un descifrado completo.
@@ -375,12 +390,12 @@ impl<'a> VerificadorZip<'a> {
     pub fn comprueba(&self, pw: &[u8]) -> bool {
         let mut k = Keys::de_password(self.t, pw);
         let mut last = 0u8;
-        for &c in &self.hdr {
+        for &c in &self.obj.header {
             let p = c ^ k.getk(self.t);
             k.update(self.t, p);
             last = p;
         }
-        last == self.chk
+        last == self.obj.chk
     }
 }
 
