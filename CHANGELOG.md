@@ -4,6 +4,20 @@ Todas las novedades relevantes de CAPAS. El formato sigue
 [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/)
 y el versionado [SemVer](https://semver.org/lang/es/).
 
+## [0.1.5] — 2026-11-27
+
+### Corregido — autoactualización en bucle
+- **La versión del binario ahora coincide con la etiqueta de la release.** El
+  workflow de release sella en `Cargo.toml` el número de la etiqueta (`vX.Y.Z`)
+  **antes de compilar**. Antes, el `.exe` publicado como v0.1.4 reportaba
+  internamente 0.1.3, así que tras «actualizar» la app volvía a ver una versión
+  mayor en GitHub y **pedía actualización sin parar**. (La release v0.1.4 quedó
+  afectada por esto; v0.1.5 la sustituye.)
+- **Reemplazo del ejecutable más robusto en Windows.** El script de
+  autoactualización renombra el `.exe` en marcha (en vez de intentar borrarlo en
+  un bucle infinito), con reintentos acotados y cierre garantizado de la
+  consola: ya no se queda una ventana `cmd` abierta.
+
 ## [0.1.3] — 2026-11-26
 
 ### Añadido — recuperación de ZipCrypto (sin contraseña)
@@ -93,6 +107,7 @@ y el versionado [SemVer](https://semver.org/lang/es/).
   packs y mods, módulo de claves e informes. Núcleo gratuito; Pro y Studio
   por licencia firmada (Ed25519) sin conexión.
 
+[0.1.5]: https://github.com/AngelazoGit/capas/releases/tag/v0.1.5
 [0.1.3]: https://github.com/AngelazoGit/capas/releases/tag/v0.1.3
 [0.1.2]: https://github.com/AngelazoGit/capas/releases/tag/v0.1.2
 [0.1.1]: https://github.com/AngelazoGit/capas/releases/tag/v0.1.1

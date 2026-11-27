@@ -26,6 +26,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Sellar versión desde la etiqueta
+        shell: bash
+        # La etiqueta manda: escribe su número (sin la "v") en la PRIMERA línea
+        # `version = "..."` de Cargo.toml (la del paquete) antes de compilar, para
+        # que el binario embeba exactamente la versión de la release. Sin esto, la
+        # app se actualiza a un .exe que reporta otra versión y vuelve a pedir
+        # actualización en bucle.
+        run: |
+          set -e
+          VER="${VERSION#v}"
+          echo "Etiqueta=$VERSION  ->  version=$VER"
+          awk -v ver="$VER" 'BEGIN{done=0} /^version = "/ && !done {sub(/"[^"]*"/, "\"" ver "\""); done=1} {print}' Cargo.toml > Cargo.toml.tmp
+          mv Cargo.toml.tmp Cargo.toml
+          grep -m1 '^version = ' Cargo.toml
+          # Falla el build si el número de la etiqueta no es SemVer X.Y.Z.
+          echo "$VER" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "::error::etiqueta no SemVer: $VERSION"; exit 1; }
       - name: Test
         run: cargo test --release
       - name: Build

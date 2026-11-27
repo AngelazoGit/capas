@@ -3326,11 +3326,36 @@ fn descargar_exe() -> Result<PathBuf, String> {
 fn reiniciar_con(nuevo: &Path) -> Result<(), String> {
     let actual = std::env::current_exe().map_err(|e| e.to_string())?;
     let bat = actual.with_file_name("capas-update.bat");
-    // Espera a que este proceso cierre, intercambia el .exe y lo relanza.
+    let viejo = actual.with_file_name("capas-old.exe");
+    // Reemplazo robusto: en Windows NO se puede borrar/sobrescribir el .exe en
+    // marcha, pero SÍ renombrarlo. Así que: renombra el actual a capas-old.exe
+    // (bucle ACOTADO, por si tarda en cerrar), pone el nuevo en su sitio, relanza
+    // y cierra la consola sola. Sin bucle infinito: la ventana nunca se queda
+    // colgada aunque algo falle.
     let script = format!(
-        "@echo off\r\nping 127.0.0.1 -n 2 >nul\r\n:loop\r\ndel \"{old}\" >nul 2>&1\r\nif exist \"{old}\" ( ping 127.0.0.1 -n 2 >nul & goto loop )\r\nmove /y \"{new}\" \"{old}\" >nul\r\nstart \"\" \"{old}\"\r\ndel \"%~f0\"\r\n",
+        "@echo off\r\n\
+         setlocal\r\n\
+         set \"OLD={old}\"\r\n\
+         set \"NEW={new}\"\r\n\
+         set \"BAK={bak}\"\r\n\
+         ping 127.0.0.1 -n 2 >nul\r\n\
+         del \"%BAK%\" >nul 2>&1\r\n\
+         set /a n=0\r\n\
+         :retry\r\n\
+         move /y \"%OLD%\" \"%BAK%\" >nul 2>&1\r\n\
+         if not exist \"%OLD%\" goto swap\r\n\
+         set /a n+=1\r\n\
+         if %n% GEQ 30 goto swap\r\n\
+         ping 127.0.0.1 -n 2 >nul\r\n\
+         goto retry\r\n\
+         :swap\r\n\
+         move /y \"%NEW%\" \"%OLD%\" >nul 2>&1\r\n\
+         start \"\" \"%OLD%\"\r\n\
+         del \"%BAK%\" >nul 2>&1\r\n\
+         (goto) 2>nul & del \"%~f0\"\r\n",
         old = actual.display(),
-        new = nuevo.display()
+        new = nuevo.display(),
+        bak = viejo.display(),
     );
     fs::write(&bat, script).map_err(|e| e.to_string())?;
     std::process::Command::new("cmd")
