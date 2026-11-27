@@ -6,6 +6,17 @@ y el versionado [SemVer](https://semver.org/lang/es/).
 
 ## [0.1.3] — 2026-11-26
 
+### Añadido — recuperación de ZipCrypto (sin contraseña)
+- **Detección de cifrado**: CAPAS distingue **ZipCrypto** (clásico, débil) de
+  **AES** (fuerte) en cada ZIP y lo dice en claro: ZipCrypto se puede recuperar
+  sin la contraseña con un texto plano conocido; AES no se rompe (solo con
+  contraseña / diccionario / fuerza bruta con abecedario).
+- **Ataque de texto plano conocido** (Biham–Kocher, implementación nativa en
+  Rust): con una copia sin cifrar de una de las entradas STORED (`--texto-plano
+  ARCHIVO`, o el selector del módulo de Claves en la app), rompe el ZipCrypto
+  **sin la contraseña**, recupera el estado del cifrador y descifra TODAS las
+  entradas, que siguen el análisis por capas. No toca AES.
+
 ### Añadido — motor 100 % nativo
 - **Contenedores sin herramientas externas**: 7z (incluido AES y cabeceras
   cifradas), RAR v2–v5 (cifrados y sólidos), CAB, MSI/MSP y cualquier archivo

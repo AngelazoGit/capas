@@ -329,6 +329,7 @@ pub struct App {
     lic_estado: Option<String>,
     usar_comunes: bool,
     diccionario: Option<PathBuf>,
+    texto_plano: Option<PathBuf>,
     fuerza_bruta: bool,
     fuerza_alfabeto: usize, // índice en ALFABETOS
     fuerza_long: usize,
@@ -476,6 +477,7 @@ impl App {
             lic_estado: None,
             usar_comunes: false,
             diccionario: None,
+            texto_plano: None,
             fuerza_bruta: false,
             fuerza_alfabeto: 0,
             fuerza_long: 4,
@@ -528,11 +530,12 @@ impl App {
                 FuerzaBruta::nuevo(&FuerzaBruta::alfabeto_por_nombre(alf), self.fuerza_long)
             }).flatten(),
             max_intentos: 2_000_000,
+            texto_plano: self.texto_plano.clone(),
         }
     }
 
     fn claves_activas(&self) -> bool {
-        !self.clave_entrada.trim().is_empty() || self.usar_comunes || self.diccionario.is_some() || self.fuerza_bruta
+        !self.clave_entrada.trim().is_empty() || self.usar_comunes || self.diccionario.is_some() || self.fuerza_bruta || self.texto_plano.is_some()
     }
 
     fn iniciar(&mut self, ctx: &egui::Context, ahora: f64) {
@@ -998,6 +1001,18 @@ impl App {
                     });
                     if let Some(d) = &self.diccionario {
                         ui.label(RichText::new(acortar(&d.display().to_string(), 36)).font(mono(10.0)).color(verde()));
+                    }
+                    ui.add_space(2.0);
+                    ui.label(RichText::new(tr("ZipCrypto — break WITHOUT password using a known file:", "ZipCrypto — romper SIN contraseña con un archivo conocido:")).font(mono(9.5)).color(morado_claro()));
+                    ui.horizontal(|ui| {
+                        if ui.add(boton(tr("KNOWN PLAINTEXT…", "TEXTO PLANO CONOCIDO…"), acento())).clicked() {
+                            if let Some(f) = rfd::FileDialog::new().pick_file() { self.texto_plano = Some(f); }
+                        }
+                        if self.texto_plano.is_some() && ui.add(boton("QUITAR", naranja())).clicked() { self.texto_plano = None; }
+                    });
+                    if let Some(d) = &self.texto_plano {
+                        ui.label(RichText::new(acortar(&d.display().to_string(), 36)).font(mono(10.0)).color(verde()));
+                        ui.label(RichText::new(tr("An unencrypted copy of one of its STORED files. Only for ZipCrypto, not AES.", "Una copia sin cifrar de uno de sus archivos STORED. Solo ZipCrypto, no AES.")).font(mono(9.0)).color(morado_medio()));
                     }
                     ui.checkbox(&mut self.fuerza_bruta, tr("BRUTE FORCE — only ZIP, off by default", "FUERZA BRUTA — solo ZIP, desactivada por defecto"));
                     if self.fuerza_bruta {

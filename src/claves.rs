@@ -32,6 +32,8 @@ pub struct Claves {
     pub fuerza: Option<FuerzaBruta>,
     /// Tope de intentos totales (protege de búsquedas infinitas).
     pub max_intentos: u64,
+    /// Texto plano conocido (archivo) para recuperar ZipCrypto sin contraseña.
+    pub texto_plano: Option<PathBuf>,
 }
 
 #[derive(Clone)]
@@ -150,6 +152,25 @@ impl Claves {
         }
         // Aviso claro según el tipo de cifrado: recuperable o solo con contraseña.
         notas.push(aviso_cifrado(cifrado));
+        // ZipCrypto + texto plano conocido: recuperación sin contraseña (destruir y montar).
+        if cifrado == Cifrado::ZipCrypto {
+            if let Some(ruta) = &self.texto_plano {
+                match std::fs::read(ruta) {
+                    Ok(plano) => {
+                        let t = crate::zipcrypto::Tablas::new();
+                        match crate::zipcrypto::romper(&t, d, &plano) {
+                            Some(k) => {
+                                notas.push(tr("✔ ZipCrypto BROKEN with the known plaintext (no password needed). Decrypting all entries…","✔ ZipCrypto ROTO con el texto plano conocido (sin contraseña). Descifrando todas las entradas…").into());
+                                let hijos = crate::zipcrypto::descifrar_todo(&t, d, k, lim);
+                                return Ok((hijos, Some("(sin contraseña: texto plano conocido)".into())));
+                            }
+                            None => notas.push(tr("Known-plaintext recovery did not find the keys (needs a STORED entry whose content matches the plaintext, ≥ ~20 bytes).","La recuperación por texto plano no halló las claves (necesita una entrada STORED cuyo contenido coincida con el texto plano, ≥ ~20 bytes).").into()),
+                        }
+                    }
+                    Err(e) => notas.push(tfmt(tr("could not read the plaintext file: {}","no se pudo leer el archivo de texto plano: {}"), &[e.to_string()])),
+                }
+            }
+        }
         if !self.activa() {
             notas.push(tr("Enable the Keys module (passwords / dictionary / common list) to open it.","Activa el módulo de Claves (contraseñas / diccionario / lista de habituales) para abrirlo.").into());
             return Ok((crate::extraer::zip(d, lim, notas)?, None));
@@ -174,8 +195,8 @@ impl Claves {
 pub fn aviso_cifrado(c: Cifrado) -> String {
     match c {
         Cifrado::ZipCrypto => tr(
-            "ZipCrypto encryption (legacy, weak): it CAN be recovered WITHOUT the password if a known plaintext is available (an unencrypted copy of one of its files, or a predictable header). Otherwise, passwords from the Keys module are tried.",
-            "Cifrado ZipCrypto (antiguo y débil): SE PUEDE recuperar SIN la contraseña si hay un texto plano conocido (una copia sin cifrar de uno de sus archivos, o una cabecera predecible). Si no, se prueban las contraseñas del módulo de Claves.",
+            "ZipCrypto encryption (legacy, weak): it CAN be recovered WITHOUT the password with a known plaintext — give an unencrypted copy of one of its STORED files (--texto-plano, or the Keys module picker). Otherwise, passwords from the Keys module are tried.",
+            "Cifrado ZipCrypto (antiguo y débil): SE PUEDE recuperar SIN la contraseña con un texto plano conocido — aporta una copia sin cifrar de uno de sus archivos STORED (--texto-plano, o el selector del módulo de Claves). Si no, se prueban las contraseñas del módulo de Claves.",
         ).to_string(),
         Cifrado::Aes => tr(
             "AES encryption (strong): it canNOT be broken. The only way in is the password — tried from the Keys module (your passwords, common list, dictionary, or bounded brute force with an alphabet).",
@@ -421,7 +442,7 @@ mod pruebas_fuerza {
     }
     #[test]
     fn candidatas_externas_nunca_usan_fuerza_bruta() {
-        let c = Claves { explicitas: vec!["hola".into()], comunes: false, diccionario: None, fuerza: FuerzaBruta::nuevo("ab", 3), max_intentos: 1000 };
+        let c = Claves { explicitas: vec!["hola".into()], comunes: false, diccionario: None, fuerza: FuerzaBruta::nuevo("ab", 3), max_intentos: 1000, texto_plano: None };
         assert!(c.fuerza.is_some());
         assert_eq!(c.candidatas_externas(), vec!["hola".to_string()]);
     }

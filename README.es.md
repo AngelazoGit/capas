@@ -150,6 +150,7 @@ herramienta, `--max-archivo-mb`, `--max-total-mb`, `--sin-tallado`,
 |---|---|---|
 | gzip, bzip2, xz, lzma, zlib, zip/jar/apk/docx, tar, ar/.deb, Mach-O fat | extracción | — |
 | 7z (incl. AES y cabeceras cifradas), RAR v2–v5 (incl. cifrado/sólido), CAB | extracción; prueba tus contraseñas del módulo de Claves | `7z` (solo respaldo) |
+| Cifrado de ZIP | detecta **ZipCrypto** vs **AES**; ZipCrypto se recupera SIN la contraseña por ataque de texto plano conocido (`--texto-plano`, un archivo STORED conocido); AES solo con la contraseña | — |
 | MSI / MSP / Office 97-2003 / cualquier archivo compuesto OLE | todos los flujos, nombres MSI decodificados; los CAB incrustados siguen a la siguiente capa | — |
 | CHD (MAME) | decodifica imágenes CD/DVD/HDD; las pistas de datos de CD pasan a ISO | `chdman` (solo respaldo) |
 | PDF | extrae y descomprime los flujos | — |

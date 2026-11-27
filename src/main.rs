@@ -29,6 +29,7 @@ mod licencia;
 mod localizar;
 mod mcp;
 mod motor;
+mod zipcrypto;
 mod nativo;
 mod pyc_tablas;
 mod plugins;
@@ -185,6 +186,10 @@ struct Args {
     #[arg(long, value_name = "ALFABETO")]
     fuerza_bruta: Option<String>,
 
+    /// Known-plaintext file to break a ZipCrypto archive WITHOUT its password
+    #[arg(long, value_name = "ARCHIVO")]
+    texto_plano: Option<PathBuf>,
+
     /// Maximum length for brute force
     #[arg(long, default_value_t = 4)]
     fuerza_long: usize,
@@ -310,6 +315,7 @@ fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
             claves::FuerzaBruta::nuevo(&claves::FuerzaBruta::alfabeto_por_nombre(al), a.fuerza_long)
         }),
         max_intentos: a.max_intentos,
+        texto_plano: a.texto_plano.clone(),
     };
     op
 }

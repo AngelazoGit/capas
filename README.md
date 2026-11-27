@@ -106,6 +106,7 @@ capas --help               # all options
 | gzip, bzip2, xz, lzma, zlib, zip/jar/apk, tar, ar/.deb, Mach-O fat | extraction | — |
 | ISO 9660 disc image (CD/DVD, PS2…) | lists and extracts files, including nested folders | — |
 | 7z (incl. AES + encrypted headers), RAR v2–v5 (incl. encrypted/solid), CAB | extraction, tries your passwords from the Keys module | `7z` (fallback only) |
+| ZIP encryption | detects **ZipCrypto** vs **AES**; ZipCrypto can be recovered WITHOUT the password via a known-plaintext attack (`--texto-plano`, a known STORED file); AES only with the password | — |
 | MSI / MSP / Office 97-2003 / any OLE compound file | every stream, MSI names decoded; embedded CABs go to the next layer | — |
 | CHD (MAME) | decodes CD/DVD/HDD images; CD data tracks become an ISO for the next layer | `chdman` (fallback only) |
 | PDF | extracts and inflates its streams | — |
