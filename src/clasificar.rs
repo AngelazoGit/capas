@@ -139,6 +139,7 @@ pub fn categoria(tipo: Tipo, nombre: &str) -> Categoria {
     match tipo {
         Tipo::Elf | Tipo::Pe | Tipo::MachO | Tipo::MachOFat => return Categoria::Ejecutable,
         Tipo::ClaseJava | Tipo::Dex | Tipo::Pyc | Tipo::Wasm | Tipo::Shader => return Categoria::Bytecode,
+        Tipo::DotNet => return Categoria::Ejecutable,
         Tipo::Imagen => return Categoria::Imagen,
         Tipo::Audio => return Categoria::Audio,
         Tipo::Video => return Categoria::Video,

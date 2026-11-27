@@ -74,6 +74,14 @@ y el versionado [SemVer](https://semver.org/lang/es/).
   plano y rompe el ZipCrypto **sin aportar ninguna copia**. Es más lento (cada
   intento cuesta unos minutos) y va desactivado por defecto.
 
+### Añadido — lector nativo de .NET / CLI
+- **Ensamblados .NET** (PE con cabecera CLR) se detectan y se les lee la
+  **estructura** de forma nativa (metadatos ECMA-335, sin .NET instalado):
+  espacios de nombres, clases, campos y métodos (con `static`), estilo `ildasm`.
+  Muy útil para la lógica de juegos Unity (`Assembly-CSharp.dll`). Además del
+  análisis PE habitual. Disponible con `--listar-codigo`/`--decompilar` y en la
+  app. (El pseudo-C# completo y el desensamblado CIL quedan para más adelante.)
+
 ### Añadido — decompilador de shaders (SPIR-V → WGSL)
 - **Shaders SPIR-V** (Vulkan/OpenGL/WebGPU) se detectan por contenido y se
   decompilan a **WGSL legible** de forma nativa (con naga, ya incluido). Sigue el

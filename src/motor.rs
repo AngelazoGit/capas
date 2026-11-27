@@ -282,6 +282,16 @@ impl Motor {
                 self.nativo(d, r, an, tipo, nodo);
                 Ok(Vec::new())
             }
+            Tipo::DotNet => {
+                // Ensamblado .NET: estructura CLI (tipos/campos/métodos) nativa,
+                // y además el análisis PE habitual (secciones, imports…).
+                match crate::dotnet::listar(d) {
+                    Ok(t) => self.guardar(an, "dotnet_estructura.txt", t.as_bytes(), nodo),
+                    Err(e) => nodo.notas.push(tfmt(tr("native .NET reader: {}", "lector .NET nativo: {}"), &[e.to_string()])),
+                }
+                self.nativo(d, r, an, Tipo::Pe, nodo);
+                Ok(Vec::new())
+            }
             Tipo::ClaseJava => {
                 // Listado nativo (equivale a javap -c -p): no necesita JDK.
                 match codigo::clase_java(d) {

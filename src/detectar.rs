@@ -32,6 +32,7 @@ pub enum Tipo {
     Pyc,
     Wasm,
     Shader,
+    DotNet,
     Pdf,
     Imagen,
     Audio,
@@ -72,6 +73,7 @@ impl Tipo {
             Tipo::Pyc => tr("Python bytecode","Bytecode Python"),
             Tipo::Wasm => "WebAssembly",
             Tipo::Shader => tr("Shader (SPIR-V)", "Shader (SPIR-V)"),
+            Tipo::DotNet => tr(".NET assembly (CLI)", "Ensamblado .NET (CLI)"),
             Tipo::Pdf => "PDF",
             Tipo::Imagen => tr("Image","Imagen"),
             Tipo::Audio => "Audio",
@@ -111,6 +113,7 @@ impl Tipo {
             Tipo::Pyc => "pyc",
             Tipo::Wasm => "wasm",
             Tipo::Shader => "shader",
+            Tipo::DotNet => "dotnet",
             Tipo::Pdf => "pdf",
             Tipo::Imagen => "img",
             Tipo::Audio => "audio",
@@ -165,6 +168,30 @@ pub fn es_pe(d: &[u8]) -> bool {
         Some(off) if (off as usize) < d.len().saturating_sub(4) => {
             &d[off as usize..off as usize + 4] == b"PE\0\0"
         }
+        _ => false,
+    }
+}
+
+/// ¿El PE tiene cabecera CLR (directorio de datos 14)? → es un ensamblado .NET.
+/// Comprobación ligera (sin parsear todo el PE).
+pub fn pe_tiene_clr(d: &[u8]) -> bool {
+    let lf = match u32le(d, 0x3c) {
+        Some(v) => v as usize,
+        None => return false,
+    };
+    let opt = lf + 24; // PE sig(4) + COFF header(20)
+    let magic = match d.get(opt..opt + 2) {
+        Some(b) => u16::from_le_bytes([b[0], b[1]]),
+        None => return false,
+    };
+    let dd = match magic {
+        0x10b => opt + 96,  // PE32
+        0x20b => opt + 112, // PE32+
+        _ => return false,
+    };
+    let dir14 = dd + 14 * 8; // directorio de datos nº 14 (COM descriptor)
+    match (u32le(d, dir14), u32le(d, dir14 + 4)) {
+        (Some(rva), Some(sz)) => rva != 0 && sz != 0,
         _ => false,
     }
 }
@@ -244,6 +271,9 @@ pub fn detectar(d: &[u8]) -> Tipo {
         return Tipo::Elf;
     }
     if es_pe(d) {
+        if pe_tiene_clr(d) {
+            return Tipo::DotNet;
+        }
         return Tipo::Pe;
     }
     match u32be(d, 0) {
