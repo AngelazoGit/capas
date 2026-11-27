@@ -26,8 +26,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Instalar Playwright + Chromium
+      - name: Instalar Playwright + Chromium + fuente DejaVu
         run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq fonts-dejavu-core
           npm init -y >/dev/null 2>&1
           npm install --no-save playwright
           npx playwright install --with-deps chromium
