@@ -16,6 +16,11 @@ y el versionado [SemVer](https://semver.org/lang/es/).
   ARCHIVO`, o el selector del módulo de Claves en la app), rompe el ZipCrypto
   **sin la contraseña**, recupera el estado del cifrador y descifra TODAS las
   entradas, que siguen el análisis por capas. No toca AES.
+- **Autodetección de cabeceras conocidas** (`--auto-texto-plano`, o la casilla
+  del módulo de Claves): si una entrada STORED es XML/SVG/HTML/plist…, CAPAS
+  prueba su cabecera típica (p. ej. `<?xml version="1.0" encoding="`) como texto
+  plano y rompe el ZipCrypto **sin aportar ninguna copia**. Es más lento (cada
+  intento cuesta unos minutos) y va desactivado por defecto.
 
 ### Añadido — motor 100 % nativo
 - **Contenedores sin herramientas externas**: 7z (incluido AES y cabeceras

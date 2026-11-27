@@ -190,6 +190,10 @@ struct Args {
     #[arg(long, value_name = "ARCHIVO")]
     texto_plano: Option<PathBuf>,
 
+    /// Auto-detect known headers (XML/SVG/HTML…) to break ZipCrypto without a password (slower)
+    #[arg(long)]
+    auto_texto_plano: bool,
+
     /// Maximum length for brute force
     #[arg(long, default_value_t = 4)]
     fuerza_long: usize,
@@ -316,6 +320,7 @@ fn opciones(a: &Args, sis: &Sistema) -> analisis::Opciones {
         }),
         max_intentos: a.max_intentos,
         texto_plano: a.texto_plano.clone(),
+        auto_texto_plano: a.auto_texto_plano,
     };
     op
 }

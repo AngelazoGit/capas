@@ -330,6 +330,7 @@ pub struct App {
     usar_comunes: bool,
     diccionario: Option<PathBuf>,
     texto_plano: Option<PathBuf>,
+    auto_texto_plano: bool,
     fuerza_bruta: bool,
     fuerza_alfabeto: usize, // índice en ALFABETOS
     fuerza_long: usize,
@@ -478,6 +479,7 @@ impl App {
             usar_comunes: false,
             diccionario: None,
             texto_plano: None,
+            auto_texto_plano: false,
             fuerza_bruta: false,
             fuerza_alfabeto: 0,
             fuerza_long: 4,
@@ -531,11 +533,12 @@ impl App {
             }).flatten(),
             max_intentos: 2_000_000,
             texto_plano: self.texto_plano.clone(),
+            auto_texto_plano: self.auto_texto_plano,
         }
     }
 
     fn claves_activas(&self) -> bool {
-        !self.clave_entrada.trim().is_empty() || self.usar_comunes || self.diccionario.is_some() || self.fuerza_bruta || self.texto_plano.is_some()
+        !self.clave_entrada.trim().is_empty() || self.usar_comunes || self.diccionario.is_some() || self.fuerza_bruta || self.texto_plano.is_some() || self.auto_texto_plano
     }
 
     fn iniciar(&mut self, ctx: &egui::Context, ahora: f64) {
@@ -1014,6 +1017,7 @@ impl App {
                         ui.label(RichText::new(acortar(&d.display().to_string(), 36)).font(mono(10.0)).color(verde()));
                         ui.label(RichText::new(tr("An unencrypted copy of one of its STORED files. Only for ZipCrypto, not AES.", "Una copia sin cifrar de uno de sus archivos STORED. Solo ZipCrypto, no AES.")).font(mono(9.0)).color(morado_medio()));
                     }
+                    ui.checkbox(&mut self.auto_texto_plano, tr("Auto-detect known headers (XML/SVG/HTML…) — slower", "Autodetectar cabeceras conocidas (XML/SVG/HTML…) — más lento"));
                     ui.checkbox(&mut self.fuerza_bruta, tr("BRUTE FORCE — only ZIP, off by default", "FUERZA BRUTA — solo ZIP, desactivada por defecto"));
                     if self.fuerza_bruta {
                         ui.horizontal(|ui| {

@@ -281,6 +281,67 @@ fn entradas_locales(d:&[u8])->Vec<Entrada>{
     v
 }
 
+/// Extensión en minúsculas de un nombre de archivo.
+fn ext(nombre:&str)->String{ nombre.rsplit('/').next().unwrap_or(nombre).rsplit('.').next().filter(|e| e.len()<=8).unwrap_or("").to_lowercase() }
+
+/// Prefijos de texto plano conocidos por tipo de archivo (los más largos y
+/// fiables primero). Sirven para romper ZipCrypto sin aportar una copia: muchos
+/// formatos empiezan por una cabecera fija y predecible.
+pub fn prefijos_auto(nombre:&str)->Vec<Vec<u8>>{
+    let e=ext(nombre);
+    // IMPORTANTE: el ataque Biham–Kocher es MUCHO más rápido cuanto más largo es
+    // el texto plano conocido (≈38 bytes ~110 s; 30 bytes se dispara a minutos).
+    // Por eso usamos la línea de declaración XML COMPLETA (≥38 bytes), probando
+    // las variantes exactas más frecuentes primero (UTF-8 / \n), no un prefijo
+    // corto "universal".
+    let xml_decls:&[&[u8]]=&[
+        b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n",
+        b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n",
+        b"<?xml version=\"1.0\" encoding=\"utf-8\"?>\n",
+        b"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n",
+    ];
+    let mut v:Vec<Vec<u8>>=Vec::new();
+    // Prefijos ESPECÍFICOS de la extensión primero: muchos SVG/plist empiezan por
+    // su propia cabecera (no por la declaración XML), y así no gastamos el
+    // presupuesto de intentos en declaraciones genéricas que no casan.
+    match e.as_str(){
+        "svg" => { v.push(b"<svg xmlns=\"http://www.w3.org/2000/svg\"".to_vec()); v.push(b"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>\n".to_vec()); }
+        // HTML5 (`<!DOCTYPE html>`, 15 B) es demasiado corto para un ataque viable;
+        // solo el DOCTYPE XHTML largo sirve. El HTML5 normal va con --texto-plano.
+        "html"|"htm"|"xhtml" => { v.push(b"<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\"".to_vec()); }
+        "plist" => { v.push(b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\"".to_vec()); }
+        _ => {}
+    }
+    // Luego las declaraciones XML genéricas (para el resto de familias XML).
+    let xml=matches!(e.as_str(),"xml"|"svg"|"plist"|"gpx"|"kml"|"rss"|"xhtml"|"xaml"|"csproj"|"vcxproj"|"resx"|"config"|"xlf"|"xliff"|"dae"|"tmx"|"xsd"|"xsl"|"xslt"|"wsdl"|"atom"|"gml"|"fods"|"fodt"|"fodp");
+    if xml { for d in xml_decls { if !v.iter().any(|x| x==d) { v.push(d.to_vec()); } } }
+    v
+}
+
+/// Autodetección: intenta romper ZipCrypto probando prefijos conocidos en las
+/// entradas STORED, según su extensión. Devuelve (claves, descripción) del éxito.
+/// `max_intentos` acota cuántos ataques se lanzan (cada uno cuesta segundos).
+pub fn romper_auto(t:&Tablas, zip:&[u8], max_intentos:usize)->Option<(Keys,String)>{
+    let mut tareas:Vec<(usize,usize,Vec<u8>)>=Vec::new(); // (datos_off, csize, prefijo)
+    for e in entradas_locales(zip){
+        if !e.cifrada || e.metodo!=0 || e.csize<12 { continue; }
+        let l=e.csize-12;
+        for pre in prefijos_auto(&e.nombre){
+            // Mínimo 34 B: por debajo, el ataque tarda demasiado para ser útil.
+            if pre.len()>=34 && pre.len()<=l { tareas.push((e.datos_off,e.csize,pre)); }
+        }
+    }
+    // orden del catálogo = por probabilidad (la cabecera más común primero).
+    for (off,csize,pre) in tareas.into_iter().take(max_intentos){
+        let enc=&zip[off..off+csize];
+        let data=Data::nueva(enc,&pre,0,vec![]);
+        if let Some(k)=atacar(t,&data).into_iter().next(){
+            return Some((k, format!("{} bytes", pre.len())));
+        }
+    }
+    None
+}
+
 /// Intenta romper un ZIP ZipCrypto usando `plano` (contenido conocido de una de
 /// sus entradas STORED). Devuelve las claves del estado inicial (post-password).
 pub fn romper(t:&Tablas, zip:&[u8], plano:&[u8]) -> Option<Keys> {
@@ -361,5 +422,18 @@ mod pruebas {
         assert_eq!(k, Keys::de_password(&t, b"miClaveLarga2026"));
         let hijos = descifrar_todo(&t, &zip, k, 1<<20);
         assert!(hijos.iter().any(|h| h.nombre.ends_with("sec.txt") && h.datos == b"secreto-capas-OK\n"));
+    }
+
+    #[test] #[ignore = "autodeteccion: cabecera corta ~2min"]
+    fn autodeteccion_rompe_por_cabecera() {
+        // datos.xml empieza por la cabecera XML conocida (prefijo de 30 bytes del
+        // catalogo); sin aportar texto plano, la autodeteccion recupera las claves
+        // y descifra tambien flag.txt.
+        let t = Tablas::new();
+        let zip = fx("zipcrypto_auto.zip");
+        let (k, _info) = romper_auto(&t, &zip, 4).expect("la autodeteccion debe romper por cabecera XML");
+        let hijos = descifrar_todo(&t, &zip, k, 1<<20);
+        assert!(hijos.iter().any(|h| h.nombre.ends_with("flag.txt")
+            && h.datos == b"FLAG{zipcrypto_roto_por_autodeteccion}\n"));
     }
 }

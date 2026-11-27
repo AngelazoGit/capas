@@ -34,6 +34,8 @@ pub struct Claves {
     pub max_intentos: u64,
     /// Texto plano conocido (archivo) para recuperar ZipCrypto sin contraseña.
     pub texto_plano: Option<PathBuf>,
+    /// Autodetección: intentar romper ZipCrypto con cabeceras conocidas.
+    pub auto_texto_plano: bool,
 }
 
 #[derive(Clone)]
@@ -70,7 +72,7 @@ impl FuerzaBruta {
 
 impl Claves {
     pub fn activa(&self) -> bool {
-        !self.explicitas.is_empty() || self.comunes || self.diccionario.is_some() || self.fuerza.is_some()
+        !self.explicitas.is_empty() || self.comunes || self.diccionario.is_some() || self.fuerza.is_some() || self.texto_plano.is_some() || self.auto_texto_plano
     }
 
     /// Todas las contraseñas candidatas, en orden de prioridad y sin repetir.
@@ -168,6 +170,16 @@ impl Claves {
                         }
                     }
                     Err(e) => notas.push(tfmt(tr("could not read the plaintext file: {}","no se pudo leer el archivo de texto plano: {}"), &[e.to_string()])),
+                }
+            } else if self.auto_texto_plano {
+                // Autodetección: cabeceras conocidas (XML/SVG/HTML/plist…) en entradas STORED.
+                let t = crate::zipcrypto::Tablas::new();
+                if let Some((k, info)) = crate::zipcrypto::romper_auto(&t, d, 4) {
+                    notas.push(tfmt(tr("✔ ZipCrypto BROKEN by auto-detected known header ({} known). Decrypting all entries…","✔ ZipCrypto ROTO por cabecera conocida autodetectada ({} conocidos). Descifrando todas las entradas…"), &[info]));
+                    let hijos = crate::zipcrypto::descifrar_todo(&t, d, k, lim);
+                    return Ok((hijos, Some("(sin contraseña: cabecera conocida)".into())));
+                } else {
+                    notas.push(tr("Auto-detection did not break it (no STORED entry with a long enough known header). Provide a known file with --texto-plano.","La autodetección no lo rompió (ninguna entrada STORED con cabecera conocida suficientemente larga). Aporta un archivo conocido con --texto-plano.").into());
                 }
             }
         }
@@ -442,7 +454,7 @@ mod pruebas_fuerza {
     }
     #[test]
     fn candidatas_externas_nunca_usan_fuerza_bruta() {
-        let c = Claves { explicitas: vec!["hola".into()], comunes: false, diccionario: None, fuerza: FuerzaBruta::nuevo("ab", 3), max_intentos: 1000, texto_plano: None };
+        let c = Claves { explicitas: vec!["hola".into()], comunes: false, diccionario: None, fuerza: FuerzaBruta::nuevo("ab", 3), max_intentos: 1000, texto_plano: None, auto_texto_plano: false };
         assert!(c.fuerza.is_some());
         assert_eq!(c.candidatas_externas(), vec!["hola".to_string()]);
     }
