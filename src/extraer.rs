@@ -698,7 +698,60 @@ fn leer_logico(d: &[u8], f: &FmtIso, lba: u32, len: usize) -> Vec<u8> {
     out
 }
 
-pub fn iso9660(d: &[u8], lim: u64, notas: &mut Vec<String>, truncado: &mut bool) -> Result<Vec<Hijo>> {
+/// Como `leer_logico`, pero escribe en streaming (sector a sector) a `out` en
+/// vez de construir un Vec. Permite volcar a disco ficheros de varios GB sin
+/// cargarlos en RAM. Devuelve cuántos bytes se escribieron.
+fn escribir_logico(d: &[u8], f: &FmtIso, lba: u32, len: usize, out: &mut impl Write) -> std::io::Result<u64> {
+    let mut restante = len;
+    let mut s = lba as usize;
+    let mut escritos = 0u64;
+    while restante > 0 {
+        let base = s.saturating_mul(f.sector) + f.usuario;
+        let tomar = restante.min(2048);
+        match d.get(base..base + tomar) {
+            Some(b) => {
+                out.write_all(b)?;
+                escritos += b.len() as u64;
+            }
+            None => break,
+        }
+        restante -= tomar;
+        s += 1;
+    }
+    Ok(escritos)
+}
+
+/// Convierte una ruta interna del ISO en una ruta relativa segura (sin "..",
+/// sin raíz absoluta, componentes vacíos fuera). Vacía → "fichero".
+fn ruta_iso_segura(nombre: &str) -> std::path::PathBuf {
+    let norm = nombre.replace('\\', "/");
+    let mut p = std::path::PathBuf::new();
+    for c in norm.split('/') {
+        let c = c.trim();
+        if c.is_empty() || c == "." || c == ".." {
+            continue;
+        }
+        p.push(c);
+    }
+    if p.as_os_str().is_empty() {
+        std::path::PathBuf::from("fichero")
+    } else {
+        p
+    }
+}
+
+/// Extrae una imagen ISO 9660. Los ficheros que caben en el presupuesto de
+/// memoria (`lim`) se devuelven como hijos (para seguir el análisis por capas).
+/// Los que NO caben: si `dir_grandes` es `Some`, se vuelcan a disco en streaming
+/// (sin cargarlos en RAM) y su ruta se devuelve en el segundo vector; si es
+/// `None`, se omiten. `truncado` se marca solo si algo quedó sin extraer.
+pub fn iso9660(
+    d: &[u8],
+    lim: u64,
+    dir_grandes: Option<&std::path::Path>,
+    notas: &mut Vec<String>,
+    truncado: &mut bool,
+) -> Result<(Vec<Hijo>, Vec<std::path::PathBuf>)> {
     let fmt = formato_iso(d).ok_or_else(|| anyhow!("{}", tr("not a primary ISO 9660 volume", "no es un volumen ISO 9660 primario")))?;
     // PVD (sector 16): registro de directorio raíz en el offset 156.
     let pvd = leer_logico(d, &fmt, 16, 2048);
@@ -717,6 +770,10 @@ pub fn iso9660(d: &[u8], lim: u64, notas: &mut Vec<String>, truncado: &mut bool)
     let mut omitidos = 0usize;
     let mut bytes_omitidos = 0u64;
     let mut avisos = 0usize;
+    // Ficheros grandes volcados a disco en streaming (no caben en RAM).
+    let mut grandes: Vec<std::path::PathBuf> = Vec::new();
+    let mut bytes_volcados = 0u64;
+    let mut escritos: std::collections::HashSet<std::path::PathBuf> = std::collections::HashSet::new();
     let mut visitados = std::collections::HashSet::new();
     let mut pila = vec![(raiz_lba, raiz_len, String::new())];
     let mut registros = 0usize;
@@ -765,13 +822,52 @@ pub fn iso9660(d: &[u8], lim: u64, notas: &mut Vec<String>, truncado: &mut bool)
             } else {
                 let tam = ext_len as u64;
                 if tam > lim || total + tam > lim {
-                    // No cabe en el presupuesto de memoria del bloque: se omite,
-                    // pero se sigue recorriendo para listar y contar el resto.
-                    omitidos += 1;
-                    bytes_omitidos += tam;
-                    if avisos < 8 {
-                        notas.push(tfmt(tr("skipped (does not fit in the per-block memory budget): {} ({})", "omitido (no cabe en el presupuesto de memoria del bloque): {} ({})"), &[completo.clone(), crate::recursos::humano(tam)]));
-                        avisos += 1;
+                    // No cabe en el presupuesto de memoria del bloque.
+                    if let Some(base) = dir_grandes {
+                        // Volcado a disco en streaming (sin cargarlo en RAM).
+                        let mut rel = ruta_iso_segura(&completo);
+                        let mut k = 1;
+                        while !escritos.insert(base.join(&rel)) {
+                            rel = ruta_iso_segura(&format!("{completo}~{k}"));
+                            k += 1;
+                        }
+                        let destino = base.join(&rel);
+                        let escrito = (|| -> std::io::Result<u64> {
+                            if let Some(p) = destino.parent() {
+                                std::fs::create_dir_all(p)?;
+                            }
+                            let f = std::fs::File::create(&destino)?;
+                            let mut w = std::io::BufWriter::with_capacity(1 << 20, f);
+                            let n = escribir_logico(d, &fmt, ext_lba, ext_len, &mut w)?;
+                            w.flush()?;
+                            Ok(n)
+                        })();
+                        match escrito {
+                            Ok(n) => {
+                                bytes_volcados += n;
+                                if avisos < 8 {
+                                    notas.push(tfmt(tr("streamed to disk (too big for RAM): {} ({})", "volcado a disco (demasiado grande para la RAM): {} ({})"), &[completo.clone(), crate::recursos::humano(n)]));
+                                    avisos += 1;
+                                }
+                                grandes.push(destino);
+                            }
+                            Err(e) => {
+                                omitidos += 1;
+                                bytes_omitidos += tam;
+                                if avisos < 8 {
+                                    notas.push(tfmt(tr("could not stream '{}' to disk: {}", "no se pudo volcar '{}' a disco: {}"), &[completo.clone(), e.to_string()]));
+                                    avisos += 1;
+                                }
+                            }
+                        }
+                    } else {
+                        // Sin destino en disco: se omite, pero se sigue listando el resto.
+                        omitidos += 1;
+                        bytes_omitidos += tam;
+                        if avisos < 8 {
+                            notas.push(tfmt(tr("skipped (does not fit in the per-block memory budget): {} ({})", "omitido (no cabe en el presupuesto de memoria del bloque): {} ({})"), &[completo.clone(), crate::recursos::humano(tam)]));
+                            avisos += 1;
+                        }
                     }
                 } else {
                     total += tam;
@@ -784,6 +880,13 @@ pub fn iso9660(d: &[u8], lim: u64, notas: &mut Vec<String>, truncado: &mut bool)
             pos += rlen;
         }
     }
+    if !grandes.is_empty() {
+        notas.push(tfmt(
+            tr("{} large file(s) ({}) streamed to disk (too big for RAM) — in the output folder, not re-analyzed.",
+               "{} fichero(s) grande(s) ({}) volcado(s) a disco (demasiado grandes para la RAM) — en la carpeta de salida, sin volver a analizar."),
+            &[grandes.len().to_string(), crate::recursos::humano(bytes_volcados)],
+        ));
+    }
     if omitidos > 0 {
         *truncado = true;
         notas.push(tfmt(
@@ -792,7 +895,7 @@ pub fn iso9660(d: &[u8], lim: u64, notas: &mut Vec<String>, truncado: &mut bool)
             &[crate::recursos::humano(lim), hijos.len().to_string(), crate::recursos::humano(total), omitidos.to_string(), crate::recursos::humano(bytes_omitidos)],
         ));
     }
-    Ok(hijos)
+    Ok((hijos, grandes))
 }
 
 #[cfg(test)]
@@ -857,10 +960,11 @@ mod pruebas_iso {
     fn lee_iso_minimo() {
         let img = mini_iso(b"HELLO ISO");
         let (mut n, mut t) = (Vec::new(), false);
-        let hijos = iso9660(&img, 1 << 20, &mut n, &mut t).unwrap();
+        let (hijos, grandes) = iso9660(&img, 1 << 20, None, &mut n, &mut t).unwrap();
         assert_eq!(hijos.len(), 1);
         assert_eq!(hijos[0].nombre, "FILE.TXT"); // sin ";1"
         assert_eq!(hijos[0].datos, b"HELLO ISO");
+        assert!(grandes.is_empty());
         assert!(!t, "no debe marcarse truncado si todo cabe");
     }
 
@@ -868,23 +972,40 @@ mod pruebas_iso {
     fn lee_bin_crudo_2352() {
         let crudo = a_2352(&mini_iso(b"RAW CD TRACK"));
         let (mut n, mut t) = (Vec::new(), false);
-        let hijos = iso9660(&crudo, 1 << 20, &mut n, &mut t).unwrap();
+        let (hijos, _g) = iso9660(&crudo, 1 << 20, None, &mut n, &mut t).unwrap();
         assert_eq!(hijos.len(), 1);
         assert_eq!(hijos[0].nombre, "FILE.TXT");
         assert_eq!(hijos[0].datos, b"RAW CD TRACK");
     }
 
     #[test]
-    fn iso_que_no_cabe_extrae_parcial_sin_fallar() {
-        // Con un límite por debajo del fichero, NO se aborta la imagen: se omite
-        // el fichero, se marca truncado y se deja una nota. (El fichero del
-        // mini-ISO son 9 bytes; con límite 4 no cabe.)
+    fn iso_que_no_cabe_sin_destino_se_omite() {
+        // Sin dir_grandes y con límite por debajo del fichero: NO se aborta la
+        // imagen, se omite el fichero, se marca truncado y se deja nota.
         let img = mini_iso(b"HELLO ISO");
         let (mut n, mut t) = (Vec::new(), false);
-        let hijos = iso9660(&img, 4, &mut n, &mut t).unwrap();
+        let (hijos, grandes) = iso9660(&img, 4, None, &mut n, &mut t).unwrap();
         assert!(hijos.is_empty(), "el fichero no cabe, se omite");
+        assert!(grandes.is_empty());
         assert!(t, "debe marcarse truncado");
         assert!(n.iter().any(|m| m.contains("omitid") || m.to_lowercase().contains("skip")));
+    }
+
+    #[test]
+    fn iso_que_no_cabe_se_vuelca_a_disco() {
+        // Con dir_grandes y límite por debajo del fichero: se VUELCA a disco en
+        // streaming (no se pierde) y su ruta sale en `grandes`. No truncado.
+        let img = mini_iso(b"HELLO ISO ON DISK");
+        let dir = std::env::temp_dir().join(format!("capas_iso_{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&dir);
+        let (mut n, mut t) = (Vec::new(), false);
+        let (hijos, grandes) = iso9660(&img, 4, Some(dir.as_path()), &mut n, &mut t).unwrap();
+        assert!(hijos.is_empty(), "no cabe en RAM, va a disco");
+        assert_eq!(grandes.len(), 1, "debe haber un fichero volcado");
+        assert!(!t, "volcado a disco = completo, no truncado");
+        let escrito = std::fs::read(&grandes[0]).unwrap();
+        assert_eq!(escrito, b"HELLO ISO ON DISK");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
 

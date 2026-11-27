@@ -6,15 +6,27 @@ y el versionado [SemVer](https://semver.org/lang/es/).
 
 ## [0.1.6] — 2026-11-27
 
+### Añadido — archivos grandes (varios GiB) y claridad de la interfaz
+- **Mapeo en memoria (mmap) del archivo de entrada.** El fichero de nivel 0 ya
+  no se carga entero en RAM: el sistema trae las páginas bajo demanda, así que
+  una ISO o un juego de varios GiB se puede analizar sin agotar la memoria.
+- **Volcado a disco en streaming de los ficheros grandes de una ISO.** Los
+  ficheros de una imagen que no caben en el presupuesto de memoria se escriben
+  directamente a la carpeta de salida en trozos (sin cargarlos en RAM) y
+  aparecen como resultados abribles. Los que caben siguen el análisis por capas.
+- **Interfaz explicada de arriba abajo.** Cada vista del menú, cada sección
+  (Núcleos, Memoria, Motores, Parámetros, Claves) y cada botón (Analizar,
+  Extraer, Vista previa…) dicen para qué sirven, con subtítulos y con ayuda al
+  pasar el ratón. Objetivo: que quien no conozca la herramienta sepa siempre qué
+  está tocando (analizar vs decompilar).
+
 ### Corregido — ISO grandes (imágenes de disco de varios GiB)
 - **Una ISO ya no se descarta entera por el límite de memoria.** Antes, una
   imagen ISO 9660 mayor que el límite por bloque fallaba con «¿bomba de
   descompresión?», lo cual era engañoso: una ISO no está comprimida (ratio 1:1),
   el límite es de MEMORIA (CAPAS mantiene lo extraído en RAM). Ahora extrae los
-  ficheros que caben, **omite** los que no con una nota por fichero, marca la
-  capa como incompleta y añade un resumen («extraídos N, omitidos K») que explica
-  cómo subir el límite (bajar HILOS o liberar RAM). Así se ve el árbol de la
-  imagen y los ficheros pequeños aunque la imagen entera no quepa.
+  ficheros que caben, los grandes se vuelcan a disco (ver arriba) y, si no hay
+  dónde volcarlos, se omiten con una nota y un resumen claro.
 
 ## [0.1.5] — 2026-11-27
 

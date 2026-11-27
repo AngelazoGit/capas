@@ -231,10 +231,20 @@ impl Motor {
             Tipo::Lz4 => extraer::lz4(d, nombre, lim),
             Tipo::Iso => {
                 let mut truncado = false;
-                match extraer::iso9660(d, lim, &mut notas, &mut truncado) {
-                    Ok(hijos) => {
+                // Carpeta de salida de esta capa: ahí se vuelcan en streaming los
+                // ficheros demasiado grandes para la RAM (an = <dir>/analisis).
+                let capas = an.parent().map(|d| d.join("capas"));
+                if let Some(c) = &capas {
+                    let _ = fs::create_dir_all(c);
+                }
+                match extraer::iso9660(d, lim, capas.as_deref(), &mut notas, &mut truncado) {
+                    Ok((hijos, grandes)) => {
                         if truncado {
                             nodo.incompleto = true;
+                        }
+                        // Los ficheros volcados a disco se listan como resultados abribles.
+                        for g in grandes {
+                            nodo.resultados.push(g.strip_prefix(&self.raiz).unwrap_or(&g).display().to_string());
                         }
                         if let Some(info) = extraer::plataforma_disco(&hijos) {
                             nodo.resultados.push(info);
