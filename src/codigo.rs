@@ -15,6 +15,56 @@ pub fn wasm_a_wat(d: &[u8]) -> Result<String> {
     wasmprinter::print_bytes(d).map_err(|e| anyhow!("wasm: {e}"))
 }
 
+// ─────────────────────────────── Shaders ───────────────────────────────
+
+/// Magia de un módulo SPIR-V (little o big endian).
+pub fn es_spirv(d: &[u8]) -> bool {
+    d.len() >= 20 && (d[0..4] == [0x03, 0x02, 0x23, 0x07] || d[0..4] == [0x07, 0x23, 0x02, 0x03])
+}
+
+/// Shader SPIR-V (binario) → WGSL legible (y, si se puede, GLSL por etapa).
+/// Usa naga, que ya está en el árbol. Sirve para shaders de Vulkan/OpenGL/WebGPU.
+pub fn spirv_a_fuente(d: &[u8]) -> Result<String> {
+    if d.len() % 4 != 0 {
+        bail!("SPIR-V truncado (no múltiplo de 4 bytes)");
+    }
+    let opts = naga::front::spv::Options::default();
+    let modulo = naga::front::spv::parse_u8_slice(d, &opts).map_err(|e| anyhow!("SPIR-V: {e}"))?;
+    let info = naga::valid::Validator::new(naga::valid::ValidationFlags::empty(), naga::valid::Capabilities::all())
+        .validate(&modulo)
+        .map_err(|e| anyhow!("SPIR-V inválido: {e}"))?;
+    let wgsl = naga::back::wgsl::write_string(&modulo, &info, naga::back::wgsl::WriterFlags::empty())
+        .map_err(|e| anyhow!("WGSL: {e}"))?;
+
+    let mut out = String::new();
+    let _ = writeln!(out, "// SPIR-V → WGSL (decompilado por CAPAS con naga)\n");
+    out.push_str(&wgsl);
+    Ok(out)
+}
+
+#[cfg(test)]
+mod pruebas_shader {
+    use super::*;
+
+    #[test]
+    fn spirv_se_decompila_a_wgsl() {
+        // Compila un WGSL mínimo a SPIR-V (con naga) y comprueba que CAPAS lo
+        // detecta como SPIR-V y lo decompila de vuelta a WGSL legible.
+        let fuente = "@compute @workgroup_size(1) fn main() { let x = 1 + 2; }";
+        let modulo = naga::front::wgsl::parse_str(fuente).unwrap();
+        let info = naga::valid::Validator::new(naga::valid::ValidationFlags::all(), naga::valid::Capabilities::all())
+            .validate(&modulo)
+            .unwrap();
+        let opts = naga::back::spv::Options::default();
+        let palabras = naga::back::spv::write_vec(&modulo, &info, &opts, None).unwrap();
+        let bytes: Vec<u8> = palabras.iter().flat_map(|w| w.to_le_bytes()).collect();
+
+        assert!(es_spirv(&bytes), "debe reconocerse como SPIR-V");
+        let wgsl = spirv_a_fuente(&bytes).expect("debe decompilar el SPIR-V");
+        assert!(wgsl.contains("fn main"), "la salida WGSL debe tener la función main:\n{wgsl}");
+    }
+}
+
 // ───────────────────────────── Java .class ─────────────────────────────
 
 /// Descriptor JVM (`Ljava/lang/String;`, `[I`…) → tipo Java legible.

@@ -74,6 +74,11 @@ y el versionado [SemVer](https://semver.org/lang/es/).
   plano y rompe el ZipCrypto **sin aportar ninguna copia**. Es más lento (cada
   intento cuesta unos minutos) y va desactivado por defecto.
 
+### Añadido — decompilador de shaders (SPIR-V → WGSL)
+- **Shaders SPIR-V** (Vulkan/OpenGL/WebGPU) se detectan por contenido y se
+  decompilan a **WGSL legible** de forma nativa (con naga, ya incluido). Sigue el
+  análisis por capas, con `--decompilar`/`--listar-codigo` y en la app.
+
 ### Añadido — motor 100 % nativo
 - **Contenedores sin herramientas externas**: 7z (incluido AES y cabeceras
   cifradas), RAR v2–v5 (cifrados y sólidos), CAB, MSI/MSP y cualquier archivo

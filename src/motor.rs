@@ -335,6 +335,14 @@ impl Motor {
                 self.externa("wasm-decompile", &[r], an, "decompilado.dcmp", nodo);
                 Ok(Vec::new())
             }
+            Tipo::Shader => {
+                // SPIR-V → WGSL legible (nativo, con naga).
+                match codigo::spirv_a_fuente(d) {
+                    Ok(t) => self.guardar(an, "shader.wgsl", t.as_bytes(), nodo),
+                    Err(e) => nodo.notas.push(tfmt(tr("native SPIR-V reader: {}", "lector SPIR-V nativo: {}"), &[e.to_string()])),
+                }
+                Ok(Vec::new())
+            }
             Tipo::Texto => Ok(extraer::base64_embebido(d)),
             Tipo::RecursoJuego if self.cfg.desempaquetar => {
                 match extraer::desempaquetar_bundle(d, nombre, lim) {

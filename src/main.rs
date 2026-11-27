@@ -373,6 +373,7 @@ fn main() -> Result<()> {
             detectar::Tipo::Dex => codigo::dex(&d),
             detectar::Tipo::Pyc => codigo::pyc(&d),
             detectar::Tipo::Wasm => codigo::wasm_a_wat(&d),
+            detectar::Tipo::Shader => codigo::spirv_a_fuente(&d),
             detectar::Tipo::Elf | detectar::Tipo::Pe | detectar::Tipo::MachO => {
                 ejecutables::analizar(&d, 200_000).map(|i| format!("{}\n{}", i.cabeceras, i.desensamblado.unwrap_or_default()))
             }
@@ -392,6 +393,7 @@ fn main() -> Result<()> {
         let r = match detectar::detectar(&d) {
             detectar::Tipo::ClaseJava => decompilar::java(&d),
             detectar::Tipo::Pyc => decompilar::python(&d),
+            detectar::Tipo::Shader => codigo::spirv_a_fuente(&d),
             otro => Err(anyhow::anyhow!("{}: {}", idioma::tr("cannot decompile", "no se puede decompilar"), otro.nombre())),
         };
         match r {

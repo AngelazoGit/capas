@@ -31,6 +31,7 @@ pub enum Tipo {
     Dex,
     Pyc,
     Wasm,
+    Shader,
     Pdf,
     Imagen,
     Audio,
@@ -70,6 +71,7 @@ impl Tipo {
             Tipo::Dex => "Android DEX",
             Tipo::Pyc => tr("Python bytecode","Bytecode Python"),
             Tipo::Wasm => "WebAssembly",
+            Tipo::Shader => tr("Shader (SPIR-V)", "Shader (SPIR-V)"),
             Tipo::Pdf => "PDF",
             Tipo::Imagen => tr("Image","Imagen"),
             Tipo::Audio => "Audio",
@@ -108,6 +110,7 @@ impl Tipo {
             Tipo::Dex => "dex",
             Tipo::Pyc => "pyc",
             Tipo::Wasm => "wasm",
+            Tipo::Shader => "shader",
             Tipo::Pdf => "pdf",
             Tipo::Imagen => "img",
             Tipo::Audio => "audio",
@@ -258,6 +261,10 @@ pub fn detectar(d: &[u8]) -> Tipo {
     }
     if d.starts_with(b"\0asm") {
         return Tipo::Wasm;
+    }
+    // SPIR-V: magia 0x07230203 (little o big endian).
+    if d.len() >= 20 && (d[0..4] == [0x03, 0x02, 0x23, 0x07] || d[0..4] == [0x07, 0x23, 0x02, 0x03]) {
+        return Tipo::Shader;
     }
     if d.starts_with(b"%PDF") {
         return Tipo::Pdf;
