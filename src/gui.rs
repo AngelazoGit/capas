@@ -184,7 +184,7 @@ fn mono(t: f32) -> FontId {
 fn color_tipo(t: Tipo) -> Color32 {
     match t {
         Tipo::Elf | Tipo::Pe | Tipo::MachO | Tipo::DotNet => naranja(),
-        Tipo::ClaseJava | Tipo::Dex | Tipo::Pyc | Tipo::Wasm | Tipo::Shader => morado_claro(),
+        Tipo::ClaseJava | Tipo::Dex | Tipo::Pyc | Tipo::Wasm | Tipo::Shader | Tipo::Lua => morado_claro(),
         Tipo::RecursoJuego => morado_claro(),
         Tipo::Texto | Tipo::Imagen => texto(),
         Tipo::Desconocido => rojo(),
@@ -246,6 +246,7 @@ fn codigo_tipo(tp: Tipo) -> &'static str {
         Tipo::Wasm => "WASM",
         Tipo::Shader => "SHADER",
         Tipo::DotNet => ".NET",
+        Tipo::Lua => "LUA",
         Tipo::Pdf => "PDF",
         Tipo::Imagen => tr("IMAGE", "IMAGEN"),
         Tipo::Audio => "AUDIO",

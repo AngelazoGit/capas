@@ -353,6 +353,14 @@ impl Motor {
                 }
                 Ok(Vec::new())
             }
+            Tipo::Lua => {
+                // Bytecode Lua 5.4 → desensamblado nativo (funciones, constantes).
+                match crate::lua::listar(d) {
+                    Ok(t) => self.guardar(an, "lua_desensamblado.txt", t.as_bytes(), nodo),
+                    Err(e) => nodo.notas.push(tfmt(tr("native Lua reader: {}", "lector Lua nativo: {}"), &[e.to_string()])),
+                }
+                Ok(Vec::new())
+            }
             Tipo::Texto => Ok(extraer::base64_embebido(d)),
             Tipo::RecursoJuego if self.cfg.desempaquetar => {
                 match extraer::desempaquetar_bundle(d, nombre, lim) {

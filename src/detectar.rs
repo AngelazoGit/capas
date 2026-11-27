@@ -33,6 +33,7 @@ pub enum Tipo {
     Wasm,
     Shader,
     DotNet,
+    Lua,
     Pdf,
     Imagen,
     Audio,
@@ -74,6 +75,7 @@ impl Tipo {
             Tipo::Wasm => "WebAssembly",
             Tipo::Shader => tr("Shader (SPIR-V)", "Shader (SPIR-V)"),
             Tipo::DotNet => tr(".NET assembly (CLI)", "Ensamblado .NET (CLI)"),
+            Tipo::Lua => tr("Lua bytecode", "Bytecode Lua"),
             Tipo::Pdf => "PDF",
             Tipo::Imagen => tr("Image","Imagen"),
             Tipo::Audio => "Audio",
@@ -114,6 +116,7 @@ impl Tipo {
             Tipo::Wasm => "wasm",
             Tipo::Shader => "shader",
             Tipo::DotNet => "dotnet",
+            Tipo::Lua => "lua",
             Tipo::Pdf => "pdf",
             Tipo::Imagen => "img",
             Tipo::Audio => "audio",
@@ -291,6 +294,9 @@ pub fn detectar(d: &[u8]) -> Tipo {
     }
     if d.starts_with(b"\0asm") {
         return Tipo::Wasm;
+    }
+    if d.starts_with(b"\x1bLua") || d.starts_with(b"\x1bLJ") {
+        return Tipo::Lua;
     }
     // SPIR-V: magia 0x07230203 (little o big endian).
     if d.len() >= 20 && (d[0..4] == [0x03, 0x02, 0x23, 0x07] || d[0..4] == [0x07, 0x23, 0x02, 0x03]) {

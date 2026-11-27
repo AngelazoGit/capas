@@ -74,6 +74,13 @@ y el versionado [SemVer](https://semver.org/lang/es/).
   plano y rompe el ZipCrypto **sin aportar ninguna copia**. Es más lento (cada
   intento cuesta unos minutos) y va desactivado por defecto.
 
+### Añadido — desensamblador nativo de bytecode Lua (5.4)
+- **Bytecode Lua 5.4** (`\x1bLuaT`) se detecta y se desensambla de forma nativa:
+  árbol de funciones, constantes (sobre todo las **cadenas**, muy útiles para
+  reversing) e instrucciones con nombres de opcode (estilo `luac -l`), sin Lua
+  instalado. Muy común en scripts de juegos y mods. LuaJIT se detecta (su
+  formato es distinto; soporte completo más adelante).
+
 ### Añadido — lector nativo de .NET / CLI
 - **Ensamblados .NET** (PE con cabecera CLR) se detectan y se les lee la
   **estructura** de forma nativa (metadatos ECMA-335, sin .NET instalado):
