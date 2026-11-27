@@ -1,3 +1,4 @@
 # El .exe (>25 MB) no cabe en Cloudflare Pages: la descarga va directa al asset
-# de la release en GitHub (se baja el .zip sin navegar por GitHub).
-/capas.exe  https://github.com/AngelazoGit/capas/releases/download/v0.1.6/capas-v0.1.6-windows-x64.zip  302
+# "capas.exe" de la ULTIMA release en GitHub (descarga directa del .exe, siempre
+# la version mas reciente; el workflow de release lo sube con nombre estable).
+/capas.exe  https://github.com/AngelazoGit/capas/releases/latest/download/capas.exe  302
