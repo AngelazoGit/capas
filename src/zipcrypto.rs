@@ -248,7 +248,7 @@ pub fn atacar(t:&Tablas,d:&Data)->Vec<Keys>{
 
 // ── Integración: parseo de entradas y descifrado con las claves recuperadas ──
 
-struct Entrada { nombre:String, metodo:u16, cifrada:bool, datos_off:usize, csize:usize }
+struct Entrada { nombre:String, metodo:u16, cifrada:bool, datos_off:usize, csize:usize, crc:u32, gp:u16, modtime:u16 }
 
 fn u16le(d:&[u8],o:usize)->usize{ u16::from_le_bytes(d[o..o+2].try_into().unwrap()) as usize }
 fn u32le(d:&[u8],o:usize)->usize{ u32::from_le_bytes(d[o..o+4].try_into().unwrap()) as usize }
@@ -263,7 +263,9 @@ fn entradas_locales(d:&[u8])->Vec<Entrada>{
     let mut off=u32le(d,e+16);
     for _ in 0..total {
         if off+46>d.len() || &d[off..off+4]!=b"PK\x01\x02" { break; }
-        let gp=u16le(d,off+8); let metodo=u16le(d,off+10) as u16;
+        let gp=u16le(d,off+8) as u16; let metodo=u16le(d,off+10) as u16;
+        let modtime=u16le(d,off+12) as u16;
+        let crc=u32le(d,off+16) as u32;
         let csize=u32le(d,off+20);
         let nl=u16le(d,off+28); let el=u16le(d,off+30); let cl=u16le(d,off+32);
         let lho=u32le(d,off+42);
@@ -273,7 +275,7 @@ fn entradas_locales(d:&[u8])->Vec<Entrada>{
             let lnl=u16le(d,lho+26); let lel=u16le(d,lho+28);
             let datos_off=lho+30+lnl+lel;
             if datos_off+csize<=d.len() {
-                v.push(Entrada{nombre,metodo,cifrada:gp&1!=0,datos_off,csize});
+                v.push(Entrada{nombre,metodo,cifrada:gp&1!=0,datos_off,csize,crc,gp,modtime});
             }
         }
         off+=46+nl+el+cl;
@@ -340,6 +342,46 @@ pub fn romper_auto(t:&Tablas, zip:&[u8], max_intentos:usize)->Option<(Keys,Strin
         }
     }
     None
+}
+
+/// Verificador RÁPIDO de contraseñas para ZipCrypto tradicional: comprueba solo
+/// el byte de control de la cabecera cifrada de 12 bytes, que descarta ~255/256
+/// de las contraseñas erróneas al instante, sin descifrar la entrada entera.
+/// Es el mismo cómputo que correría una GPU. NO sirve para AES (método 99).
+pub struct VerificadorZip<'a> {
+    t: &'a Tablas,
+    hdr: [u8; 12],
+    chk: u8,
+}
+impl<'a> VerificadorZip<'a> {
+    /// Prepara el verificador con la primera entrada ZipCrypto tradicional.
+    /// Devuelve None si el ZIP no tiene ninguna (p. ej. es AES o no está cifrado).
+    pub fn nuevo(t: &'a Tablas, zip: &[u8]) -> Option<Self> {
+        for e in entradas_locales(zip) {
+            if !e.cifrada || e.metodo == 99 || e.csize < 12 {
+                continue; // 99 = AES; sin 12 bytes de cabecera no se puede.
+            }
+            let hdr: [u8; 12] = zip.get(e.datos_off..e.datos_off + 12)?.try_into().ok()?;
+            // Byte de control: MSB del CRC, o del mod-time si el bit 3 (data
+            // descriptor) está puesto (ahí el CRC local aún no se conocía).
+            let chk = if e.gp & 0x08 != 0 { (e.modtime >> 8) as u8 } else { (e.crc >> 24) as u8 };
+            return Some(VerificadorZip { t, hdr, chk });
+        }
+        None
+    }
+    /// ¿Pasa la contraseña el chequeo rápido? Hay ~1/256 de falsos positivos, así
+    /// que un acierto debe confirmarse con un descifrado completo.
+    #[inline]
+    pub fn comprueba(&self, pw: &[u8]) -> bool {
+        let mut k = Keys::de_password(self.t, pw);
+        let mut last = 0u8;
+        for &c in &self.hdr {
+            let p = c ^ k.getk(self.t);
+            k.update(self.t, p);
+            last = p;
+        }
+        last == self.chk
+    }
 }
 
 /// Intenta romper un ZIP ZipCrypto usando `plano` (contenido conocido de una de
@@ -410,6 +452,25 @@ mod pruebas {
         let mut k = s0;
         let claro: Vec<u8> = cifrado.iter().map(|&c| { let p = c ^ k.getk(&t); k.update(&t, p); p }).collect();
         assert_eq!(claro, b"hola mundo zipcrypto");
+    }
+
+    #[test]
+    fn verificador_rapido_acepta_la_correcta_y_rechaza() {
+        // El chequeo rápido del byte de control debe aceptar la contraseña real y
+        // rechazar la inmensa mayoría de las erróneas (al instante, sin descifrar).
+        let t = Tablas::new();
+        let zip = fx("zipcrypto_reto.zip");
+        let ver = VerificadorZip::nuevo(&t, &zip).expect("zipcrypto_reto.zip es ZipCrypto tradicional");
+        assert!(ver.comprueba(b"miClaveLarga2026"), "debe aceptar la contraseña correcta");
+        // Prueba muchas erróneas: casi todas deben rechazarse (1/256 de falso positivo).
+        let mut falsos = 0;
+        for i in 0..2000u32 {
+            let pw = format!("mala{i}");
+            if ver.comprueba(pw.as_bytes()) {
+                falsos += 1;
+            }
+        }
+        assert!(falsos < 40, "demasiados falsos positivos: {falsos}/2000 (esperado ~8)");
     }
 
     #[test] #[ignore = "ataque completo: ~10s"]

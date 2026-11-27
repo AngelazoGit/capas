@@ -320,12 +320,24 @@ fn buscar(d: &[u8], candidatas: &[String]) -> Option<String> {
     let idx = entrada_de_prueba(d)?;
     let encontrada = AtomicBool::new(false);
     let resultado: Mutex<Option<(usize, String)>> = Mutex::new(None);
+    // Camino RÁPIDO para ZipCrypto tradicional: por cada candidata se comprueba
+    // solo el byte de control de la cabecera de 12 bytes (descarta ~255/256 al
+    // instante) y solo se descifra la entrada entera cuando ese chequeo pasa.
+    // Mucho más rápido en fuerza bruta que descifrar todo por cada candidata.
+    let tablas = crate::zipcrypto::Tablas::new();
+    let rapido = crate::zipcrypto::VerificadorZip::nuevo(&tablas, d);
     candidatas
         .par_iter()
         .enumerate()
         .for_each(|(orden, clave)| {
             if encontrada.load(Ordering::Relaxed) {
                 return;
+            }
+            // Si hay verificador rápido (ZipCrypto), filtra antes de descifrar.
+            if let Some(ver) = &rapido {
+                if !ver.comprueba(clave.as_bytes()) {
+                    return;
+                }
             }
             if probar(d, idx, clave) {
                 let mut r = resultado.lock().unwrap();

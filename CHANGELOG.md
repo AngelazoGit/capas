@@ -6,6 +6,14 @@ y el versionado [SemVer](https://semver.org/lang/es/).
 
 ## [0.1.6] — 2026-11-27
 
+### Añadido — fuerza bruta de ZipCrypto mucho más rápida
+- **Chequeo rápido del byte de control.** Al probar contraseñas contra un ZIP
+  con ZipCrypto tradicional, ahora se comprueba primero el byte de control de la
+  cabecera cifrada de 12 bytes (descarta ~255/256 de las erróneas al instante) y
+  solo se descifra la entrada entera cuando ese chequeo pasa. En una prueba,
+  ~457.000 candidatas en ~1,2 s con 4 hilos. Es el mismo cómputo que ejecutaría
+  una GPU, así que deja la puerta abierta a acelerarlo por GPU más adelante.
+
 ### Añadido — archivos grandes (varios GiB) y claridad de la interfaz
 - **Mapeo en memoria (mmap) del archivo de entrada.** El fichero de nivel 0 ya
   no se carga entero en RAM: el sistema trae las páginas bajo demanda, así que
