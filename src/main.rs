@@ -21,6 +21,7 @@ mod claves;
 mod detectar;
 mod dotnet;
 mod lua;
+mod il2cpp;
 mod edicion;
 mod ejecutables;
 mod extraer;
@@ -378,6 +379,7 @@ fn main() -> Result<()> {
             detectar::Tipo::Shader => codigo::spirv_a_fuente(&d),
             detectar::Tipo::DotNet => dotnet::listar(&d),
             detectar::Tipo::Lua => lua::listar(&d),
+            detectar::Tipo::Il2Cpp => il2cpp::listar(&d),
             detectar::Tipo::Elf | detectar::Tipo::Pe | detectar::Tipo::MachO => {
                 ejecutables::analizar(&d, 200_000).map(|i| format!("{}\n{}", i.cabeceras, i.desensamblado.unwrap_or_default()))
             }
@@ -400,6 +402,7 @@ fn main() -> Result<()> {
             detectar::Tipo::Shader => codigo::spirv_a_fuente(&d),
             detectar::Tipo::DotNet => dotnet::listar(&d),
             detectar::Tipo::Lua => lua::listar(&d),
+            detectar::Tipo::Il2Cpp => il2cpp::listar(&d),
             otro => Err(anyhow::anyhow!("{}: {}", idioma::tr("cannot decompile", "no se puede decompilar"), otro.nombre())),
         };
         match r {

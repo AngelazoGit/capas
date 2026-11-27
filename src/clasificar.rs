@@ -138,7 +138,7 @@ pub fn categoria(tipo: Tipo, nombre: &str) -> Categoria {
     // 1) Formatos que el analizador identifica por contenido.
     match tipo {
         Tipo::Elf | Tipo::Pe | Tipo::MachO | Tipo::MachOFat => return Categoria::Ejecutable,
-        Tipo::ClaseJava | Tipo::Dex | Tipo::Pyc | Tipo::Wasm | Tipo::Shader | Tipo::Lua => return Categoria::Bytecode,
+        Tipo::ClaseJava | Tipo::Dex | Tipo::Pyc | Tipo::Wasm | Tipo::Shader | Tipo::Lua | Tipo::Il2Cpp => return Categoria::Bytecode,
         Tipo::DotNet => return Categoria::Ejecutable,
         Tipo::Imagen => return Categoria::Imagen,
         Tipo::Audio => return Categoria::Audio,

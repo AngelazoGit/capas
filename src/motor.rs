@@ -361,6 +361,14 @@ impl Motor {
                 }
                 Ok(Vec::new())
             }
+            Tipo::Il2Cpp => {
+                // Unity IL2CPP: nombres (tipos/métodos) y literales del juego.
+                match crate::il2cpp::listar(d) {
+                    Ok(t) => self.guardar(an, "il2cpp_metadata.txt", t.as_bytes(), nodo),
+                    Err(e) => nodo.notas.push(tfmt(tr("native IL2CPP reader: {}", "lector IL2CPP nativo: {}"), &[e.to_string()])),
+                }
+                Ok(Vec::new())
+            }
             Tipo::Texto => Ok(extraer::base64_embebido(d)),
             Tipo::RecursoJuego if self.cfg.desempaquetar => {
                 match extraer::desempaquetar_bundle(d, nombre, lim) {

@@ -74,6 +74,13 @@ y el versionado [SemVer](https://semver.org/lang/es/).
   plano y rompe el ZipCrypto **sin aportar ninguna copia**. Es más lento (cada
   intento cuesta unos minutos) y va desactivado por defecto.
 
+### Añadido — metadatos de Unity IL2CPP
+- **`global-metadata.dat`** (magia `0xFAB11BAF`) se detecta y se le extraen los
+  **nombres** (tipos, métodos, campos, espacios) y los **literales de cadena**
+  del juego, sin herramientas externas. Es lo más útil para reversing de juegos
+  Unity compilados con IL2CPP. (Reconstruir las firmas C# completas correlacionando
+  con el binario nativo queda para más adelante.)
+
 ### Añadido — desensamblador nativo de bytecode Lua (5.4)
 - **Bytecode Lua 5.4** (`\x1bLuaT`) se detecta y se desensambla de forma nativa:
   árbol de funciones, constantes (sobre todo las **cadenas**, muy útiles para

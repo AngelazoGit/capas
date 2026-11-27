@@ -34,6 +34,7 @@ pub enum Tipo {
     Shader,
     DotNet,
     Lua,
+    Il2Cpp,
     Pdf,
     Imagen,
     Audio,
@@ -76,6 +77,7 @@ impl Tipo {
             Tipo::Shader => tr("Shader (SPIR-V)", "Shader (SPIR-V)"),
             Tipo::DotNet => tr(".NET assembly (CLI)", "Ensamblado .NET (CLI)"),
             Tipo::Lua => tr("Lua bytecode", "Bytecode Lua"),
+            Tipo::Il2Cpp => tr("Unity IL2CPP metadata", "Metadatos Unity IL2CPP"),
             Tipo::Pdf => "PDF",
             Tipo::Imagen => tr("Image","Imagen"),
             Tipo::Audio => "Audio",
@@ -117,6 +119,7 @@ impl Tipo {
             Tipo::Shader => "shader",
             Tipo::DotNet => "dotnet",
             Tipo::Lua => "lua",
+            Tipo::Il2Cpp => "il2cpp",
             Tipo::Pdf => "pdf",
             Tipo::Imagen => "img",
             Tipo::Audio => "audio",
@@ -297,6 +300,10 @@ pub fn detectar(d: &[u8]) -> Tipo {
     }
     if d.starts_with(b"\x1bLua") || d.starts_with(b"\x1bLJ") {
         return Tipo::Lua;
+    }
+    // Unity IL2CPP global-metadata.dat: magia 0xFAB11BAF (LE).
+    if d.starts_with(&[0xAF, 0x1B, 0xB1, 0xFA]) {
+        return Tipo::Il2Cpp;
     }
     // SPIR-V: magia 0x07230203 (little o big endian).
     if d.len() >= 20 && (d[0..4] == [0x03, 0x02, 0x23, 0x07] || d[0..4] == [0x07, 0x23, 0x02, 0x03]) {
