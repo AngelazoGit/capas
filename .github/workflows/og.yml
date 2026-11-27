@@ -1,0 +1,50 @@
+name: og-cards
+
+# Regenera las tarjetas OG (docs/og.png, docs/og-es.png) con el número de
+# versión cuando se publica una release, y las commitea a main (Cloudflare Pages
+# redesplegará). Tambien a mano desde Actions -> Run workflow.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versión a estampar (p. ej. v0.1.7)"
+        required: true
+        default: "v0.1.6"
+
+permissions:
+  contents: write
+
+jobs:
+  cards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Instalar Playwright + Chromium
+        run: |
+          npm init -y >/dev/null 2>&1
+          npm install --no-save playwright
+          npx playwright install --with-deps chromium
+      - name: Renderizar tarjetas con la versión
+        env:
+          VERSION: ${{ inputs.version || github.event.release.tag_name }}
+        run: node docs/.og/build.cjs "$VERSION"
+      - name: Commit si cambiaron
+        run: |
+          git config user.name "angelazo"
+          git config user.email "AngelazoGit@users.noreply.github.com"
+          if git diff --quiet -- docs/og.png docs/og-es.png; then
+            echo "Las tarjetas no cambiaron."
+          else
+            git add docs/og.png docs/og-es.png
+            git commit -m "seo: tarjetas OG regeneradas para ${VERSION:-release}"
+            git push origin main
+          fi
+        env:
+          VERSION: ${{ inputs.version || github.event.release.tag_name }}
