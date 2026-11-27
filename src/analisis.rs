@@ -140,15 +140,23 @@ pub fn ejecutar(
                     m.emitir(Evento::Aviso(tfmt(tr("{} ({}) exceeds the total budget","{} ({}) supera el presupuesto total"), &[p.display().to_string(), humano(tam)])));
                     return None;
                 }
-                match fs::read(&p) {
-                    Ok(datos) => {
-                        let dir = raiz.join(motor::ruta_segura(&n));
-                        let _ = fs::create_dir_all(&dir);
-                        Some(m.procesar(datos, n, p, dir, 0))
-                    }
-                    Err(e) => {
-                        m.emitir(Evento::Aviso(format!("{}: {e}", p.display())));
-                        None
+                // Para no cargar en RAM archivos enormes (ISOs/juegos de varios GB),
+                // se mapea el fichero en memoria (mmap): el SO trae las páginas bajo
+                // demanda y las libera si falta RAM, así que el input apenas consume
+                // memoria. Si el mmap falla (p. ej. sistema de archivos raro), se lee
+                // normal. El mmap es de solo lectura; para el análisis nos vale.
+                let dir = raiz.join(motor::ruta_segura(&n));
+                let _ = fs::create_dir_all(&dir);
+                let mapa = fs::File::open(&p).ok().and_then(|f| unsafe { memmap2::Mmap::map(&f).ok() });
+                if let Some(mapa) = mapa {
+                    Some(m.procesar(&mapa, n, p, dir, 0))
+                } else {
+                    match fs::read(&p) {
+                        Ok(datos) => Some(m.procesar(&datos, n, p, dir, 0)),
+                        Err(e) => {
+                            m.emitir(Evento::Aviso(format!("{}: {e}", p.display())));
+                            None
+                        }
                     }
                 }
             })

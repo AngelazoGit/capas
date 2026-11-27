@@ -116,10 +116,10 @@ impl Motor {
     }
 
     /// Procesa un bloque. `ruta_fisica` es dónde está guardado en disco.
-    pub fn procesar(&self, datos: Vec<u8>, nombre: String, ruta_fisica: PathBuf, dir: PathBuf, capa: usize) -> Nodo {
+    pub fn procesar(&self, datos: &[u8], nombre: String, ruta_fisica: PathBuf, dir: PathBuf, capa: usize) -> Nodo {
         let n = self.procesados.fetch_add(1, Ordering::Relaxed) + 1;
-        let tipo = detectar::detectar(&datos);
-        let sha = hex(&Sha256::digest(&datos));
+        let tipo = detectar::detectar(datos);
+        let sha = hex(&Sha256::digest(datos));
         let rel = dir.strip_prefix(&self.raiz).unwrap_or(&dir).display().to_string();
         let (confianza, evidencia) = crate::clasificar::confianza(tipo, &nombre);
         self.emitir(Evento::Bloque { n, capa, tipo, tamano: datos.len() as u64, ruta: rel.clone() });
@@ -131,7 +131,7 @@ impl Motor {
             descripcion: tipo.nombre().into(),
             tamano: datos.len() as u64,
             sha256: sha.clone(),
-            entropia: (detectar::entropia(&datos) * 1000.0).round() / 1000.0,
+            entropia: (detectar::entropia(datos) * 1000.0).round() / 1000.0,
             directorio: rel,
             confianza,
             evidencia,
@@ -165,8 +165,7 @@ impl Motor {
             ));
         }
 
-        let hijos = self.capa(&datos, &nombre, &ruta_fisica, &analisis, tipo, &mut nodo);
-        drop(datos);
+        let hijos = self.capa(datos, &nombre, &ruta_fisica, &analisis, tipo, &mut nodo);
         // Un contenedor del que no se extrajo nada suele estar cifrado, truncado o
         // corrupto: análisis incompleto (el PDF puede no llevar flujos y no cuenta).
         if tipo.es_contenedor() && tipo != Tipo::Pdf && hijos.is_empty() {
@@ -645,7 +644,10 @@ impl Motor {
         }
         let mut hijos: Vec<Nodo> = tareas
             .into_par_iter()
-            .map(|(h, dir, fisico)| self.procesar(h.datos, h.nombre, fisico, dir, capa + 1))
+            .map(|(h, dir, fisico)| {
+                let Hijo { nombre, datos } = h;
+                self.procesar(&datos, nombre, fisico, dir, capa + 1)
+            })
             .collect();
         hijos.sort_by(|a, b| a.nombre.cmp(&b.nombre));
         nodo.hijos = hijos;

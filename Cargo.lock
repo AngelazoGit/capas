@@ -513,6 +513,7 @@ dependencies = [
  "iced-x86",
  "lz4_flex 0.11.7",
  "lzma-rs",
+ "memmap2",
  "rayon",
  "rfd",
  "rusqlite",
