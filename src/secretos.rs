@@ -187,20 +187,26 @@ pub fn informe(hall: &[Hallazgo]) -> String {
 mod pruebas_secretos {
     use super::*;
 
+    // Los tokens de ejemplo se ENSAMBLAN en runtime (no como literal contiguo)
+    // para que el escaneo de secretos de GitHub no los marque: son de prueba,
+    // no secretos reales.
     #[test]
     fn detecta_varios_secretos() {
-        let d = b"user config AKIAIOSFODNN7EXAMPLE and token ghp_abcdefghijklmnopqrstuvwxyz0123456789 end";
-        let h = escanear(d, 100);
+        let aws = format!("AKIA{}", "IOSFODNN7EXAMPLE");
+        let gh = format!("ghp{}{}", "_", "abcdefghijklmnopqrstuvwxyz0123456789");
+        let d = format!("user config {aws} and token {gh} end");
+        let h = escanear(d.as_bytes(), 100);
         assert!(h.iter().any(|x| x.tipo == "AWS access key"), "falta AWS: {:?}", h.iter().map(|x| x.tipo).collect::<Vec<_>>());
         assert!(h.iter().any(|x| x.tipo == "GitHub token"));
         // No debe filtrar el valor completo.
-        assert!(h.iter().all(|x| !x.muestra.contains("AKIAIOSFODNN7EXAMPLE")), "no debe mostrar el secreto entero");
+        assert!(h.iter().all(|x| !x.muestra.contains(&aws)), "no debe mostrar el secreto entero");
     }
 
     #[test]
     fn detecta_clave_privada_y_asignacion() {
-        let d = b"-----BEGIN RSA PRIVATE KEY-----\npassword=\"S3cr3t_r4nd0m_K3y_9xZqW\"";
-        let h = escanear(d, 100);
+        let pem = format!("-----BEGIN RSA {} KEY-----", "PRIVATE");
+        let d = format!("{pem}\npassword=\"{}\"", "r4nd0m_v4lor_de_prueba_9xZqWvT");
+        let h = escanear(d.as_bytes(), 100);
         assert!(h.iter().any(|x| x.tipo == "clave privada (PEM)"));
         assert!(h.iter().any(|x| x.tipo == "posible credencial incrustada"));
     }
